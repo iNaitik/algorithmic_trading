@@ -130,7 +130,9 @@ def log_trade_to_csv(symbol: str, side: str, qty: int, price: float,
     Appends a completed trade record to trade_history.csv.
     Creates the file with headers if it does not exist.
     """
-    csv_file = "trade_history.csv"
+    data_dir = "data"
+    os.makedirs(data_dir, exist_ok=True)
+    csv_file = os.path.join(data_dir, "trade_history.csv")
     headers = ["timestamp", "symbol", "side", "quantity", "execution_price",
                "order_id", "take_profit", "stop_loss"]
     file_exists = os.path.isfile(csv_file)

@@ -41,6 +41,19 @@ from alpaca.data.enums import DataFeed
 # Import the strategy registry (auto-discovers all strategy files)
 from strategies import list_strategies, get_strategy
 
+# Rich Terminal UI Components
+try:
+    from rich.console import Console
+    from rich.table import Table
+    from rich.panel import Panel
+    from rich.text import Text
+    from rich import box
+    console = Console()
+    HAS_RICH = True
+except ImportError:
+    HAS_RICH = False
+    console = None
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Indian Market Configuration
 # ──────────────────────────────────────────────────────────────────────────────
@@ -69,16 +82,113 @@ class Colors:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Currency & Timestamp Formatting Utilities
+# ──────────────────────────────────────────────────────────────────────────────
+def format_indian_number(amount: float, decimals: int = 2) -> str:
+    """
+    Formats a numeric value using the Indian numbering system:
+    - Digits grouped in 2s after the first 3 digits (e.g. 10,00,000.00).
+    """
+    sign_str = "-" if amount < 0 else ""
+    abs_amt = round(abs(amount), decimals)
+    int_part = int(abs_amt)
+    dec_part = f"{abs_amt - int_part:.{decimals}f}"[1:]
+    s = str(int_part)
+    if len(s) <= 3:
+        return sign_str + s + dec_part
+    last_three = s[-3:]
+    remaining = s[:-3]
+    parts = []
+    while remaining:
+        parts.append(remaining[-2:])
+        remaining = remaining[:-2]
+    parts.reverse()
+    return sign_str + ",".join(parts) + "," + last_three + dec_part
+
+
+def format_currency(
+    amount: float,
+    currency: str = "₹",
+    include_sign: bool = False,
+    show_lakh_tag: bool = False,
+) -> str:
+    """
+    Formats currency amounts with market-specific standards:
+    - If currency is '₹': formats in Indian numbering system (Lakhs/Crores, e.g. ₹10,00,000.00).
+      Optionally appends descriptive Lakhs/Crores tag (e.g. ₹10,00,000.00 (10.00 Lakhs)).
+    - If currency is '$': formats in standard Western thousand/million system (e.g. $100,000.00).
+    """
+    prefix = ""
+    if include_sign:
+        prefix = "+" if amount >= 0 else "-"
+        abs_amount = abs(amount)
+    elif amount < 0:
+        prefix = "-"
+        abs_amount = abs(amount)
+    else:
+        abs_amount = amount
+
+    if currency == "₹":
+        formatted = format_indian_number(abs_amount, 2)
+        res = f"{prefix}₹{formatted}"
+        if show_lakh_tag and abs_amount >= 100_000:
+            if abs_amount >= 10_000_000:
+                res += f" ({abs_amount / 10_000_000:.2f} Cr)"
+            else:
+                res += f" ({abs_amount / 100_000:.2f} Lakhs)"
+        return res
+    else:
+        # Western thousand/million system with $
+        formatted = f"{abs_amount:,.2f}"
+        return f"{prefix}{currency}{formatted}"
+
+
+def format_bar_timestamp(ts) -> str:
+    """Formats a pandas/datetime index timestamp cleanly for live logs and tables."""
+    if hasattr(ts, "strftime"):
+        # If time is non-zero (intraday), format as YYYY-MM-DD HH:MM
+        if getattr(ts, "hour", 0) != 0 or getattr(ts, "minute", 0) != 0 or getattr(ts, "second", 0) != 0:
+            return ts.strftime("%Y-%m-%d %H:%M")
+        return ts.strftime("%Y-%m-%d")
+    return str(ts)[:16]
+
+
+def parse_capital_input(user_input: str, default_capital: float, is_indian: bool = True) -> float:
+    """
+    Parses flexible starting capital input supporting suffixes (L, Lakhs, Cr, k, m)
+    and commas (e.g. '10L', '10 Lakhs', '10,00,000', '50k', '500000').
+    """
+    raw = user_input.strip().lower().replace(",", "").replace("₹", "").replace("$", "")
+    if not raw:
+        return default_capital
+    try:
+        if raw.endswith("cr") or raw.endswith("crore") or raw.endswith("crores"):
+            val_str = raw.replace("crores", "").replace("crore", "").replace("cr", "").strip()
+            return float(val_str) * 10_000_000.0
+        elif raw.endswith("l") or raw.endswith("lakh") or raw.endswith("lakhs") or raw.endswith("lac") or raw.endswith("lacs"):
+            val_str = raw.replace("lakhs", "").replace("lakh", "").replace("lacs", "").replace("lac", "").replace("l", "").strip()
+            return float(val_str) * 100_000.0
+        elif raw.endswith("k"):
+            val_str = raw.replace("k", "").strip()
+            return float(val_str) * 1_000.0
+        elif raw.endswith("m") or raw.endswith("million"):
+            val_str = raw.replace("million", "").replace("m", "").strip()
+            return float(val_str) * 1_000_000.0
+        else:
+            val = float(raw)
+            return val if val > 0 else default_capital
+    except Exception:
+        return default_capital
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 1. Historical Data Ingestion
 # ──────────────────────────────────────────────────────────────────────────────
-def fetch_historical_backtest_data(symbol: str, days_back: int = 30) -> pd.DataFrame:
+def fetch_historical_backtest_data(symbol: str, days_back: int = 30, interval: str = "5m") -> pd.DataFrame:
     """
-    Retrieves 5-minute OHLCV bar data from Alpaca's IEX feed for the
+    Retrieves OHLCV bar data from Alpaca's IEX feed for the
     specified symbol over the trailing `days_back` calendar days.
-
-    The Alpaca SDK returns a MultiIndex DataFrame (symbol, timestamp).
-    This function isolates the target symbol so the resulting DataFrame
-    is indexed solely by timestamp.
 
     Parameters
     ----------
@@ -86,17 +196,14 @@ def fetch_historical_backtest_data(symbol: str, days_back: int = 30) -> pd.DataF
         The ticker symbol to fetch (e.g. "AAPL").
     days_back : int
         Number of calendar days of history to retrieve (default 30).
+    interval : str
+        Bar interval timeframe ("1m", "5m", "15m", "30m", "1h", "1d"). Default "5m".
 
     Returns
     -------
     pd.DataFrame
         Columns: open, high, low, close, volume.
         Index: DatetimeIndex (UTC timestamps).
-
-    Raises
-    ------
-    ValueError
-        If no data is returned for the requested symbol/period.
     """
     load_dotenv()
     api_key: str = os.getenv("ALPACA_API_KEY", "")
@@ -112,15 +219,25 @@ def fetch_historical_backtest_data(symbol: str, days_back: int = 30) -> pd.DataF
     end_dt: datetime = datetime.now(timezone.utc)
     start_dt: datetime = end_dt - timedelta(days=days_back)
 
+    tf_unit_map = {
+        "1m": TimeFrame(1, TimeFrameUnit.Minute),
+        "5m": TimeFrame(5, TimeFrameUnit.Minute),
+        "15m": TimeFrame(15, TimeFrameUnit.Minute),
+        "30m": TimeFrame(30, TimeFrameUnit.Minute),
+        "1h": TimeFrame(1, TimeFrameUnit.Hour),
+        "60m": TimeFrame(1, TimeFrameUnit.Hour),
+        "1d": TimeFrame(1, TimeFrameUnit.Day),
+    }
+    alpaca_tf = tf_unit_map.get(interval.lower(), TimeFrame(5, TimeFrameUnit.Minute))
+
+    print(f"{Colors.CYAN}📡 Fetching {days_back}-day {interval} bars for {symbol} via Alpaca...{Colors.RESET}")
     request_params: StockBarsRequest = StockBarsRequest(
         symbol_or_symbols=symbol,
-        timeframe=TimeFrame(15, TimeFrameUnit.Minute),  # 15 Minute bars
+        timeframe=alpaca_tf,
         start=start_dt,
         end=end_dt,
         feed=DataFeed.IEX,
     )
-
-    print(f"{Colors.CYAN}📡 Fetching {days_back}-day 5-min bars for {symbol}...{Colors.RESET}")
     bars = client.get_stock_bars(request_params)
 
     if bars.df.empty:
@@ -187,31 +304,27 @@ def fetch_forex_data(symbol: str, days_back: int = 60, timeframe: str = "15m") -
 # ──────────────────────────────────────────────────────────────────────────────
 # 1b. Indian Market Data Ingestion (yfinance Fallback)
 # ──────────────────────────────────────────────────────────────────────────────
-def fetch_indian_data(symbol: str, days_back: int = 60) -> pd.DataFrame:
+def fetch_indian_data(symbol: str, days_back: int = 60, interval: str = "5m") -> pd.DataFrame:
     """
-    Retrieves 5-minute OHLCV bar data for NSE-listed stocks using yfinance.
+    Retrieves OHLCV bar data for NSE-listed stocks using yfinance.
 
-    yfinance enforces a hard ~60-day limit on intraday data (intervals < 1d).
-    If ``days_back`` exceeds 60, it is silently clamped to 60 and a warning
-    is printed.
+    yfinance enforces a hard ~60-day limit on intraday data (< 1d),
+    and a ~7-day limit on 1m data. Daily data has no 60-day cap.
 
     Parameters
     ----------
     symbol : str
         The NSE ticker symbol with `.NS` suffix (e.g. "RELIANCE.NS").
     days_back : int
-        Number of calendar days of history to retrieve (max 60 for 5m data).
+        Number of calendar days of history to retrieve.
+    interval : str
+        Candle interval ("1m", "5m", "15m", "30m", "60m", "1h", "1d"). Default "5m".
 
     Returns
     -------
     pd.DataFrame
         Columns: open, high, low, close, volume.
         Index: DatetimeIndex (IST timestamps).
-
-    Raises
-    ------
-    ValueError
-        If no data is returned for the requested symbol/period.
     """
     try:
         import yfinance as yf
@@ -221,20 +334,27 @@ def fetch_indian_data(symbol: str, days_back: int = 60) -> pd.DataFrame:
             "Install it with: pip install yfinance"
         )
 
-    # yfinance caps intraday at ~60 days
-    effective_days: int = min(days_back, 60)
-    if days_back > 60:
-        print(f"{Colors.YELLOW}⚠️  yfinance limits 5-min data to ~60 days. "
-              f"Clamping {days_back}d → {effective_days}d.{Colors.RESET}")
+    is_intraday: bool = interval.lower() in ("1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h")
+    if is_intraday and interval.lower() == "1m":
+        effective_days: int = min(days_back, 7)
+        if days_back > 7:
+            print(f"{Colors.YELLOW}⚠️  yfinance limits 1-min data to ~7 days. "
+                  f"Clamping {days_back}d → {effective_days}d.{Colors.RESET}")
+    elif is_intraday:
+        effective_days: int = min(days_back, 60)
+        if days_back > 60:
+            print(f"{Colors.YELLOW}⚠️  yfinance limits intraday data to ~60 days. "
+                  f"Clamping {days_back}d → {effective_days}d.{Colors.RESET}")
+    else:
+        effective_days: int = days_back
 
-    # Map days to yfinance period strings
-    period: str = f"{effective_days}d"
+    period: str = f"{effective_days}d" if effective_days <= 730 else "max"
 
-    print(f"{Colors.CYAN}📡 Fetching {effective_days}-day 5-min bars for "
+    print(f"{Colors.CYAN}📡 Fetching {effective_days}-day {interval} bars for "
           f"{symbol} via yfinance...{Colors.RESET}")
 
     ticker = yf.Ticker(symbol)
-    df: pd.DataFrame = ticker.history(period=period, interval="5m")
+    df: pd.DataFrame = ticker.history(period=period, interval=interval)
 
     if df.empty:
         raise ValueError(
@@ -316,7 +436,16 @@ def run_backtest(
     # Simulation state
     cash: float = initial_capital
     shares_held: int = 0
+    position_side: str = ""  # "LONG" or "SHORT"
     entry_price: float = 0.0
+    entry_time: str = ""
+    entry_fee: float = 0.0
+    entry_brokerage: float = 0.0
+    entry_exchange: float = 0.0
+    entry_sebi: float = 0.0
+    entry_stamp: float = 0.0
+    entry_gst: float = 0.0
+    entry_stt: float = 0.0
 
     # Pre-allocate tracking arrays for performance
     n: int = len(df)
@@ -360,9 +489,11 @@ def run_backtest(
                 cash -= cost
                 shares_held = affordable_shares
                 entry_price = fill_price
+                entry_time = format_bar_timestamp(df.index[i])
                 trade_count += 1
 
                 print(f"  {Colors.GREEN}▲ BUY  #{trade_count:<3}"
+                      f"  [{entry_time}]"
                       f"  {affordable_shares:>6} shares @ ${fill_price:>10,.2f}"
                       f"  │  Cash: ${cash:>12,.2f}{Colors.RESET}")
 
@@ -370,6 +501,7 @@ def run_backtest(
         elif signal == -1 and shares_held > 0:
             # Apply slippage: receive slightly LESS than the open
             fill_price = bar_open * (1.0 - slippage_pct)
+            exit_time: str = format_bar_timestamp(df.index[i])
             proceeds: float = shares_held * fill_price - commission_fixed
             trade_pnl: float = (fill_price - entry_price) * shares_held
             trade_pnl_pct: float = ((fill_price - entry_price) / entry_price) * 100.0
@@ -379,6 +511,10 @@ def run_backtest(
             pnl_label: str = "Profit" if is_win else "Loss"
 
             trade_log.append({
+                'entry_time': entry_time,
+                'exit_time': exit_time,
+                'placed_at': entry_time,
+                'side': 'LONG',
                 'entry_price': entry_price,
                 'exit_price': fill_price,
                 'shares': shares_held,
@@ -389,6 +525,7 @@ def run_backtest(
 
             trade_count += 1
             print(f"  {Colors.RED}▼ SELL #{trade_count:<3}"
+                  f"  [{exit_time}]"
                   f"  {shares_held:>6} shares @ ${fill_price:>10,.2f}"
                   f"  │  {pnl_color}{pnl_label}: ${trade_pnl:>+10,.2f} "
                   f"({trade_pnl_pct:>+.2f}%){Colors.RESET}")
@@ -413,6 +550,8 @@ def run_backtest(
     # Attach trade log as a DataFrame attribute for analytics
     df.attrs['trade_log'] = trade_log
     df.attrs['initial_capital'] = initial_capital
+    df.attrs['market'] = 'US'
+    df.attrs['currency'] = '$'
 
     # Handle open position at end of simulation
     if shares_held > 0:
@@ -491,7 +630,16 @@ def run_backtest_india(
     # Simulation state
     cash: float = initial_capital
     shares_held: int = 0
+    position_side: str = ""  # "LONG" or "SHORT"
     entry_price: float = 0.0
+    entry_time: str = ""
+    entry_fee: float = 0.0
+    entry_brokerage: float = 0.0
+    entry_exchange: float = 0.0
+    entry_sebi: float = 0.0
+    entry_stamp: float = 0.0
+    entry_gst: float = 0.0
+    entry_stt: float = 0.0
 
     # Pre-allocate tracking arrays
     n: int = len(df)
@@ -509,7 +657,7 @@ def run_backtest_india(
     print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * 60}")
     print(f"  INDIAN BACKTEST ENGINE — Starting Simulation")
     print(f"{'═' * 60}{Colors.RESET}")
-    print(f"  Initial Capital : ₹{initial_capital:>14,.2f}")
+    print(f"  Initial Capital : {format_currency(initial_capital, '₹', show_lakh_tag=True):>14}")
     print(f"  Slippage        : {SLIPPAGE * 100:.4f}% per leg")
     print(f"  Brokerage       : {BROKERAGE_RATE * 100:.4f}% (capped ₹{BROKERAGE_CAP:.0f})")
     print(f"  STT (sell)      : {STT_RATE * 100:.4f}%")
@@ -523,16 +671,14 @@ def run_backtest_india(
         bar_open: float = float(open_prices[i])
         bar_close: float = float(close_prices[i])
 
-        # ── BUY ENTRY (with Indian costs) ────────────────────────────
+        # ── BUY ENTRY (LONG) ─────────────────────────────────────────
         if signal == 1 and shares_held == 0:
             # Apply slippage: pay MORE than the open
             fill_price: float = bar_open * (1.0 + SLIPPAGE)
 
             # Calculate max affordable shares after costs
-            # Iterative approach: estimate shares, compute costs, adjust
             est_shares: int = int(cash / fill_price)
             if est_shares > 0:
-                # Compute buy-leg costs
                 turnover: float = fill_price * est_shares
                 brokerage: float = min(turnover * BROKERAGE_RATE, BROKERAGE_CAP)
                 exchange:  float = turnover * EXCHANGE_FEE
@@ -540,7 +686,6 @@ def run_backtest_india(
                 stamp:     float = turnover * STAMP_DUTY
                 gst:       float = GST_RATE * (brokerage + exchange + sebi)
                 buy_cost:  float = brokerage + exchange + sebi + stamp + gst
-
                 total_outflow: float = turnover + buy_cost
 
                 # Adjust shares if total exceeds cash
@@ -558,20 +703,28 @@ def run_backtest_india(
                 if est_shares > 0:
                     cash -= total_outflow
                     shares_held = est_shares
+                    position_side = "LONG"
                     entry_price = fill_price
+                    entry_time = format_bar_timestamp(df.index[i])
+                    entry_fee = buy_cost
+                    entry_brokerage = brokerage
+                    entry_exchange = exchange
+                    entry_sebi = sebi
+                    entry_stamp = stamp
+                    entry_gst = gst
+                    entry_stt = 0.0
                     trade_count += 1
 
-                    print(f"  {Colors.GREEN}▲ BUY  #{trade_count:<3}"
-                          f"  {est_shares:>6} shares @ ₹{fill_price:>10,.2f}"
-                          f"  │  Costs: ₹{buy_cost:>8,.2f}"
-                          f"  │  Cash: ₹{cash:>12,.2f}{Colors.RESET}")
+                    print(f"  {Colors.GREEN}▲ BUY (LONG) #{trade_count:<3}"
+                          f"  [{entry_time}]"
+                          f"  {est_shares:>6} shares @ {format_currency(fill_price, '₹')}"
+                          f"  │  Costs: {format_currency(buy_cost, '₹')}"
+                          f"  │  Cash: {format_currency(cash, '₹')}{Colors.RESET}")
 
-        # ── SELL EXIT (with Indian costs) ────────────────────────────
-        elif signal == -1 and shares_held > 0:
-            # Apply slippage: receive LESS than the open
+        # ── SELL EXIT (CLOSE LONG) ───────────────────────────────────
+        elif signal == -1 and shares_held > 0 and position_side == "LONG":
             fill_price = bar_open * (1.0 - SLIPPAGE)
-
-            # Compute sell-leg costs
+            exit_time: str = format_bar_timestamp(df.index[i])
             turnover: float = fill_price * shares_held
             brokerage: float = min(turnover * BROKERAGE_RATE, BROKERAGE_CAP)
             stt:       float = turnover * STT_RATE
@@ -581,41 +734,171 @@ def run_backtest_india(
             sell_cost: float = brokerage + stt + exchange + sebi + gst
 
             proceeds: float = turnover - sell_cost
-            trade_pnl: float = (fill_price - entry_price) * shares_held - sell_cost
-            # Also subtract the original buy cost from the trade log entry
-            trade_pnl_pct: float = ((fill_price - entry_price) / entry_price) * 100.0
+            total_trade_costs: float = entry_fee + sell_cost
+            gross_pnl: float = (fill_price - entry_price) * shares_held
+            trade_pnl: float = gross_pnl - total_trade_costs
+            trade_pnl_pct: float = (trade_pnl / (entry_price * shares_held + entry_fee)) * 100.0
 
             is_win: bool = trade_pnl >= 0.0
             pnl_color: str = Colors.GREEN if is_win else Colors.RED
             pnl_label: str = "Profit" if is_win else "Loss"
 
             trade_log.append({
+                'entry_time': entry_time,
+                'exit_time': exit_time,
+                'placed_at': entry_time,
+                'side': 'LONG',
                 'entry_price': entry_price,
                 'exit_price': fill_price,
                 'shares': shares_held,
+                'gross_pnl': gross_pnl,
                 'pnl': trade_pnl,
                 'pnl_pct': trade_pnl_pct,
                 'is_win': is_win,
+                'buy_cost': entry_fee,
                 'sell_cost': sell_cost,
+                'total_cost': total_trade_costs,
+                'brokerage': entry_brokerage + brokerage,
+                'stt': stt,
+                'exchange': entry_exchange + exchange,
+                'sebi': entry_sebi + sebi,
+                'stamp': entry_stamp,
+                'gst': entry_gst + gst,
             })
 
             trade_count += 1
-            print(f"  {Colors.RED}▼ SELL #{trade_count:<3}"
-                  f"  {shares_held:>6} shares @ ₹{fill_price:>10,.2f}"
-                  f"  │  Costs: ₹{sell_cost:>8,.2f}"
-                  f"  │  {pnl_color}{pnl_label}: ₹{trade_pnl:>+10,.2f} "
+            print(f"  {Colors.RED}▼ SELL (CLOSE LONG) #{trade_count:<3}"
+                  f"  [{exit_time}]"
+                  f"  {shares_held:>6} shares @ {format_currency(fill_price, '₹')}"
+                  f"  │  Costs: {format_currency(sell_cost, '₹')}"
+                  f"  │  {pnl_color}{pnl_label}: {format_currency(trade_pnl, '₹', include_sign=True)} "
                   f"({trade_pnl_pct:>+.2f}%){Colors.RESET}")
 
             cash += proceeds
             shares_held = 0
+            position_side = ""
+            entry_price = 0.0
+
+        # ── SHORT ENTRY (SELL TO OPEN SHORT) ─────────────────────────
+        elif signal == -1 and shares_held == 0:
+            fill_price = bar_open * (1.0 - SLIPPAGE)
+            est_shares = int(cash / fill_price)
+            if est_shares > 0:
+                turnover = fill_price * est_shares
+                brokerage = min(turnover * BROKERAGE_RATE, BROKERAGE_CAP)
+                stt = turnover * STT_RATE
+                exchange = turnover * EXCHANGE_FEE
+                sebi = turnover * SEBI_FEE
+                gst = GST_RATE * (brokerage + exchange + sebi)
+                sell_cost = brokerage + stt + exchange + sebi + gst
+                total_outflow = turnover + sell_cost
+
+                while total_outflow > cash and est_shares > 0:
+                    est_shares -= 1
+                    turnover = fill_price * est_shares
+                    brokerage = min(turnover * BROKERAGE_RATE, BROKERAGE_CAP)
+                    stt = turnover * STT_RATE
+                    exchange = turnover * EXCHANGE_FEE
+                    sebi = turnover * SEBI_FEE
+                    gst = GST_RATE * (brokerage + exchange + sebi)
+                    sell_cost = brokerage + stt + exchange + sebi + gst
+                    total_outflow = turnover + sell_cost
+
+                if est_shares > 0:
+                    cash -= total_outflow
+                    shares_held = est_shares
+                    position_side = "SHORT"
+                    entry_price = fill_price
+                    entry_time = format_bar_timestamp(df.index[i])
+                    entry_fee = sell_cost
+                    entry_brokerage = brokerage
+                    entry_stt = stt
+                    entry_exchange = exchange
+                    entry_sebi = sebi
+                    entry_stamp = 0.0
+                    entry_gst = gst
+                    trade_count += 1
+
+                    print(f"  {Colors.RED}▼ SELL (SHORT) #{trade_count:<3}"
+                          f"  [{entry_time}]"
+                          f"  {est_shares:>6} shares @ {format_currency(fill_price, '₹')}"
+                          f"  │  Costs: {format_currency(sell_cost, '₹')}"
+                          f"  │  Cash: {format_currency(cash, '₹')}{Colors.RESET}")
+
+        # ── COVER SHORT (BUY TO CLOSE SHORT) ─────────────────────────
+        elif signal == 1 and shares_held > 0 and position_side == "SHORT":
+            fill_price = bar_open * (1.0 + SLIPPAGE)
+            exit_time = format_bar_timestamp(df.index[i])
+            turnover = fill_price * shares_held
+            brokerage = min(turnover * BROKERAGE_RATE, BROKERAGE_CAP)
+            exchange = turnover * EXCHANGE_FEE
+            sebi = turnover * SEBI_FEE
+            stamp = turnover * STAMP_DUTY
+            gst = GST_RATE * (brokerage + exchange + sebi)
+            buy_cost = brokerage + exchange + sebi + stamp + gst
+
+            gross_pnl = (entry_price - fill_price) * shares_held
+            total_trade_costs = entry_fee + buy_cost
+            trade_pnl = gross_pnl - total_trade_costs
+            trade_pnl_pct = (trade_pnl / (entry_price * shares_held + entry_fee)) * 100.0
+
+            is_win = trade_pnl >= 0.0
+            pnl_color = Colors.GREEN if is_win else Colors.RED
+            pnl_label = "Profit" if is_win else "Loss"
+
+            trade_log.append({
+                'entry_time': entry_time,
+                'exit_time': exit_time,
+                'placed_at': entry_time,
+                'side': 'SHORT',
+                'entry_price': entry_price,
+                'exit_price': fill_price,
+                'shares': shares_held,
+                'gross_pnl': gross_pnl,
+                'pnl': trade_pnl,
+                'pnl_pct': trade_pnl_pct,
+                'is_win': is_win,
+                'buy_cost': buy_cost,
+                'sell_cost': entry_fee,
+                'total_cost': total_trade_costs,
+                'brokerage': entry_brokerage + brokerage,
+                'stt': entry_stt,
+                'exchange': entry_exchange + exchange,
+                'sebi': entry_sebi + sebi,
+                'stamp': stamp,
+                'gst': entry_gst + gst,
+            })
+
+            trade_count += 1
+            print(f"  {Colors.GREEN}▲ BUY (COVER SHORT) #{trade_count:<3}"
+                  f"  [{exit_time}]"
+                  f"  {shares_held:>6} shares @ {format_currency(fill_price, '₹')}"
+                  f"  │  Costs: {format_currency(buy_cost, '₹')}"
+                  f"  │  {pnl_color}{pnl_label}: {format_currency(trade_pnl, '₹', include_sign=True)} "
+                  f"({trade_pnl_pct:>+.2f}%){Colors.RESET}")
+
+            # Return reserved principal plus gross PnL minus cover fees
+            cash += (entry_price * shares_held) + gross_pnl - buy_cost
+            shares_held = 0
+            position_side = ""
             entry_price = 0.0
 
         # ── Record portfolio state at this bar ───────────────────────
-        market_value: float = shares_held * bar_close
+        if position_side == "LONG":
+            market_value: float = shares_held * bar_close
+            equity: float = cash + market_value
+        elif position_side == "SHORT":
+            unrealized: float = (entry_price - bar_close) * shares_held
+            market_value: float = -(shares_held * bar_close)
+            equity: float = cash + (entry_price * shares_held) + unrealized
+        else:
+            market_value = 0.0
+            equity = cash
+
         cash_arr[i] = cash
         shares_arr[i] = shares_held
         market_val_arr[i] = market_value
-        equity_arr[i] = cash + market_value
+        equity_arr[i] = equity
 
     # Attach tracking columns
     df['cash'] = cash_arr
@@ -626,6 +909,10 @@ def run_backtest_india(
     # Attach trade log
     df.attrs['trade_log'] = trade_log
     df.attrs['initial_capital'] = initial_capital
+    df.attrs['market'] = 'FOREX'
+    df.attrs['currency'] = '$'
+    df.attrs['market'] = 'INDIA'
+    df.attrs['currency'] = '₹'
 
     # Handle open position at end of simulation
     if shares_held > 0:
@@ -716,11 +1003,32 @@ def calculate_metrics(backtest_df: pd.DataFrame, initial_capital: float) -> Dict
     gross_loss: float = abs(sum(t['pnl'] for t in trade_log if not t['is_win']))
     profit_factor: float = (gross_profit / gross_loss) if gross_loss > 0 else float('inf')
 
+    # ── Statutory Charges & Cost Aggregation ─────────────────────────
+    total_charges: float = sum(t.get('total_cost', 0.0) for t in trade_log)
+    gross_trading_pnl: float = sum(t.get('gross_pnl', t['pnl']) for t in trade_log)
+    total_brokerage: float = sum(t.get('brokerage', 0.0) for t in trade_log)
+    total_stt: float = sum(t.get('stt', 0.0) for t in trade_log)
+    total_exchange: float = sum(t.get('exchange', 0.0) for t in trade_log)
+    total_stamp: float = sum(t.get('stamp', 0.0) for t in trade_log)
+    total_sebi: float = sum(t.get('sebi', 0.0) for t in trade_log)
+    total_gst: float = sum(t.get('gst', 0.0) for t in trade_log)
+
+    market: str = backtest_df.attrs.get('market', 'INDIA' if initial_capital >= 500_000 else 'US')
+    currency: str = backtest_df.attrs.get('currency', '₹' if market == 'INDIA' else '$')
+
     # ── Assemble metrics dict ────────────────────────────────────────
     metrics: Dict = {
         'initial_capital': initial_capital,
         'final_equity': final_equity,
         'net_pnl': net_pnl,
+        'gross_trading_pnl': gross_trading_pnl,
+        'total_charges': total_charges,
+        'total_brokerage': total_brokerage,
+        'total_stt': total_stt,
+        'total_exchange': total_exchange,
+        'total_stamp': total_stamp,
+        'total_sebi': total_sebi,
+        'total_gst': total_gst,
         'total_return_pct': total_return_pct,
         'total_trades': total_trades,
         'winning_trades': winning_trades,
@@ -733,6 +1041,9 @@ def calculate_metrics(backtest_df: pd.DataFrame, initial_capital: float) -> Dict
         'profit_factor': profit_factor,
         'gross_profit': gross_profit,
         'gross_loss': gross_loss,
+        'trade_log': trade_log,
+        'market': market,
+        'currency': currency,
     }
 
     # ── Pretty Print Report ──────────────────────────────────────────
@@ -744,7 +1055,117 @@ def calculate_metrics(backtest_df: pd.DataFrame, initial_capital: float) -> Dict
 def _print_report(metrics: Dict, strategy_name: str = "") -> None:
     """
     Renders a formatted, color-coded performance report to the terminal.
+    Uses Rich library if available for high-clarity cards, otherwise falls back to ANSI.
     """
+    currency = metrics.get('currency', "₹" if metrics.get('initial_capital', 0) >= 500_000 else "$")
+
+    gross_pnl = metrics.get('gross_trading_pnl', metrics['net_pnl'])
+    gross_style = "bold green" if gross_pnl >= 0 else "bold red"
+    charges = metrics.get('total_charges', 0.0)
+
+    if HAS_RICH and console:
+        title_str = f"📈 Backtest Performance Report — {strategy_name}" if strategy_name else "📈 Backtest Performance Report"
+        ret = metrics['total_return_pct']
+        ret_style = "bold green" if ret >= 0 else "bold red"
+        wr = metrics['win_rate']
+        wr_style = "green" if wr >= 50 else "red"
+        sharpe = metrics['sharpe_ratio']
+        sharpe_style = "cyan" if sharpe > 0 else "red"
+        pf = metrics['profit_factor']
+        pf_str = f"{pf:.2f}" if pf != float('inf') else "∞"
+        pf_style = "green" if pf >= 1.0 else "red"
+
+        grid = Table(box=box.SIMPLE, show_header=False, padding=(0, 2), expand=False)
+        grid.add_column("Category 1", style="dim", justify="left")
+        grid.add_column("Value 1", justify="right", no_wrap=True)
+        grid.add_column("Category 2", style="dim", justify="left")
+        grid.add_column("Value 2", justify="right", no_wrap=True)
+
+        grid.add_row("Initial Capital", format_currency(metrics['initial_capital'], currency, show_lakh_tag=True),
+                     "Total Trades", f"{metrics['total_trades']}")
+        grid.add_row("Gross Trading P&L", f"[{gross_style}]{format_currency(gross_pnl, currency, include_sign=True)}[/{gross_style}]",
+                     "Winning / Losing", f"[green]{metrics['winning_trades']}[/green] / [red]{metrics['losing_trades']}[/red]")
+        grid.add_row("Total Charges & Taxes", f"[bold yellow]-{format_currency(charges, currency)}[/bold yellow]" if charges > 0 else f"{currency}0.00",
+                     "Win Rate", f"[{wr_style}]{wr:.1f}%[/{wr_style}]")
+        grid.add_row("Net P&L (In Hand)", f"[{ret_style}]{format_currency(metrics['net_pnl'], currency, include_sign=True)}[/{ret_style}]",
+                     "Avg Win / Loss", f"[green]{format_currency(metrics['avg_win'], currency, include_sign=True)}[/green] / [red]{format_currency(metrics['avg_loss'], currency, include_sign=True)}[/red]")
+        grid.add_row("Final Equity (In Hand)", f"[{ret_style}]{format_currency(metrics['final_equity'], currency, show_lakh_tag=True)}[/{ret_style}]",
+                     "Profit Factor", f"[{pf_style}]{pf_str}[/{pf_style}]")
+        grid.add_row("Net Total Return", f"[{ret_style}]{ret:+,.2f}%[/{ret_style}]",
+                     "Max Drawdown", f"[red]{metrics['max_drawdown_pct']:.2f}%[/red]")
+        grid.add_row("Sharpe Ratio", f"[{sharpe_style}]{sharpe:.4f}[/{sharpe_style}]",
+                     "", "")
+
+        panel = Panel(grid, title=f"[bold cyan]{title_str}[/bold cyan]", border_style="cyan", box=box.ROUNDED)
+        console.print()
+        console.print(panel)
+
+        # ── Statutory Charges Breakdown Card (if applicable) ────────────────
+        if charges > 0:
+            fee_table = Table(title="🧾 Statutory Charges & Tax Deductions", box=box.ROUNDED, header_style="bold cyan")
+            fee_table.add_column("Charge Component", style="bold white")
+            fee_table.add_column("Regulatory Basis", style="dim cyan")
+            fee_table.add_column("Total Deducted", justify="right", style="bold yellow")
+
+            if metrics.get('total_brokerage', 0.0) > 0:
+                fee_table.add_row("Brokerage", "min(0.03%, ₹20) per order leg", format_currency(metrics['total_brokerage'], "₹"))
+            if metrics.get('total_stt', 0.0) > 0:
+                fee_table.add_row("STT (Securities Transaction Tax)", "0.025% on Sell Turnover", format_currency(metrics['total_stt'], "₹"))
+            if metrics.get('total_exchange', 0.0) > 0:
+                fee_table.add_row("NSE Exchange Transaction Charges", "0.00297% on Turnover", format_currency(metrics['total_exchange'], "₹"))
+            if metrics.get('total_stamp', 0.0) > 0:
+                fee_table.add_row("Stamp Duty", "0.003% on Buy Turnover", format_currency(metrics['total_stamp'], "₹"))
+            if metrics.get('total_sebi', 0.0) > 0:
+                fee_table.add_row("SEBI Turnover Charges", "₹10 per crore (0.0001%)", format_currency(metrics['total_sebi'], "₹"))
+            if metrics.get('total_gst', 0.0) > 0:
+                fee_table.add_row("GST (18%)", "18% on (Brokerage + Exchange + SEBI)", format_currency(metrics['total_gst'], "₹"))
+            fee_table.add_row("Total Charges & Taxes", "Combined Statutory Friction", f"[bold red]{format_currency(charges, currency)}[/bold red]")
+            console.print(fee_table)
+
+        # ── Itemized Trade Journal Table (if trades occurred) ───────────────
+        trade_log = metrics.get('trade_log', [])
+        if trade_log:
+            tl_table = Table(title="📜 Trade Execution & Net In-Hand Journal", box=box.ROUNDED, header_style="bold cyan", expand=False)
+            tl_table.add_column("#", justify="center", width=3, style="bold yellow")
+            tl_table.add_column("Placed At (Entry)", justify="center", style="cyan", no_wrap=True)
+            tl_table.add_column("Exited At", justify="center", style="dim cyan", no_wrap=True)
+            tl_table.add_column("Side", justify="center", style="bold white")
+            tl_table.add_column("Entry Price", justify="right", style="white")
+            tl_table.add_column("Exit Price", justify="right", style="white")
+            tl_table.add_column("Qty", justify="right", style="magenta")
+            tl_table.add_column("Gross P&L", justify="right")
+            tl_table.add_column("Taxes & Fees", justify="right", style="yellow")
+            tl_table.add_column("Net In-Hand", justify="right")
+            tl_table.add_column("Return %", justify="right")
+            tl_table.add_column("Status", justify="center")
+
+            for idx, t in enumerate(trade_log, 1):
+                t_gross = t.get('gross_pnl', t['pnl'])
+                t_net = t['pnl']
+                t_fees = t.get('total_cost', 0.0)
+                t_gross_style = "green" if t_gross >= 0 else "red"
+                t_net_style = "bold green" if t_net >= 0 else "bold red"
+                status = "[green]🟢 WIN[/green]" if t['is_win'] else "[red]🔴 LOSS[/red]"
+
+                tl_table.add_row(
+                    str(idx),
+                    str(t.get('placed_at', t.get('entry_time', 'N/A'))),
+                    str(t.get('exit_time', 'N/A')),
+                    str(t.get('side', 'LONG')),
+                    format_currency(t['entry_price'], currency),
+                    format_currency(t['exit_price'], currency),
+                    f"{t.get('shares', t.get('units', 0)):,}",
+                    f"[{t_gross_style}]{format_currency(t_gross, currency, include_sign=True)}[/{t_gross_style}]",
+                    f"-{format_currency(t_fees, currency)}" if t_fees > 0 else f"{currency}0.00",
+                    f"[{t_net_style}]{format_currency(t_net, currency, include_sign=True)}[/{t_net_style}]",
+                    f"[{t_net_style}]{t['pnl_pct']:+.2f}%[/{t_net_style}]",
+                    status
+                )
+            console.print(tl_table)
+
+        console.print()
+        return
+
     ret_color: str = Colors.GREEN if metrics['total_return_pct'] >= 0 else Colors.RED
     dd_color: str = Colors.RED  # Drawdown is always a negative metric
     sharpe_color: str = Colors.GREEN if metrics['sharpe_ratio'] > 0 else Colors.RED
@@ -756,12 +1177,15 @@ def _print_report(metrics: Dict, strategy_name: str = "") -> None:
     print(f"{'═' * 60}{Colors.RESET}")
 
     # Capital summary
-    print(f"\n  {Colors.BOLD}Capital Summary{Colors.RESET}")
+    print(f"\n  {Colors.BOLD}Capital & P&L Summary{Colors.RESET}")
     print(f"  {'─' * 40}")
-    print(f"  Initial Capital   : ${metrics['initial_capital']:>14,.2f}")
-    print(f"  Final Equity      : {ret_color}${metrics['final_equity']:>14,.2f}{Colors.RESET}")
-    print(f"  Net P&L           : {ret_color}${metrics['net_pnl']:>+14,.2f}{Colors.RESET}")
-    print(f"  Total Return      : {ret_color}{metrics['total_return_pct']:>+14.2f}%{Colors.RESET}")
+    print(f"  Initial Capital        : {format_currency(metrics['initial_capital'], currency, show_lakh_tag=True):>14}")
+    gross_col = Colors.GREEN if gross_pnl >= 0 else Colors.RED
+    print(f"  Gross Trading P&L      : {gross_col}{format_currency(gross_pnl, currency, include_sign=True):>14}{Colors.RESET}")
+    print(f"  Total Charges & Taxes  : {Colors.YELLOW}-{format_currency(charges, currency):>14}{Colors.RESET}")
+    print(f"  Final Equity (In Hand) : {ret_color}{format_currency(metrics['final_equity'], currency, show_lakh_tag=True):>14}{Colors.RESET}")
+    print(f"  Net P&L (In Hand)      : {ret_color}{format_currency(metrics['net_pnl'], currency, include_sign=True):>14}{Colors.RESET}")
+    print(f"  Total Return (Net)     : {ret_color}{metrics['total_return_pct']:>+14.2f}%{Colors.RESET}")
 
     # Trade statistics
     print(f"\n  {Colors.BOLD}Trade Statistics{Colors.RESET}")
@@ -771,8 +1195,8 @@ def _print_report(metrics: Dict, strategy_name: str = "") -> None:
     print(f"  Losing Trades     : {Colors.RED}{metrics['losing_trades']:>14}{Colors.RESET}")
     wr_color: str = Colors.GREEN if metrics['win_rate'] >= 50 else Colors.RED
     print(f"  Win Rate          : {wr_color}{metrics['win_rate']:>13.1f}%{Colors.RESET}")
-    print(f"  Avg Winning Trade : {Colors.GREEN}${metrics['avg_win']:>+13,.2f}{Colors.RESET}")
-    print(f"  Avg Losing Trade  : {Colors.RED}${metrics['avg_loss']:>+13,.2f}{Colors.RESET}")
+    print(f"  Avg Winning Trade : {Colors.GREEN}{format_currency(metrics['avg_win'], currency, include_sign=True):>13}{Colors.RESET}")
+    print(f"  Avg Losing Trade  : {Colors.RED}{format_currency(metrics['avg_loss'], currency, include_sign=True):>13}{Colors.RESET}")
 
     # Risk metrics
     print(f"\n  {Colors.BOLD}Risk Metrics{Colors.RESET}")
@@ -836,6 +1260,7 @@ def run_backtest_forex(
     cash: float = initial_capital
     units_held: int = 0
     entry_price: float = 0.0
+    entry_time: str = ""
 
     # Pre-allocate tracking arrays
     n: int = len(df)
@@ -879,10 +1304,12 @@ def run_backtest_forex(
                 cash -= cost
                 units_held = affordable_units
                 entry_price = fill_price
+                entry_time = format_bar_timestamp(df.index[i])
                 trade_count += 1
 
                 spread_cost: float = affordable_units * HALF_SPREAD
                 print(f"  {Colors.GREEN}▲ BUY  #{trade_count:<3}"
+                      f"  [{entry_time}]"
                       f"  {affordable_units:>6} units @ ${fill_price:.5f}"
                       f"  │  Spread: ${spread_cost:>8,.4f}"
                       f"  │  Cash: ${cash:>12,.2f}{Colors.RESET}")
@@ -890,6 +1317,7 @@ def run_backtest_forex(
         # ── SELL EXIT (pip-spread friction) ────────────────────────────
         elif signal == -1 and units_held > 0:
             fill_price = bar_open - HALF_SPREAD
+            exit_time = format_bar_timestamp(df.index[i])
             proceeds: float = units_held * fill_price
             trade_pnl: float = (fill_price - entry_price) * units_held
             trade_pnl_pct: float = ((fill_price - entry_price) / entry_price) * 100.0
@@ -900,9 +1328,14 @@ def run_backtest_forex(
             pnl_label: str = "Profit" if is_win else "Loss"
 
             trade_log.append({
+                'entry_time': entry_time,
+                'exit_time': exit_time,
+                'placed_at': entry_time,
+                'side': 'LONG',
                 'entry_price': entry_price,
                 'exit_price': fill_price,
                 'shares': units_held,
+                'units': units_held,
                 'pnl': trade_pnl,
                 'pnl_pct': trade_pnl_pct,
                 'is_win': is_win,
@@ -911,6 +1344,7 @@ def run_backtest_forex(
 
             trade_count += 1
             print(f"  {Colors.RED}▼ SELL #{trade_count:<3}"
+                  f"  [{exit_time}]"
                   f"  {units_held:>6} units @ ${fill_price:.5f}"
                   f"  │  Spread: ${spread_cost:>8,.4f}"
                   f"  │  {pnl_color}{pnl_label}: ${trade_pnl:>+10,.2f} "
@@ -936,6 +1370,10 @@ def run_backtest_forex(
     # Attach trade log
     df.attrs['trade_log'] = trade_log
     df.attrs['initial_capital'] = initial_capital
+    df.attrs['market'] = 'FOREX'
+    df.attrs['currency'] = '$'
+    df.attrs['market'] = 'INDIA'
+    df.attrs['currency'] = '₹'
 
     # Handle open position at end of simulation
     if units_held > 0:
@@ -1123,9 +1561,58 @@ def run_all_strategies_forex(
 def _print_comparison_table(all_metrics: List[Dict]) -> None:
     """
     Prints a side-by-side comparison table of all strategy results.
+    Uses Rich Table if available, otherwise falls back to ANSI.
     """
     if not all_metrics:
-        print(f"{Colors.YELLOW}No strategies were run.{Colors.RESET}")
+        if HAS_RICH and console:
+            console.print("[yellow]⚠️  No strategies were run.[/yellow]")
+        else:
+            print(f"{Colors.YELLOW}No strategies were run.{Colors.RESET}")
+        return
+
+    # Sort by total return (best first)
+    sorted_metrics: List[Dict] = sorted(all_metrics, key=lambda m: m['total_return_pct'], reverse=True)
+
+    if HAS_RICH and console:
+        table = Table(title="🏆 Strategy Performance Leaderboard", box=box.ROUNDED, header_style="bold cyan")
+        table.add_column("Rank", justify="center", no_wrap=True)
+        table.add_column("Strategy Name", style="bold white")
+        table.add_column("Net P&L (In Hand)", justify="right", no_wrap=True)
+        table.add_column("Charges", justify="right", no_wrap=True)
+        table.add_column("Return %", justify="right", no_wrap=True)
+        table.add_column("Win Rate", justify="right", no_wrap=True)
+        table.add_column("Trades", justify="right", no_wrap=True)
+        table.add_column("Max DD", justify="right", no_wrap=True)
+        table.add_column("Sharpe", justify="right", no_wrap=True)
+        table.add_column("PF", justify="right", no_wrap=True)
+
+        for i, m in enumerate(sorted_metrics):
+            name: str = m.get('strategy_name', 'Unknown')
+            ret: float = m['total_return_pct']
+            wr: float = m['win_rate']
+            trades: int = m['total_trades']
+            dd: float = m['max_drawdown_pct']
+            sharpe: float = m['sharpe_ratio']
+            pf: float = m['profit_factor']
+            charges = m.get('total_charges', 0.0)
+            curr = m.get('currency', "₹" if m.get('initial_capital', 0) >= 500_000 else "$")
+
+            charges_str = f"[yellow]-{format_currency(charges, curr)}[/yellow]" if charges > 0 else f"{curr}0.00"
+            net_str = f"[{'bold green' if m['net_pnl'] >= 0 else 'bold red'}]{format_currency(m['net_pnl'], curr, include_sign=True)}[/]"
+            ret_str = f"[bold green]{ret:>+7.2f}%[/bold green]" if ret >= 0 else f"[bold red]{ret:>+7.2f}%[/bold red]"
+            wr_str = f"[green]{wr:>5.1f}%[/green]" if wr >= 50 else f"[red]{wr:>5.1f}%[/red]"
+            dd_str = f"[red]{dd:>5.2f}%[/red]"
+            sharpe_str = f"[cyan]{sharpe:>6.2f}[/cyan]" if sharpe > 0 else f"[red]{sharpe:>6.2f}[/red]"
+            pf_str = f"[green]{pf:>5.2f}[/green]" if pf >= 1.0 else f"[red]{pf:>5.2f}[/red]"
+            if pf == float('inf'):
+                pf_str = "[green]∞[/green]"
+
+            rank_badge = "🥇 1" if i == 0 else ("🥈 2" if i == 1 else ("🥉 3" if i == 2 else f"   {i+1}"))
+            table.add_row(rank_badge, name, net_str, charges_str, ret_str, wr_str, str(trades), dd_str, sharpe_str, pf_str)
+
+        console.print()
+        console.print(table)
+        console.print()
         return
 
     print(f"\n{Colors.BOLD}{Colors.CYAN}{'═' * 90}")
@@ -1136,9 +1623,6 @@ def _print_comparison_table(all_metrics: List[Dict]) -> None:
     print(f"\n  {'Strategy':<22} {'Return':>10} {'Win Rate':>10} {'Trades':>8} "
           f"{'Max DD':>10} {'Sharpe':>10} {'PF':>8}")
     print(f"  {'─' * 22} {'─' * 10} {'─' * 10} {'─' * 8} {'─' * 10} {'─' * 10} {'─' * 8}")
-
-    # Sort by total return (best first)
-    sorted_metrics: List[Dict] = sorted(all_metrics, key=lambda m: m['total_return_pct'], reverse=True)
 
     for i, m in enumerate(sorted_metrics):
         name: str = m.get('strategy_name', 'Unknown')[:22]
@@ -1170,72 +1654,363 @@ def _print_comparison_table(all_metrics: List[Dict]) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 5. Main Block — Interactive Strategy Selection
+# 5. Main Block — Dynamic Interactive Setup & Strategy Execution
 # ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
 
-    SYMBOL: str = "EUR/USD"
-    LOOKBACK_DAYS: int = 360
-    INITIAL_CAPITAL: float = 100_000.0
-    SLIPPAGE_PCT: float = 0.0005  # 0.05%
-    FOREX_SPREAD_PIPS: float = 1.5  # 1.5 pip round-trip spread for majors
-
-    # Detect if the symbol belongs to the Indian market (either in watchlist or ends with .NS)
-    IS_INDIAN: bool = (SYMBOL in INDIAN_WATCHLIST) or SYMBOL.endswith(".NS") or SYMBOL == "^NSEI"
-    IS_FOREX: bool = "/" in SYMBOL or SYMBOL.endswith("=X")
-    FOREX_MODE: bool = IS_FOREX
-
-    if IS_INDIAN:
-        # Indian market defaults
-        INITIAL_CAPITAL = 1_000_000.0  # ₹10,00,000
-        LOOKBACK_DAYS = 60  # yfinance 5m limit
-    elif FOREX_MODE:
-        LOOKBACK_DAYS = 60  # yfinance intraday limit
-
-    print(f"\n{Colors.BOLD}{'🚀' * 3}  Algo Backtesting Framework  {'🚀' * 3}{Colors.RESET}")
-    if IS_INDIAN:
-        print(f"{Colors.YELLOW}  🇮🇳  Indian Market Mode — NSE via yfinance{Colors.RESET}")
-        CURRENT_MARKET = "INDIA"
-    elif IS_FOREX:
-        print(f"{Colors.YELLOW}  💱  Forex Market Mode — via yfinance{Colors.RESET}")
-        CURRENT_MARKET = "US"  # Treat as US for strategies
+    if HAS_RICH and console:
+        console.print()
+        console.print(Panel(
+            "[bold cyan]Algo Backtesting & Quantitative Research Terminal[/bold cyan]\n"
+            "[dim white]Multi-Asset Engine • Dynamic Timeframes • Statutory Friction & Slippage Model[/dim white]",
+            box=box.DOUBLE,
+            border_style="bright_cyan",
+            padding=(0, 2)
+        ))
+        console.print()
     else:
-        CURRENT_MARKET = "US"
+        print(f"\n{Colors.BOLD}{'🚀' * 3}  Algo Backtesting Framework  {'🚀' * 3}{Colors.RESET}\n")
+
+    # ── Step 1: Dynamic Market Selection ─────────────────────────────────────
+    if HAS_RICH and console:
+        market_table = Table(title="🌍 Step 1: Select Trading Market", box=box.ROUNDED, header_style="bold cyan")
+        market_table.add_column("#", justify="center", min_width=3, no_wrap=True, style="bold yellow")
+        market_table.add_column("Market", style="bold white")
+        market_table.add_column("Asset Class", style="green")
+        market_table.add_column("Data Feed", style="cyan")
+        market_table.add_column("Default", justify="center", no_wrap=True, style="bold green")
+
+        market_table.add_row("1", "🇮🇳 India (NSE)", "Equities (Intraday MIS / Cash)", "Yahoo Finance (yfinance)", "[Default]")
+        market_table.add_row("2", "🇺🇸 United States", "Equities (US Stocks)", "Alpaca Markets API", "")
+        market_table.add_row("3", "💱 Forex", "Currency Pairs (G10 FX)", "Yahoo Finance (yfinance)", "")
+        console.print(market_table)
+    else:
+        print(f"{Colors.BOLD}1. Select Market:{Colors.RESET}")
+        print(f"  {Colors.CYAN}1.{Colors.RESET} 🇮🇳  Indian Equities (NSE via yfinance) {Colors.GREEN}[Default]{Colors.RESET}")
+        print(f"  {Colors.CYAN}2.{Colors.RESET} 🇺🇸  US Equities (Alpaca Markets API)")
+        print(f"  {Colors.CYAN}3.{Colors.RESET} 💱  Forex Pairs (via yfinance)")
+
+    try:
+        if HAS_RICH and console:
+            market_input: str = console.input("[bold yellow]Enter choice [1-3, default 1]: [/bold yellow]").strip()
+        else:
+            market_input: str = input(f"{Colors.YELLOW}Enter choice [1-3, default 1]: {Colors.RESET}").strip()
+    except (EOFError, KeyboardInterrupt):
+        market_input = "1"
+
+    if market_input == "2":
+        SELECTED_MARKET = "US"
+        IS_INDIAN = False
+        IS_FOREX = False
+    elif market_input == "3":
+        SELECTED_MARKET = "FOREX"
+        IS_INDIAN = False
+        IS_FOREX = True
+    else:
+        SELECTED_MARKET = "INDIA"
+        IS_INDIAN = True
+        IS_FOREX = False
+
+    FOREX_MODE = IS_FOREX
+    CURRENT_MARKET = "INDIA" if IS_INDIAN else "US"
     print()
 
-    # Show available strategies for the current market
+    # ── Step 2: Dynamic Stock / Symbol Selection ─────────────────────────────
+    if IS_INDIAN:
+        INDIAN_PRESETS = [
+            ("RELIANCE.NS", "Reliance Industries Ltd.", "Energy & Conglomerate", "[Default]"),
+            ("HDFCBANK.NS", "HDFC Bank Ltd.", "Private Banking", ""),
+            ("TCS.NS", "Tata Consultancy Services Ltd.", "Information Technology", ""),
+            ("INFY.NS", "Infosys Ltd.", "Information Technology", ""),
+            ("SBIN.NS", "State Bank of India", "PSU Banking", ""),
+            ("ICICIBANK.NS", "ICICI Bank Ltd.", "Private Banking", ""),
+            ("TATAMOTORS.NS", "Tata Motors Ltd.", "Automotive", ""),
+            ("^NSEI", "Nifty 50 Index", "Benchmark Index", ""),
+        ]
+
+        if HAS_RICH and console:
+            sym_table = Table(title="📈 Step 2: Select NSE Equity Symbol", box=box.ROUNDED, header_style="bold cyan")
+            sym_table.add_column("#", justify="center", min_width=3, no_wrap=True, style="bold yellow")
+            sym_table.add_column("Ticker", style="bold green", no_wrap=True)
+            sym_table.add_column("Company / Asset", style="bold white")
+            sym_table.add_column("Sector", style="dim cyan")
+            sym_table.add_column("Default", justify="center", no_wrap=True, style="bold green")
+
+            for idx, (sym, name, sector, is_def) in enumerate(INDIAN_PRESETS, 1):
+                sym_table.add_row(str(idx), sym, name, sector, is_def)
+            sym_table.add_row("9", "Custom Ticker", "Enter any custom NSE ticker", "User Defined", "")
+            console.print(sym_table)
+            sym_input = console.input("[bold yellow]Enter choice [1-9 or type ticker, default 1]: [/bold yellow]").strip()
+        else:
+            print(f"{Colors.BOLD}2. Select Stock (Indian NSE):{Colors.RESET}")
+            for idx, (sym, name, sector, is_def) in enumerate(INDIAN_PRESETS, 1):
+                print(f"  {Colors.CYAN}{idx}.{Colors.RESET} {sym:<16} {Colors.DIM}— {name}{Colors.RESET}")
+            print(f"  {Colors.CYAN}9.{Colors.RESET} Enter custom ticker...")
+            sym_input = input(f"{Colors.YELLOW}Enter choice [1-9 or type ticker, default 1]: {Colors.RESET}").strip()
+
+        if not sym_input or sym_input == "1":
+            SYMBOL = "RELIANCE.NS"
+        elif sym_input.isdigit() and 1 <= int(sym_input) <= len(INDIAN_PRESETS):
+            SYMBOL = INDIAN_PRESETS[int(sym_input) - 1][0]
+        elif sym_input == "9":
+            prompt = "[bold yellow]Enter custom NSE ticker (e.g. BAJFINANCE.NS): [/bold yellow]" if HAS_RICH and console else f"{Colors.YELLOW}Enter custom NSE ticker (e.g. BAJFINANCE.NS): {Colors.RESET}"
+            try:
+                custom_sym = (console.input(prompt) if HAS_RICH and console else input(prompt)).strip().upper()
+            except (EOFError, KeyboardInterrupt):
+                custom_sym = "RELIANCE.NS"
+            if custom_sym and not custom_sym.endswith(".NS") and not custom_sym.startswith("^"):
+                custom_sym += ".NS"
+            SYMBOL = custom_sym or "RELIANCE.NS"
+        else:
+            custom_sym = sym_input.upper()
+            if not custom_sym.endswith(".NS") and not custom_sym.startswith("^"):
+                custom_sym += ".NS"
+            SYMBOL = custom_sym
+
+        INITIAL_CAPITAL = 1_000_000.0  # ₹10,00,000
+
+    elif IS_FOREX:
+        FOREX_PRESETS = [
+            ("EUR/USD", "Euro / US Dollar", "Major Pair", "[Default]"),
+            ("GBP/USD", "British Pound / US Dollar", "Major Pair", ""),
+            ("USD/JPY", "US Dollar / Japanese Yen", "Major Pair", ""),
+            ("AUD/USD", "Australian Dollar / US Dollar", "Commodity Pair", ""),
+            ("USD/CAD", "US Dollar / Canadian Dollar", "Commodity Pair", ""),
+        ]
+
+        if HAS_RICH and console:
+            fx_table = Table(title="💱 Step 2: Select Forex Currency Pair", box=box.ROUNDED, header_style="bold cyan")
+            fx_table.add_column("#", justify="center", min_width=3, no_wrap=True, style="bold yellow")
+            fx_table.add_column("Pair", style="bold green", no_wrap=True)
+            fx_table.add_column("Currency Pair", style="bold white")
+            fx_table.add_column("Category", style="dim cyan")
+            fx_table.add_column("Default", justify="center", no_wrap=True, style="bold green")
+
+            for idx, (sym, name, cat, is_def) in enumerate(FOREX_PRESETS, 1):
+                fx_table.add_row(str(idx), sym, name, cat, is_def)
+            fx_table.add_row("6", "Custom Pair", "Enter any currency pair", "User Defined", "")
+            console.print(fx_table)
+            sym_input = console.input("[bold yellow]Enter choice [1-6 or type pair, default 1]: [/bold yellow]").strip()
+        else:
+            print(f"{Colors.BOLD}2. Select Forex Pair:{Colors.RESET}")
+            for idx, (sym, name, cat, is_def) in enumerate(FOREX_PRESETS, 1):
+                print(f"  {Colors.CYAN}{idx}.{Colors.RESET} {sym:<16} {Colors.DIM}— {name}{Colors.RESET}")
+            print(f"  {Colors.CYAN}6.{Colors.RESET} Enter custom pair...")
+            sym_input = input(f"{Colors.YELLOW}Enter choice [1-6 or type pair, default 1]: {Colors.RESET}").strip()
+
+        if not sym_input or sym_input == "1":
+            SYMBOL = "EUR/USD"
+        elif sym_input.isdigit() and 1 <= int(sym_input) <= len(FOREX_PRESETS):
+            SYMBOL = FOREX_PRESETS[int(sym_input) - 1][0]
+        elif sym_input == "6":
+            prompt = "[bold yellow]Enter currency pair (e.g. EUR/JPY): [/bold yellow]" if HAS_RICH and console else f"{Colors.YELLOW}Enter currency pair (e.g. EUR/JPY): {Colors.RESET}"
+            try:
+                custom_pair = (console.input(prompt) if HAS_RICH and console else input(prompt)).strip().upper()
+            except (EOFError, KeyboardInterrupt):
+                custom_pair = "EUR/USD"
+            SYMBOL = custom_pair or "EUR/USD"
+        else:
+            SYMBOL = sym_input.upper()
+
+        INITIAL_CAPITAL = 100_000.0
+
+    else:  # US Equities
+        US_PRESETS = [
+            ("AAPL", "Apple Inc.", "Megacap Consumer Electronics", "[Default]"),
+            ("MSFT", "Microsoft Corporation", "Enterprise Cloud & Software", ""),
+            ("NVDA", "NVIDIA Corporation", "Semiconductors & AI", ""),
+            ("AMZN", "Amazon.com Inc.", "E-Commerce & Cloud Computing", ""),
+            ("GOOGL", "Alphabet Inc.", "Digital Search & AI", ""),
+            ("TSLA", "Tesla Inc.", "Electric Vehicles & Clean Energy", ""),
+        ]
+
+        if HAS_RICH and console:
+            us_table = Table(title="🇺🇸 Step 2: Select US Equity Symbol", box=box.ROUNDED, header_style="bold cyan")
+            us_table.add_column("#", justify="center", min_width=3, no_wrap=True, style="bold yellow")
+            us_table.add_column("Ticker", style="bold green", no_wrap=True)
+            us_table.add_column("Company Name", style="bold white")
+            us_table.add_column("Sector", style="dim cyan")
+            us_table.add_column("Default", justify="center", no_wrap=True, style="bold green")
+
+            for idx, (sym, name, sec, is_def) in enumerate(US_PRESETS, 1):
+                us_table.add_row(str(idx), sym, name, sec, is_def)
+            us_table.add_row("7", "Custom Ticker", "Enter any US ticker (e.g. AMD)", "User Defined", "")
+            console.print(us_table)
+            sym_input = console.input("[bold yellow]Enter choice [1-7 or type ticker, default 1]: [/bold yellow]").strip()
+        else:
+            print(f"{Colors.BOLD}2. Select US Stock (Alpaca):{Colors.RESET}")
+            for idx, (sym, name, sec, is_def) in enumerate(US_PRESETS, 1):
+                print(f"  {Colors.CYAN}{idx}.{Colors.RESET} {sym:<16} {Colors.DIM}— {name}{Colors.RESET}")
+            print(f"  {Colors.CYAN}7.{Colors.RESET} Enter custom ticker...")
+            sym_input = input(f"{Colors.YELLOW}Enter choice [1-7 or type ticker, default 1]: {Colors.RESET}").strip()
+
+        if not sym_input or sym_input == "1":
+            SYMBOL = "AAPL"
+        elif sym_input.isdigit() and 1 <= int(sym_input) <= len(US_PRESETS):
+            SYMBOL = US_PRESETS[int(sym_input) - 1][0]
+        elif sym_input == "7":
+            prompt = "[bold yellow]Enter US ticker (e.g. AMD): [/bold yellow]" if HAS_RICH and console else f"{Colors.YELLOW}Enter US ticker (e.g. AMD): {Colors.RESET}"
+            try:
+                custom_sym = (console.input(prompt) if HAS_RICH and console else input(prompt)).strip().upper()
+            except (EOFError, KeyboardInterrupt):
+                custom_sym = "AAPL"
+            SYMBOL = custom_sym or "AAPL"
+        else:
+            SYMBOL = sym_input.upper()
+
+        INITIAL_CAPITAL = 100_000.0
+
+    print()
+
+    # ── Step 3: Dynamic Candle / Timeframe Interval Selection ────────────────
+    CANDLE_OPTIONS = [
+        ("1m", "1-Minute Bars", "Scalping & High-Frequency Price Action", ""),
+        ("2m", "2-Minute Bars", "Micro-Momentum & Clean Pullbacks", ""),
+        ("5m", "5-Minute Bars", "Intraday ORB & VWAP Breakouts", "[Default]"),
+        ("15m", "15-Minute Bars", "Short-term Momentum & Reversals", ""),
+        ("30m", "30-Minute Bars", "Multi-hour Trend Following", ""),
+        ("1h", "1-Hour Bars", "Swing Trading & Trend Structure", ""),
+        ("1d", "Daily Bars", "Positional & Long-term Swings", ""),
+    ]
+
+    if HAS_RICH and console:
+        tf_table = Table(title="⏱️  Step 3: Select Candle Timeframe", box=box.ROUNDED, header_style="bold cyan")
+        tf_table.add_column("#", justify="center", min_width=3, no_wrap=True, style="bold yellow")
+        tf_table.add_column("Timeframe", style="bold green", no_wrap=True)
+        tf_table.add_column("Description", style="bold white")
+        tf_table.add_column("Recommended Strategy Context", style="dim cyan")
+        tf_table.add_column("Default", justify="center", no_wrap=True, style="bold green")
+
+        for idx, (tf, desc, context, is_def) in enumerate(CANDLE_OPTIONS, 1):
+            tf_table.add_row(str(idx), tf, desc, context, is_def)
+        tf_table.add_row(str(len(CANDLE_OPTIONS) + 1), "Custom", "Enter custom interval (e.g. 10m)", "User Defined", "")
+        console.print(tf_table)
+        tf_input = console.input(f"[bold yellow]Enter choice [1-{len(CANDLE_OPTIONS) + 1}, default 3 for 5m]: [/bold yellow]").strip()
+    else:
+        print(f"{Colors.BOLD}3. Select Candle Interval (Timeframe):{Colors.RESET}")
+        for idx, (tf, desc, context, is_def) in enumerate(CANDLE_OPTIONS, 1):
+            print(f"  {Colors.CYAN}{idx}.{Colors.RESET} {tf:<8} {Colors.DIM}— {desc}{Colors.RESET}")
+        print(f"  {Colors.CYAN}{len(CANDLE_OPTIONS) + 1}.{Colors.RESET} Enter custom interval...")
+        tf_input = input(f"{Colors.YELLOW}Choose timeframe [1-{len(CANDLE_OPTIONS) + 1}, default 3 for 5m]: {Colors.RESET}").strip()
+
+    custom_idx = str(len(CANDLE_OPTIONS) + 1)
+    if not tf_input or tf_input == "3":
+        INTERVAL = "5m"
+    elif tf_input.isdigit() and 1 <= int(tf_input) <= len(CANDLE_OPTIONS):
+        INTERVAL = CANDLE_OPTIONS[int(tf_input) - 1][0]
+    elif tf_input == custom_idx:
+        prompt = "[bold yellow]Enter custom timeframe (e.g. 10m): [/bold yellow]" if HAS_RICH and console else f"{Colors.YELLOW}Enter custom timeframe (e.g. 10m): {Colors.RESET}"
+        try:
+            INTERVAL = (console.input(prompt) if HAS_RICH and console else input(prompt)).strip() or "5m"
+        except (EOFError, KeyboardInterrupt):
+            INTERVAL = "5m"
+    else:
+        INTERVAL = tf_input
+
+    print()
+
+    # ── Step 4: Dynamic Lookback Selection ───────────────────────────────────
+    is_intraday = INTERVAL.lower() in ("1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h")
+    default_days = 7 if INTERVAL.lower() == "1m" else (60 if is_intraday else 365)
+
+    try:
+        if HAS_RICH and console:
+            lookback_prompt = f"[bold yellow]📅 Step 4: Enter historical lookback in calendar days [dim](default {default_days}d)[/dim]: [/bold yellow]"
+            lookback_input = console.input(lookback_prompt).strip()
+        else:
+            lookback_input = input(f"{Colors.YELLOW}4. Enter lookback in calendar days [default {default_days}]: {Colors.RESET}").strip()
+        LOOKBACK_DAYS = int(lookback_input) if lookback_input else default_days
+    except (ValueError, EOFError, KeyboardInterrupt):
+        LOOKBACK_DAYS = default_days
+
+    # ── Step 5: Dynamic Starting Capital (Initial Balance) ───────────────────
+    default_capital = 1_000_000.0 if IS_INDIAN else 100_000.0
+    if IS_INDIAN:
+        cap_hint = "e.g. 1000000, 10L, 5L, default ₹10,00,000 (10 Lakhs)"
+        cap_prompt = f"[bold yellow]💰 Step 5: Enter Starting Capital in ₹ [dim]({cap_hint})[/dim]: [/bold yellow]" if HAS_RICH and console else f"{Colors.YELLOW}5. Enter Starting Capital in ₹ ({cap_hint}): {Colors.RESET}"
+    else:
+        cap_hint = "e.g. 100000 or 100k, default $100,000"
+        cap_prompt = f"[bold yellow]💰 Step 5: Enter Starting Capital in $ [dim]({cap_hint})[/dim]: [/bold yellow]" if HAS_RICH and console else f"{Colors.YELLOW}5. Enter Starting Capital in $ ({cap_hint}): {Colors.RESET}"
+
+    try:
+        cap_input = (console.input(cap_prompt) if HAS_RICH and console else input(cap_prompt)).strip()
+        INITIAL_CAPITAL = parse_capital_input(cap_input, default_capital, is_indian=IS_INDIAN)
+    except (ValueError, EOFError, KeyboardInterrupt):
+        INITIAL_CAPITAL = default_capital
+
+    SLIPPAGE_PCT = 0.0005        # 0.05%
+    FOREX_SPREAD_PIPS = 1.5      # 1.5 pips for forex
+
+    # ── Configuration Summary Panel ──────────────────────────────────────────
+    curr_symbol = "₹" if IS_INDIAN else "$"
+    start_cash_str = format_currency(INITIAL_CAPITAL, curr_symbol, show_lakh_tag=True)
+    if HAS_RICH and console:
+        console.print()
+        config_summary = (
+            f"[bold white]Target Market:[/bold white]   [bold cyan]{SELECTED_MARKET}[/bold cyan]    "
+            f"[bold white]Symbol:[/bold white]        [bold green]{SYMBOL}[/bold green]\n"
+            f"[bold white]Timeframe:[/bold white]       [bold yellow]{INTERVAL}[/bold yellow]           "
+            f"[bold white]Lookback:[/bold white]      [bold magenta]{LOOKBACK_DAYS} calendar days[/bold magenta]\n"
+            f"[bold white]Starting Cash:[/bold white]   [bold white]{start_cash_str}[/bold white]     "
+            f"[bold white]Friction Model:[/bold white] [dim green]{'NSE Statutory + 5bps' if IS_INDIAN else ('1.5 pips spread' if IS_FOREX else '0.05% slippage')}[/dim green]"
+        )
+        console.print(Panel(
+            config_summary,
+            title="⚙️  Active Backtest Parameters",
+            box=box.ROUNDED,
+            border_style="bright_blue",
+            padding=(0, 2)
+        ))
+        console.print()
+
+    # ── Step 6: Strategy Discovery & Selection ───────────────────────────────
     all_strategies = list_strategies()
     strategies = [s for s in all_strategies if s.get('market', 'US') in (CURRENT_MARKET, 'ALL')]
-    
-    print(f"{Colors.BOLD}Available Strategies for {CURRENT_MARKET} Market:{Colors.RESET}")
-    if not strategies:
-        print(f"  {Colors.RED}No strategies found for {CURRENT_MARKET} market.{Colors.RESET}")
-        sys.exit(0)
-        
-    for i, s in enumerate(strategies, 1):
-        print(f"  {Colors.CYAN}{i}.{Colors.RESET} {s['name']:<25} {Colors.DIM}— {s['description']}{Colors.RESET}")
-    print(f"  {Colors.CYAN}0.{Colors.RESET} {'Run ALL strategies':<25} {Colors.DIM}— Compare all side-by-side{Colors.RESET}")
 
-    # Interactive selection
-    print(f"\n{Colors.YELLOW}Select strategies (e.g., 1 or 1,3 or 0 for all): {Colors.RESET}", end="")
+    if not strategies:
+        if HAS_RICH and console:
+            console.print(f"[bold red]❌ No strategies found for {CURRENT_MARKET} market.[/bold red]")
+        else:
+            print(f"  {Colors.RED}No strategies found for {CURRENT_MARKET} market.{Colors.RESET}")
+        sys.exit(0)
+
+    if HAS_RICH and console:
+        strat_table = Table(title=f"🎯 Step 6: Select Strategy ({CURRENT_MARKET} Market)", box=box.ROUNDED, header_style="bold cyan")
+        strat_table.add_column("#", justify="center", min_width=3, no_wrap=True, style="bold yellow")
+        strat_table.add_column("Strategy Name", style="bold white", no_wrap=True)
+        strat_table.add_column("Market", style="cyan", justify="center", no_wrap=True)
+        strat_table.add_column("Description", style="dim white")
+
+        for i, s in enumerate(strategies, 1):
+            strat_table.add_row(str(i), s['name'], s.get('market', 'ALL'), s.get('description', ''))
+        strat_table.add_row("0", "⚡ Run ALL Strategies", "ALL", "Execute every available strategy and compare side-by-side")
+        console.print(strat_table)
+
+        user_input = console.input("[bold yellow]Select strategies [e.g. 1 or 1,2 or 0 for all, default 1]: [/bold yellow]").strip()
+    else:
+        print(f"{Colors.BOLD}6. Available Strategies for {CURRENT_MARKET} Market:{Colors.RESET}")
+        for i, s in enumerate(strategies, 1):
+            print(f"  {Colors.CYAN}{i}.{Colors.RESET} {s['name']:<28} {Colors.DIM}— {s['description']}{Colors.RESET}")
+        print(f"  {Colors.CYAN}0.{Colors.RESET} {'Run ALL strategies':<28} {Colors.DIM}— Compare all side-by-side{Colors.RESET}")
+        user_input: str = input(f"\n{Colors.YELLOW}Select strategies (e.g., 1 or 1,2 or 0 for all) [default 1]: {Colors.RESET}").strip()
+
     try:
-        user_input: str = input().strip()
         if not user_input:
-            choices = [0]
+            choices = [1]
         else:
             choices = [int(x.strip()) for x in user_input.split(',')]
-    except (ValueError, EOFError):
-        choices = [0]
+    except (ValueError, EOFError, KeyboardInterrupt):
+        choices = [1]
 
     print()
 
-    # Step 1 — Ingest historical data (route by market)
+    # ── Step 6: Fetch Data with User's Dynamic Interval ───────────────────────
     if IS_INDIAN:
-        raw_df: pd.DataFrame = fetch_indian_data(SYMBOL, days_back=LOOKBACK_DAYS)
+        raw_df: pd.DataFrame = fetch_indian_data(SYMBOL, days_back=LOOKBACK_DAYS, interval=INTERVAL)
     elif IS_FOREX:
-        raw_df: pd.DataFrame = fetch_forex_data(SYMBOL, days_back=LOOKBACK_DAYS, timeframe="15m")
+        raw_df: pd.DataFrame = fetch_forex_data(SYMBOL, days_back=LOOKBACK_DAYS, timeframe=INTERVAL)
     else:
-        raw_df: pd.DataFrame = fetch_historical_backtest_data(SYMBOL, days_back=LOOKBACK_DAYS)
+        raw_df: pd.DataFrame = fetch_historical_backtest_data(SYMBOL, days_back=LOOKBACK_DAYS, interval=INTERVAL)
 
     if 0 in choices:
         # Run ALL strategies with comparison
@@ -1246,17 +2021,25 @@ if __name__ == "__main__":
                 name: str = entry['name']
                 strategy_func: Callable = get_strategy(name)
 
-                print(f"\n{Colors.BOLD}{Colors.YELLOW}{'━' * 60}")
-                print(f"  🎯  Strategy: {name}")
-                print(f"{'━' * 60}{Colors.RESET}")
-
                 strategy_df: pd.DataFrame = strategy_func(raw_df.copy())
-
                 buy_count: int = int((strategy_df['signal'] == 1).sum())
                 sell_count: int = int((strategy_df['signal'] == -1).sum())
-                print(f"{Colors.CYAN}📊 Signals: "
-                      f"{Colors.GREEN}{buy_count} BUY{Colors.CYAN} | "
-                      f"{Colors.RED}{sell_count} SELL{Colors.RESET}")
+
+                if HAS_RICH and console:
+                    console.print(Panel(
+                        f"[bold white]Strategy Simulation:[/bold white] [bold cyan]{name}[/bold cyan]\n"
+                        f"[dim]Generated Signals:[/dim] [bold green]{buy_count} BUY[/bold green] [dim]|[/dim] [bold red]{sell_count} SELL[/bold red]",
+                        box=box.ROUNDED,
+                        border_style="yellow",
+                        padding=(0, 2)
+                    ))
+                else:
+                    print(f"\n{Colors.BOLD}{Colors.YELLOW}{'━' * 60}")
+                    print(f"  🎯  Strategy: {name}")
+                    print(f"{'━' * 60}{Colors.RESET}")
+                    print(f"{Colors.CYAN}📊 Signals: "
+                          f"{Colors.GREEN}{buy_count} BUY{Colors.CYAN} | "
+                          f"{Colors.RED}{sell_count} SELL{Colors.RESET}")
 
                 result_df: pd.DataFrame = run_backtest_india(
                     strategy_df, initial_capital=INITIAL_CAPITAL,
@@ -1289,18 +2072,25 @@ if __name__ == "__main__":
 
                 if IS_INDIAN:
                     strategy_func: Callable = get_strategy(selected_name)
-
-                    print(f"\n{Colors.BOLD}{Colors.YELLOW}{'━' * 60}")
-                    print(f"  🎯  Strategy: {selected_name}")
-                    print(f"{'━' * 60}{Colors.RESET}")
-
                     strategy_df: pd.DataFrame = strategy_func(raw_df.copy())
-
                     buy_count: int = int((strategy_df['signal'] == 1).sum())
                     sell_count: int = int((strategy_df['signal'] == -1).sum())
-                    print(f"{Colors.CYAN}📊 Signals: "
-                          f"{Colors.GREEN}{buy_count} BUY{Colors.CYAN} | "
-                          f"{Colors.RED}{sell_count} SELL{Colors.RESET}")
+
+                    if HAS_RICH and console:
+                        console.print(Panel(
+                            f"[bold white]Strategy Simulation:[/bold white] [bold cyan]{selected_name}[/bold cyan]\n"
+                            f"[dim]Generated Signals:[/dim] [bold green]{buy_count} BUY[/bold green] [dim]|[/dim] [bold red]{sell_count} SELL[/bold red]",
+                            box=box.ROUNDED,
+                            border_style="yellow",
+                            padding=(0, 2)
+                        ))
+                    else:
+                        print(f"\n{Colors.BOLD}{Colors.YELLOW}{'━' * 60}")
+                        print(f"  🎯  Strategy: {selected_name}")
+                        print(f"{'━' * 60}{Colors.RESET}")
+                        print(f"{Colors.CYAN}📊 Signals: "
+                              f"{Colors.GREEN}{buy_count} BUY{Colors.CYAN} | "
+                              f"{Colors.RED}{sell_count} SELL{Colors.RESET}")
 
                     result_df: pd.DataFrame = run_backtest_india(
                         strategy_df, initial_capital=INITIAL_CAPITAL,

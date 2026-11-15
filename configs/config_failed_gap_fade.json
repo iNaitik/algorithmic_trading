@@ -1,0 +1,50 @@
+{
+  "strategy_name": "NSE Failed-Gap Fade",
+  "version": "1.0.0",
+  "market": "INDIA",
+  "session": {
+    "market_open": "09:15",
+    "market_close": "15:30",
+    "or_start": "09:15",
+    "or_end": "09:30",
+    "entry_start": "09:30",
+    "entry_end": "11:00",
+    "hard_exit": "15:15",
+    "broker_auto_square_off": "15:20",
+    "timezone": "Asia/Kolkata"
+  },
+  "filters": {
+    "min_gap_pct": 0.0030,
+    "max_gap_pct": 0.0100,
+    "max_rvol": 1.5,
+    "rvol_lookback_days": 20,
+    "orb_top_n_exclusion": 5,
+    "min_reward_risk_ratio": 1.5,
+    "tick_size": 0.05,
+    "tick_through_required": true
+  },
+  "risk_management": {
+    "risk_per_trade_pct": 0.0025,
+    "max_leverage": 3.0,
+    "max_concurrent_positions": 3,
+    "daily_loss_limit_pct": 0.015,
+    "max_trades_per_stock_per_day": 1
+  },
+  "cost_model": {
+    "slippage_bps": 3.0,
+    "brokerage_rate": 0.0003,
+    "brokerage_cap": 20.0,
+    "stt_rate": 0.00025,
+    "exchange_fee": 0.0000297,
+    "sebi_fee": 0.000001,
+    "stamp_duty": 0.00003,
+    "gst_rate": 0.18
+  },
+  "calendar_files": {
+    "results_calendar": "data/calendars/results_calendar.csv",
+    "fno_ban_calendar": "data/calendars/fno_ban_calendar.csv",
+    "circuit_limit_calendar": "data/calendars/circuit_limit_calendar.csv",
+    "nifty50_pit_constituents": "data/calendars/nifty50_pit.csv"
+  }
+}
+
