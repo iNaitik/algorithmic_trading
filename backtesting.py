@@ -33,10 +33,19 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 
-from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
-from alpaca.data.enums import DataFeed
+try:
+    from alpaca.data.historical import StockHistoricalDataClient
+    from alpaca.data.requests import StockBarsRequest
+    from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+    from alpaca.data.enums import DataFeed
+    HAS_ALPACA = True
+except ImportError:
+    HAS_ALPACA = False
+    StockHistoricalDataClient = None
+    StockBarsRequest = None
+    TimeFrame = None
+    TimeFrameUnit = None
+    DataFeed = None
 
 # Import the strategy registry (auto-discovers all strategy files)
 from strategies import list_strategies, get_strategy
@@ -208,6 +217,11 @@ def fetch_historical_backtest_data(symbol: str, days_back: int = 30, interval: s
     load_dotenv()
     api_key: str = os.getenv("ALPACA_API_KEY", "")
     secret_key: str = os.getenv("ALPACA_SECRET_KEY", "")
+
+    if not HAS_ALPACA:
+        raise ImportError(
+            "alpaca-py is not installed. Run 'pip install alpaca-py' or use yfinance for US market data."
+        )
 
     if not api_key or not secret_key:
         raise ValueError(
