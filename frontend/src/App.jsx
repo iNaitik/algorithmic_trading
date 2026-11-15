@@ -17,6 +17,7 @@ import {
 import LiveBotDashboard from './components/LiveBotDashboard';
 import BacktesterView from './components/BacktesterView';
 import FactorMatrixView from './components/FactorMatrixView';
+import MorningScannerView from './components/MorningScannerView';
 import TradeJournal from './components/TradeJournal';
 
 export default function App() {
@@ -153,6 +154,7 @@ export default function App() {
     { id: "dashboard", label: "Dashboard" },
     { id: "backtester", label: "Strategy Backtester" },
     { id: "matrix", label: "Factor Matrix" },
+    { id: "scanner", label: "⚡ Morning Scanner" },
     { id: "journal", label: "Trade Journal" },
     { id: "risk", label: "Risk Guardrails" }
   ];
@@ -475,6 +477,23 @@ export default function App() {
                 setInterval(combo.timeframe);
                 setActiveTab("backtester");
                 setTimeout(runBacktest, 100);
+              }}
+              currency={currency}
+            />
+          )}
+
+          {/* VIEW: MORNING SCANNER */}
+          {activeTab === "scanner" && (
+            <MorningScannerView
+              onSelectForBacktest={(sym, strat) => {
+                setSymbol(sym);
+                if (strat) setSelectedStrategy(strat);
+                setActiveTab("backtester");
+                setTimeout(runBacktest, 100);
+              }}
+              onSelectForBot={(sym) => {
+                setSymbol(sym);
+                setActiveTab("dashboard");
               }}
               currency={currency}
             />

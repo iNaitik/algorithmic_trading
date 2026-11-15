@@ -956,6 +956,32 @@ def get_matrix_task_status(task_id: str):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Multi-Market Scanner Endpoints (NSE 09:16 AM / US 09:31 AM ET / Forex 24/5)
+# ─────────────────────────────────────────────────────────────────────────────
+from scanner.morning_scanner import run_market_scanner
+
+class ScannerRequest(BaseModel):
+    market: Optional[str] = "INDIA"
+    snapshot_mode: Optional[str] = "916_OPEN"
+    force_refresh: Optional[bool] = False
+
+@app.get("/api/scanner/morning")
+def get_morning_scanner(
+    market: str = Query("INDIA", description="INDIA, US, FOREX"),
+    snapshot_mode: str = Query("916_OPEN", description="916_OPEN or LIVE")
+):
+    """Returns scheduled 9:16 AM snapshot or live market scan results with exact timestamps."""
+    return run_market_scanner(market=market, snapshot_mode=snapshot_mode, force_refresh=False)
+
+@app.post("/api/scanner/scan")
+def trigger_market_scan(req: Optional[ScannerRequest] = None):
+    """Forces an on-demand market scan across India, US, or Forex anytime."""
+    m = req.market if req and req.market else "INDIA"
+    mode = req.snapshot_mode if req and req.snapshot_mode else "LIVE"
+    return run_market_scanner(market=m, snapshot_mode=mode, force_refresh=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Static Web App Mount (Serve frontend/dist if built)
 # ─────────────────────────────────────────────────────────────────────────────
 from fastapi.staticfiles import StaticFiles
@@ -983,5 +1009,6 @@ if os.path.exists(dist_dir):
 
 if __name__ == "__main__":
     import uvicorn
-    print("\n🚀 Starting Algo Trading Quantitative Terminal on http://127.0.0.1:8000 ...")
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    print(f"\n🚀 Starting Algo Trading Quantitative Terminal on port {port} ...")
+    uvicorn.run("server:app", host="0.0.0.0", port=port, reload=False)
