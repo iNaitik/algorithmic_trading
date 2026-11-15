@@ -458,6 +458,21 @@ def get_bot_state(symbol: Optional[str] = "SBIN.NS"):
         except Exception:
             pass
 
+    active_cfg_file = os.path.join("data", "bot_active_config.json")
+    if os.path.exists(active_cfg_file):
+        import json
+        try:
+            with open(active_cfg_file, "r") as f:
+                acfg = json.load(f)
+                if acfg.get("strategy"):
+                    state_data["strategy"] = acfg["strategy"]
+                if acfg.get("timeframe"):
+                    state_data["timeframe"] = acfg["timeframe"]
+                if acfg.get("status"):
+                    state_data["status"] = acfg["status"]
+        except Exception:
+            pass
+
     history_file = os.path.join("data", "trade_history.csv")
     recent_trades = []
     if os.path.exists(history_file):

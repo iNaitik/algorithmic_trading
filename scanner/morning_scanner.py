@@ -590,47 +590,125 @@ def auto_market_close_and_summarize():
 
 
 def _scheduler_worker():
-    """Wakes up every minute, manages market lifecycle (09:15 Open, 09:16 Scan, 03:15 Square-off, 03:30 Close)."""
+    """Wakes up every minute, manages market lifecycle (09:00 Prompt, 09:14 Fallback, 09:15 Open, 09:16 Scan, 09:20 Auto-Pick, 15:15 Square-off, 15:30 Close)."""
     while True:
         try:
             now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
             now_et = datetime.now(ZoneInfo("America/New_York"))
 
-            # 1. India: 09:15 AM IST (Mon-Fri) - Market Opens -> Set Bot ACTIVE
-            if now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 15:
-                auto_market_open()
+            # 1. India: 09:00 AM IST (Mon-Fri) - Pre-Market Interactive Prompt (Strategy & Timeframe)
+            if now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 0:
+                print(f"[SCHEDULER] 🌅 09:00 AM IST: Dispatching Telegram Pre-Market Strategy Selection...")
+                try:
+                    from notifications.telegram_bot import prompt_morning_setup
+                    prompt_morning_setup()
+                except Exception as t_err:
+                    print(f"[SCHEDULER] Telegram prompt error: {t_err}")
                 time.sleep(65)
 
-            # 2. India: 09:16 AM IST (Mon-Fri) - First 1-min candle completes -> Morning Scan & Telegram Alert
+            # 2. India: 09:14 AM IST (Mon-Fri) - Fallback to Default VWAP (2m) if user made no selection
+            elif now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 14:
+                try:
+                    from notifications.telegram_bot import get_active_config, save_active_config, send_telegram_alert
+                    cfg = get_active_config()
+                    if cfg.get("skip_today"):
+                        print("[SCHEDULER] User skipped today's session. Bot remains paused.")
+                    elif not cfg.get("user_selected"):
+                        print("[SCHEDULER] No user selection by 09:14 AM. Applying default VWAP (2m)...")
+                        cfg["strategy"] = "NSE Midday VWAP Pullback"
+                        cfg["timeframe"] = "2m"
+                        cfg["status"] = "ACTIVE (MONITORING)"
+                        save_active_config(cfg)
+                        send_telegram_alert(
+                            "⏰ <b>09:14 AM AUTO-FALLBACK ACTIVATED:</b>\n\n"
+                            "• <b>Strategy:</b> NSE Midday VWAP Pullback\n"
+                            "• <b>Timeframe:</b> 2-minute candles\n"
+                            "• <b>Status:</b> ACTIVE (Monitoring)\n\n"
+                            "<i>Ready for market open in 1 minute!</i>"
+                        )
+                except Exception as e:
+                    print(f"[SCHEDULER FALLBACK ERROR] {e}")
+                time.sleep(65)
+
+            # 3. India: 09:15 AM IST (Mon-Fri) - Market Opens -> Set Bot ACTIVE (if not skipped)
+            elif now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 15:
+                try:
+                    from notifications.telegram_bot import get_active_config
+                    cfg = get_active_config()
+                    if not cfg.get("skip_today"):
+                        auto_market_open()
+                except Exception:
+                    auto_market_open()
+                time.sleep(65)
+
+            # 4. India: 09:16 AM IST (Mon-Fri) - First 1-min candle completes -> Morning Scan & Stock Pick Buttons
             elif now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 16:
                 print(f"[SCHEDULER] ⏰ Triggering Automated 09:16 AM IST India Opening Scan...")
-                scan_res = run_market_scanner(market="INDIA", snapshot_mode="916_OPEN", force_refresh=True)
                 try:
-                    from notifications.telegram_bot import notify_morning_scan
-                    notify_morning_scan(scan_res)
+                    from notifications.telegram_bot import get_active_config
+                    cfg = get_active_config()
+                    if not cfg.get("skip_today"):
+                        scan_res = run_market_scanner(market="INDIA", snapshot_mode="916_OPEN", force_refresh=True)
+                        from notifications.telegram_bot import notify_morning_scan
+                        notify_morning_scan(scan_res)
+                    else:
+                        print("[SCHEDULER] Session skipped. Morning scan skipped.")
                 except Exception as t_err:
                     print(f"[SCHEDULER] Telegram notification error: {t_err}")
                 time.sleep(65)
 
-            # 3. India: 09:31 AM IST (Mon-Fri) - 15m ORB range complete -> ORB scan
+            # 5. India: 09:20 AM IST (Mon-Fri) - Auto-select Top #1 Stock if user hasn't chosen a pick
+            elif now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 20:
+                try:
+                    from notifications.telegram_bot import get_active_config, save_active_config, send_telegram_alert
+                    cfg = get_active_config()
+                    if not cfg.get("skip_today") and not cfg.get("user_selected_stock"):
+                        # Get latest scan cached
+                        scan_res = run_market_scanner(market="INDIA", snapshot_mode="916_OPEN", force_refresh=False)
+                        top_longs = scan_res.get("top_longs", [])
+                        top_sym = top_longs[0]["symbol"] if top_longs else "SBIN.NS"
+                        cfg["active_symbol"] = top_sym
+                        cfg["user_selected_stock"] = True
+                        save_active_config(cfg)
+                        send_telegram_alert(
+                            f"⏰ <b>09:20 AM AUTO-PICK ACTIVATED:</b>\n\n"
+                            f"The bot has auto-locked on <b>{top_sym}</b> (Top Ranked Volume Breakout).\n"
+                            f"• Strategy: <b>{cfg.get('strategy')}</b> ({cfg.get('timeframe')})\n"
+                            f"• Status: <b>ACTIVE (Monitoring Entries)</b>"
+                        )
+                except Exception as e:
+                    print(f"[SCHEDULER AUTO-PICK ERROR] {e}")
+                time.sleep(65)
+
+            # 6. India: 09:31 AM IST (Mon-Fri) - 15m ORB range complete -> ORB scan
             elif now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 31:
                 print(f"[SCHEDULER] ⏰ Triggering 09:31 AM IST India ORB Range Scan...")
                 run_market_scanner(market="INDIA", snapshot_mode="LIVE", force_refresh=True)
                 time.sleep(65)
 
-            # 4. India: 03:15 PM IST (15:15, Mon-Fri) - Intraday MIS Square-Off
+            # 7. India: 03:15 PM IST (15:15, Mon-Fri) - Intraday MIS Square-Off
             elif now_ist.weekday() < 5 and now_ist.hour == 15 and now_ist.minute == 15:
                 print(f"[SCHEDULER] ⏰ Triggering 03:15 PM IST Intraday MIS Auto-Square-Off...")
                 auto_square_off_intraday()
                 time.sleep(65)
 
-            # 5. India: 03:30 PM IST (15:30, Mon-Fri) - Market Close & Daily EOD Report
+            # 8. India: 03:30 PM IST (15:30, Mon-Fri) - Market Close & Daily EOD Report
             elif now_ist.weekday() < 5 and now_ist.hour == 15 and now_ist.minute == 30:
                 print(f"[SCHEDULER] ⏰ Triggering 03:30 PM IST Market Close & Daily Summary...")
                 auto_market_close_and_summarize()
+                # Reset skip_today for next day
+                try:
+                    from notifications.telegram_bot import get_active_config, save_active_config
+                    cfg = get_active_config()
+                    cfg["skip_today"] = False
+                    cfg["user_selected"] = False
+                    cfg["user_selected_stock"] = False
+                    save_active_config(cfg)
+                except Exception:
+                    pass
                 time.sleep(65)
 
-            # 6. US: 09:31 AM ET (Mon-Fri) - US Opening Scan
+            # 9. US: 09:31 AM ET (Mon-Fri) - US Opening Scan
             elif now_et.weekday() < 5 and now_et.hour == 9 and now_et.minute == 31:
                 print(f"[SCHEDULER] ⏰ Triggering Automated 09:31 AM ET US Opening Scan...")
                 run_market_scanner(market="US", snapshot_mode="916_OPEN", force_refresh=True)
