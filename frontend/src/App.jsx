@@ -18,11 +18,13 @@ import LiveBotDashboard from './components/LiveBotDashboard';
 import BacktesterView from './components/BacktesterView';
 import FactorMatrixView from './components/FactorMatrixView';
 import MorningScannerView from './components/MorningScannerView';
+import TelegramModal from './components/TelegramModal';
 import TradeJournal from './components/TradeJournal';
 
 export default function App() {
   // Navigation active tab: 'dashboard', 'backtester', 'matrix', 'journal', 'risk'
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [isTelegramOpen, setIsTelegramOpen] = useState(false);
 
   // Global search
   const [searchQuery, setSearchQuery] = useState("");
@@ -337,16 +339,39 @@ export default function App() {
               <span>{selectedMarket === "INDIA" ? "🇮🇳 NSE" : (selectedMarket === "US" ? "🇺🇸 US" : "💱 FX")}</span>
             </div>
 
-            <div style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '50%',
-              backgroundColor: '#f3f4f6',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}>
+            <button
+              onClick={() => setIsTelegramOpen(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 12px',
+                borderRadius: '10px',
+                backgroundColor: '#e6f4ea',
+                color: '#059669',
+                fontSize: '0.75rem',
+                fontWeight: '700',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              📱 Telegram Alerts
+            </button>
+
+            <div
+              onClick={() => setIsTelegramOpen(true)}
+              title="Configure Telegram Mobile Notifications"
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                backgroundColor: '#f3f4f6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
               <Bell size={17} color="#4b5563" />
             </div>
 
@@ -539,6 +564,12 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {/* Telegram Push Notification Settings Modal */}
+      <TelegramModal
+        isOpen={isTelegramOpen}
+        onClose={() => setIsTelegramOpen(false)}
+      />
     </div>
   );
 }

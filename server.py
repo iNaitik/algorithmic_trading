@@ -982,6 +982,56 @@ def trigger_market_scan(req: Optional[ScannerRequest] = None):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Telegram Push Notifications Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+from notifications.telegram_bot import (
+    get_telegram_credentials,
+    save_telegram_credentials,
+    send_telegram_alert,
+    notify_morning_scan
+)
+
+class TelegramConfigRequest(BaseModel):
+    bot_token: str
+    chat_id: str
+
+@app.get("/api/notifications/telegram/status")
+def get_telegram_status():
+    token, chat_id = get_telegram_credentials()
+    configured = bool(token and chat_id)
+    masked_token = f"{token[:6]}...{token[-4:]}" if token and len(token) > 10 else None
+    return {
+        "configured": configured,
+        "chat_id": chat_id if configured else None,
+        "token_masked": masked_token
+    }
+
+@app.post("/api/notifications/telegram/config")
+def set_telegram_config(req: TelegramConfigRequest):
+    if not req.bot_token.strip() or not req.chat_id.strip():
+        raise HTTPException(status_code=400, detail="Bot token and chat ID are required.")
+    success = save_telegram_credentials(req.bot_token, req.chat_id)
+    return {"success": success, "configured": True}
+
+@app.post("/api/notifications/telegram/test")
+def test_telegram_alert():
+    token, chat_id = get_telegram_credentials()
+    if not token or not chat_id:
+        raise HTTPException(status_code=400, detail="Telegram is not configured. Provide bot token and chat ID first.")
+    
+    test_msg = (
+        "🔔 <b>Algo Trading Bot — Connection Verified!</b>\n\n"
+        "✅ Your Telegram push notifications are active.\n"
+        "📈 You will receive tomorrow's 09:16 AM market breakout picks and live trade signals right here on your phone!\n\n"
+        "📱 <i>Live Terminal: https://algorithmic-trading-1-zcqx.onrender.com</i>"
+    )
+    sent = send_telegram_alert(test_msg)
+    if not sent:
+        raise HTTPException(status_code=502, detail="Failed to deliver message via Telegram API. Check bot token and chat ID.")
+    return {"success": True, "message": "Test alert sent to Telegram!"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Static Web App Mount (Serve frontend/dist if built)
 # ─────────────────────────────────────────────────────────────────────────────
 from fastapi.staticfiles import StaticFiles

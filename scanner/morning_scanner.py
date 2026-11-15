@@ -464,7 +464,12 @@ def _scheduler_worker():
             # 1. India: 09:16 AM IST (Mon-Fri)
             if now_ist.weekday() < 5 and now_ist.hour == 9 and now_ist.minute == 16:
                 print(f"[SCHEDULER] ⏰ Triggering Automated 09:16 AM IST India Opening Scan...")
-                run_market_scanner(market="INDIA", snapshot_mode="916_OPEN", force_refresh=True)
+                scan_res = run_market_scanner(market="INDIA", snapshot_mode="916_OPEN", force_refresh=True)
+                try:
+                    from notifications.telegram_bot import notify_morning_scan
+                    notify_morning_scan(scan_res)
+                except Exception as t_err:
+                    print(f"[SCHEDULER] Telegram notification error: {t_err}")
                 time.sleep(65)  # Sleep past the minute
 
             # 2. India: 09:31 AM IST (15m ORB complete)
