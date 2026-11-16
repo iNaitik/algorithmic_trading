@@ -8,8 +8,9 @@ strategy registries, and live paper-trading bot states.
 
 import os
 import sys
+import io
 import math
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 import time
 from datetime import datetime, date
 import csv
@@ -67,25 +68,33 @@ class BacktestRequest(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Helper: Prepare DataFrame for TradingView Charts
+# Helper: Prepare DataFrame for TradingView Charts with Timezone Alignment
 # ─────────────────────────────────────────────────────────────────────────────
-def df_to_tv_candles(df: pd.DataFrame) -> List[Dict[str, Any]]:
+def to_chart_time(ts, market: str = "INDIA") -> Union[int, str]:
+    """Converts a timestamp to TradingView Lightweight Charts format,
+    adjusting intraday epoch by the exchange timezone offset so the candle clock time
+    matches the exact market session hours (e.g. 09:15 AM IST for NSE India)."""
+    if not hasattr(ts, "timestamp"):
+        return str(ts)[:10]
+    if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
+        return ts.strftime("%Y-%m-%d")
+
+    epoch = int(ts.timestamp())
+    # If tz-aware, add its utcoffset seconds so UTC display in Lightweight Charts matches exchange local time
+    if hasattr(ts, "utcoffset") and ts.utcoffset() is not None:
+        epoch += int(ts.utcoffset().total_seconds())
+    elif market == "INDIA":
+        epoch += 19800  # Fallback: 5 hours 30 mins for naive Indian timestamps
+    elif market == "US":
+        epoch -= 4 * 3600  # Fallback for naive US Eastern timestamps
+    return epoch
+
+
+def df_to_tv_candles(df: pd.DataFrame, market: str = "INDIA") -> List[Dict[str, Any]]:
     """Converts OHLCV dataframe to TradingView Lightweight Charts candle format."""
     candles = []
-    is_intraday = any(col in df.columns for col in ['open']) and len(df) > 0
-    # Determine if index is datetime
     for ts, row in df.iterrows():
-        # TradingView accepts Unix timestamp (seconds) for intraday, or "YYYY-MM-DD" for daily
-        if hasattr(ts, "timestamp"):
-            # If intraday, use epoch seconds (int)
-            # If daily (00:00:00), use string YYYY-MM-DD
-            if ts.hour == 0 and ts.minute == 0 and ts.second == 0:
-                time_val = ts.strftime("%Y-%m-%d")
-            else:
-                time_val = int(ts.timestamp())
-        else:
-            time_val = str(ts)[:10]
-
+        time_val = to_chart_time(ts, market)
         candles.append({
             "time": time_val,
             "open": round(float(row['open']), 2),
@@ -97,14 +106,14 @@ def df_to_tv_candles(df: pd.DataFrame) -> List[Dict[str, Any]]:
     return candles
 
 
-def extract_tv_markers(trade_log: List[Dict], df: pd.DataFrame) -> List[Dict[str, Any]]:
+def extract_tv_markers(trade_log: List[Dict], df: pd.DataFrame, market: str = "INDIA") -> List[Dict[str, Any]]:
     """Extracts entry and exit markers positioned on candlesticks for TradingView."""
     markers = []
-    # Build a lookup for timestamp -> epoch seconds
+    # Build a lookup for timestamp -> chart epoch
     time_map = {}
     for ts in df.index:
         time_str = format_bar_timestamp(ts)
-        epoch = int(ts.timestamp()) if hasattr(ts, "timestamp") and (ts.hour != 0 or ts.minute != 0) else ts.strftime("%Y-%m-%d")
+        epoch = to_chart_time(ts, market)
         time_map[time_str] = epoch
 
     for idx, t in enumerate(trade_log, 1):
@@ -313,14 +322,14 @@ def run_backtest_endpoint(req: BacktestRequest):
     metrics = calculate_metrics(res_df, initial_capital)
     trade_log = res_df.attrs.get('trade_log', [])
 
-    # 6. Format Candlesticks and Markers for TradingView
-    candles = df_to_tv_candles(raw_df)
-    markers = extract_tv_markers(trade_log, raw_df)
+    # 6. Format Candlesticks and Markers for TradingView (Timezone Aligned)
+    candles = df_to_tv_candles(raw_df, market=market)
+    markers = extract_tv_markers(trade_log, raw_df, market=market)
 
     # 7. Format Equity Curve
     equity_curve = []
     for ts, row in res_df.iterrows():
-        epoch = int(ts.timestamp()) if hasattr(ts, "timestamp") and (ts.hour != 0 or ts.minute != 0) else ts.strftime("%Y-%m-%d")
+        epoch = to_chart_time(ts, market)
         eq = round(float(row.get('total_equity', initial_capital)), 2)
         equity_curve.append({
             "time": epoch,
@@ -334,7 +343,7 @@ def run_backtest_endpoint(req: BacktestRequest):
     if 'vwap' in strat_df.columns:
         indicators['vwap'] = [
             {
-                "time": int(ts.timestamp()) if hasattr(ts, "timestamp") and (ts.hour != 0 or ts.minute != 0) else ts.strftime("%Y-%m-%d"),
+                "time": to_chart_time(ts, market),
                 "value": round(float(v), 2)
             }
             for ts, v in strat_df['vwap'].dropna().items()
@@ -342,7 +351,7 @@ def run_backtest_endpoint(req: BacktestRequest):
     if 'ema_fast' in strat_df.columns:
         indicators['ema_fast'] = [
             {
-                "time": int(ts.timestamp()) if hasattr(ts, "timestamp") and (ts.hour != 0 or ts.minute != 0) else ts.strftime("%Y-%m-%d"),
+                "time": to_chart_time(ts, market),
                 "value": round(float(v), 2)
             }
             for ts, v in strat_df['ema_fast'].dropna().items()
@@ -456,60 +465,74 @@ def _init_default_logs():
 _init_default_logs()
 
 
+from engine.live_trader import get_live_state, command_bot_control, start_live_execution_engine
+
 class BotControlRequest(BaseModel):
     action: str = Field(..., description="START, STOP, PAUSE, SQUARE_OFF, RESET")
-    symbol: str = Field(default="SBIN.NS")
-    strategy_name: Optional[str] = "NSE Intraday ORB Breakout"
+    symbol: Optional[str] = Field(default=None)
+    strategy_name: Optional[str] = "NSE Midday VWAP Pullback"
     capital: Optional[float] = 1_000_000.0
 
 
+@app.on_event("startup")
+def startup_event():
+    """Starts background execution engines, lifecycle schedulers, and Telegram callback listeners."""
+    print("🚀 [SERVER STARTUP] Initializing background engines...")
+    try:
+        from engine.live_trader import start_live_execution_engine
+        start_live_execution_engine()
+    except Exception as e:
+        print(f"[STARTUP ERROR] Live Execution Engine: {e}")
+
+    try:
+        from scanner.morning_scanner import start_scanner_scheduler
+        start_scanner_scheduler()
+    except Exception as e:
+        print(f"[STARTUP ERROR] Scanner Scheduler: {e}")
+
+    try:
+        from notifications.telegram_bot import start_telegram_listener
+        start_telegram_listener()
+    except Exception as e:
+        print(f"[STARTUP ERROR] Telegram Listener: {e}")
+
+
 @app.get("/api/bot/state")
-def get_bot_state(symbol: Optional[str] = "SBIN.NS"):
-    """Fetches real-time status and logs for the active paper-trading bot."""
-    clean_sym = symbol.replace(".", "_").replace("^", "")
-    state_file = os.path.join("data", f"bot_india_state_{clean_sym}.json")
-    if not os.path.exists(state_file):
-        state_file = f"bot_india_state_{clean_sym}.json"
+def get_bot_state(symbol: Optional[str] = None):
+    """Fetches real-time status and logs directly from the active live execution engine."""
+    live_state = get_live_state()
+    active_sym = live_state.get("symbol", "SBIN.NS")
+    # If no symbol specified or requested symbol is empty, default to active live engine symbol
+    target_sym = symbol.strip() if symbol and symbol.strip() else active_sym
 
-    state_data = {
-        "symbol": symbol,
-        "status": "ACTIVE (MONITORING)",
-        "strategy": "NSE Intraday ORB Breakout",
-        "cash": 1_000_000.0,
-        "in_position": False,
-        "shares": 0,
-        "position_side": None,
-        "entry_price": 0.0,
-        "stop_loss": None,
-        "target_price": None,
-        "last_updated": datetime.now().isoformat()
-    }
-
-    if os.path.exists(state_file):
-        import json
-        try:
-            with open(state_file, "r") as f:
-                saved = json.load(f)
-                state_data.update(saved)
-                if not saved.get("status"):
-                    state_data["status"] = "ACTIVE (IN POSITION)" if saved.get("in_position") else "ACTIVE (MONITORING)"
-        except Exception:
-            pass
-
-    active_cfg_file = os.path.join("data", "bot_active_config.json")
-    if os.path.exists(active_cfg_file):
-        import json
-        try:
-            with open(active_cfg_file, "r") as f:
-                acfg = json.load(f)
-                if acfg.get("strategy"):
-                    state_data["strategy"] = acfg["strategy"]
-                if acfg.get("timeframe"):
-                    state_data["timeframe"] = acfg["timeframe"]
-                if acfg.get("status"):
-                    state_data["status"] = acfg["status"]
-        except Exception:
-            pass
+    # If requested symbol matches active engine symbol, return live engine state
+    if target_sym == active_sym:
+        state_data = live_state
+    else:
+        # Load symbol-specific state file
+        clean_sym = target_sym.replace(".", "_").replace("^", "")
+        state_file = os.path.join("data", f"bot_india_state_{clean_sym}.json")
+        state_data = {
+            "symbol": target_sym,
+            "status": live_state.get("status", "ACTIVE (MONITORING)"),
+            "strategy": live_state.get("strategy", "NSE Midday VWAP Pullback"),
+            "timeframe": live_state.get("timeframe", "2m"),
+            "cash": live_state.get("cash", 1_000_000.0),
+            "in_position": False,
+            "shares": 0,
+            "position_side": None,
+            "entry_price": 0.0,
+            "stop_loss": None,
+            "target_price": None,
+            "last_updated": datetime.now().isoformat()
+        }
+        if os.path.exists(state_file):
+            import json
+            try:
+                with open(state_file, "r") as f:
+                    state_data.update(json.load(f))
+            except Exception:
+                pass
 
     # Parse real historical trades from trade_history.csv
     history_file = os.path.join("data", "trade_history.csv")
@@ -530,7 +553,7 @@ def get_bot_state(symbol: Optional[str] = "SBIN.NS"):
                         time_str = ts[11:16] if len(ts) >= 16 else ""
 
                     action = str(row.get("Action", "BUY")).upper()
-                    sym = str(row.get("Symbol", symbol))
+                    sym = str(row.get("Symbol", target_sym))
                     shs = int(row.get("Shares", 0))
                     price = float(row.get("Execution_Price", 0.0))
                     cash_change = str(row.get("Cash_Change", "0"))
@@ -562,29 +585,16 @@ def get_bot_state(symbol: Optional[str] = "SBIN.NS"):
                         "RawAmount": amt_val
                     }
                     all_trades.append(trade_obj)
-                    if sym == symbol:
+                    if sym == target_sym:
                         recent_trades.append(trade_obj)
         except Exception as e:
             print(f"[TRADES PARSE ERROR] {e}")
 
-    # Generate telemetry heartbeat logs when ACTIVE
-    if state_data.get("status", "").startswith("ACTIVE"):
-        last_log = _BOT_LOGS[-1]["message"] if _BOT_LOGS else ""
-        if len(_BOT_LOGS) < 6 or "Telemetry heartbeat" not in last_log:
-            curr_sym = state_data.get("symbol", "SBIN.NS")
-            curr_strat = state_data.get("strategy", "NSE Midday VWAP Pullback")
-            curr_tf = state_data.get("timeframe", "2m")
-            if state_data.get("in_position"):
-                shs = state_data.get("shares", 0)
-                ep = state_data.get("entry_price", 0.0)
-                sl = state_data.get("stop_loss", 0.0)
-                tp = state_data.get("target_price", 0.0)
-                add_bot_log("SIGNAL", f"In position: {shs} shares {curr_sym} @ ₹{ep:.2f}. Target: ₹{tp:.2f} | SL: ₹{sl:.2f}", curr_sym)
-            else:
-                add_bot_log("TICK", f"Monitoring {curr_sym} ({curr_strat} [{curr_tf}]). VWAP & 9/21 EMA spread in zone. Awaiting entry confirmation.", curr_sym)
-
     return {
         "bot_state": state_data,
+        "active_symbol": active_sym,
+        "active_strategy": live_state.get("strategy", "NSE Midday VWAP Pullback"),
+        "active_status": live_state.get("status", "ACTIVE (MONITORING)"),
         "recent_trades": recent_trades,
         "all_trades": all_trades,
         "logs": _BOT_LOGS[-60:]
@@ -608,95 +618,14 @@ def clear_bot_logs():
 
 @app.post("/api/bot/control")
 def control_paper_bot(req: BotControlRequest):
-    """Controls the simulated live paper trading bot."""
-    clean_sym = req.symbol.replace(".", "_").replace("^", "")
-    os.makedirs("data", exist_ok=True)
-    state_file = os.path.join("data", f"bot_india_state_{clean_sym}.json")
-    
-    # Load existing state or init
-    current = {
-        "symbol": req.symbol,
-        "status": "STOPPED",
-        "strategy": req.strategy_name or "NSE Intraday ORB Breakout",
-        "cash": req.capital or 1_000_000.0,
-        "in_position": False,
-        "shares": 0,
-        "position_side": None,
-        "entry_price": 0.0,
-        "stop_loss": None,
-        "target_price": None,
-        "last_updated": datetime.now().isoformat()
-    }
-    if os.path.exists(state_file):
-        import json
-        try:
-            with open(state_file, "r") as f:
-                current.update(json.load(f))
-        except Exception:
-            pass
-
-    act = req.action.upper()
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    if act == "START":
-        current["status"] = "ACTIVE (IN POSITION)" if current.get("in_position") else "ACTIVE (MONITORING)"
-        current["strategy"] = req.strategy_name or current.get("strategy")
-        add_bot_log("CONTROL", f"Bot STARTED on {req.symbol}. Strategy: '{current['strategy']}'. Telemetry monitoring active.", req.symbol)
-    elif act == "PAUSE":
-        current["status"] = "PAUSED"
-        add_bot_log("CONTROL", f"Bot PAUSED on {req.symbol}. Execution suspended by user.", req.symbol)
-    elif act == "STOP":
-        current["status"] = "STOPPED"
-        add_bot_log("CONTROL", f"Bot STOPPED on {req.symbol}.", req.symbol)
-    elif act == "RESET":
-        current.update({
-            "status": "ACTIVE (MONITORING)",
-            "cash": req.capital or 1_000_000.0,
-            "in_position": False,
-            "shares": 0,
-            "position_side": None,
-            "entry_price": 0.0,
-            "stop_loss": None,
-            "target_price": None
-        })
-        add_bot_log("SYSTEM", f"Bot reset on {req.symbol}: Balance restored to ₹{current['cash']:,.2f}.", req.symbol)
-    elif act == "SQUARE_OFF":
-        if current.get("in_position") and current.get("shares", 0) > 0:
-            shs = current["shares"]
-            ep = current.get("entry_price", 100.0)
-            exit_price = round(ep * 1.008, 2)  # simulated slight profit fill
-            proceeds = round(shs * exit_price, 2)
-            current["cash"] = round(current.get("cash", 0.0) + proceeds, 2)
-            current["in_position"] = False
-            current["shares"] = 0
-            current["position_side"] = None
-            current["entry_price"] = 0.0
-            current["stop_loss"] = None
-            current["target_price"] = None
-            current["status"] = "ACTIVE (MONITORING)"
-            
-            # Record in trade_history.csv
-            hist_file = os.path.join("data", "trade_history.csv")
-            file_exists = os.path.exists(hist_file)
-            try:
-                with open(hist_file, "a", newline="") as f:
-                    writer = csv.writer(f)
-                    if not file_exists:
-                        writer.writerow(["Timestamp", "Action", "Symbol", "Shares", "Execution_Price", "Cash_Change"])
-                    writer.writerow([now_str, "MANUAL_SQUARE_OFF", req.symbol, shs, exit_price, f"+{proceeds:.2f}"])
-            except Exception:
-                pass
-            add_bot_log("ORDER", f"Manual SQUARE-OFF filled: {shs} shares of {req.symbol} @ ₹{exit_price:.2f}. Net cash change: +₹{proceeds:,.2f}.", req.symbol)
-        else:
-            current["status"] = "ACTIVE (MONITORING)"
-            add_bot_log("ORDER", f"Square-off triggered for {req.symbol}, but position is already flat.", req.symbol)
-
-    current["last_updated"] = datetime.now().isoformat()
-    import json
-    with open(state_file, "w") as f:
-        json.dump(current, f, indent=2)
-
-    return {"success": True, "action": act, "bot_state": current}
+    """Controls the active live paper trading engine directly."""
+    updated_state = command_bot_control(
+        action=req.action,
+        symbol=req.symbol,
+        strategy_name=req.strategy_name,
+        capital=req.capital
+    )
+    return {"success": True, "action": req.action, "bot_state": updated_state}
 
 
 @app.get("/api/market/watchlist")

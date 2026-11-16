@@ -333,6 +333,11 @@ def handle_telegram_callback(cb_data: str):
         cfg["skip_today"] = True
         cfg["user_selected"] = True
         save_active_config(cfg)
+        try:
+            from engine.live_trader import command_bot_control
+            command_bot_control("PAUSE")
+        except Exception:
+            pass
         send_telegram_alert(
             "⏸️ <b>SESSION SKIPPED FOR TODAY</b>\n\n"
             "The bot has been paused. <b>No trades will be executed today.</b>\n"
@@ -346,6 +351,11 @@ def handle_telegram_callback(cb_data: str):
         cfg["skip_today"] = False
         cfg["user_selected"] = True
         save_active_config(cfg)
+        try:
+            from engine.live_trader import command_bot_control
+            command_bot_control("START", symbol=sym, strategy_name=cfg.get("strategy"))
+        except Exception as e:
+            print(f"[TELEGRAM ENGINE ERROR] {e}")
         send_telegram_alert(
             f"🚀 <b>ACTIVE STOCK SELECTED: {sym}</b>\n\n"
             f"The bot is now locked on <b>{sym}</b> for today's session.\n"

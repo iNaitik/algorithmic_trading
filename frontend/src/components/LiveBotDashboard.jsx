@@ -44,6 +44,8 @@ export default function LiveBotDashboard({
   const [activeBottomView, setActiveBottomView] = useState("DUAL"); // "DUAL", "LOGS", "TRADES"
   const [countdownText, setCountdownText] = useState("");
 
+  const userSelectedSymbolRef = useRef(false);
+  const userSelectedStrategyRef = useRef(false);
   const terminalBodyRef = useRef(null);
 
   // Live Market Countdown Timer (09:15 AM IST Open / 03:15 PM MIS / 03:30 PM Close)
@@ -90,15 +92,20 @@ export default function LiveBotDashboard({
   // Fetch bot telemetry, logs, and market quotes
   const fetchData = async () => {
     try {
+      const querySym = userSelectedSymbolRef.current ? `?symbol=${encodeURIComponent(symbol)}` : '';
       const [botRes, wlRes] = await Promise.all([
-        fetch(`/api/bot/state?symbol=${encodeURIComponent(symbol)}`),
+        fetch(`/api/bot/state${querySym}`),
         fetch(`/api/market/watchlist?market=${market}`)
       ]);
       if (botRes.ok) {
         const json = await botRes.json();
         setBotData(json);
-        if (json.bot_state?.strategy) {
-          setStrategy(json.bot_state.strategy);
+        // Automatically sync to active scanner/engine stock if user hasn't explicitly chosen one
+        if (!userSelectedSymbolRef.current && (json.active_symbol || json.bot_state?.symbol)) {
+          setSymbol(json.active_symbol || json.bot_state.symbol);
+        }
+        if (!userSelectedStrategyRef.current && (json.active_strategy || json.bot_state?.strategy)) {
+          setStrategy(json.active_strategy || json.bot_state.strategy);
         }
       }
       if (wlRes.ok) setWatchlist(await wlRes.json());
@@ -120,27 +127,46 @@ export default function LiveBotDashboard({
     }
   }, [botData?.logs, autoScroll]);
 
-  // Bot Control Actions
-  const handleControl = async (action) => {
+  // Bot Control Actions with Instant Optimistic UI Feedback
+  const handleControl = async (action, overrideSymbol = null, overrideStrategy = null) => {
+    const targetSymbol = overrideSymbol || symbol;
+    const targetStrategy = overrideStrategy || strategy;
+
+    // Instant optimistic update so Play / Pause button reacts immediately without waiting
+    const newStatus = action === "PAUSE" ? "PAUSED" : (action === "START" ? "ACTIVE (MONITORING)" : "STOPPED");
+    setBotData(prev => prev ? {
+      ...prev,
+      bot_state: {
+        ...prev.bot_state,
+        status: newStatus,
+        symbol: targetSymbol,
+        strategy: targetStrategy
+      }
+    } : null);
+
     setActionLoading(true);
     try {
       const res = await fetch('/api/bot/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, symbol, strategy_name: strategy, capital: 1000000.0 })
+        body: JSON.stringify({ action, symbol: targetSymbol, strategy_name: targetStrategy, capital: 1000000.0 })
       });
       if (res.ok) {
         const json = await res.json();
-        setBotData(prev => ({
-          ...prev,
-          bot_state: json.bot_state
-        }));
-        await fetchData();
+        if (json.bot_state) {
+          setBotData(prev => ({
+            ...prev,
+            bot_state: json.bot_state
+          }));
+          if (json.bot_state.symbol) setSymbol(json.bot_state.symbol);
+          if (json.bot_state.strategy) setStrategy(json.bot_state.strategy);
+        }
       }
     } catch (e) {
       console.error("Control error:", e);
     } finally {
       setActionLoading(false);
+      fetchData();
     }
   };
 
@@ -269,7 +295,7 @@ export default function LiveBotDashboard({
   };
 
   return (
-    <div style={{
+    <div className="quant-dashboard-container" style={{
       display: 'flex',
       flexDirection: 'column',
       gap: '24px',
@@ -371,31 +397,81 @@ export default function LiveBotDashboard({
         </div>
 
         {/* Right: State-Aware Dynamic Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {/* Symbol Selector */}
-          <select
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            style={{
-              padding: '9px 14px',
-              backgroundColor: '#f9fafb',
-              border: '1px solid #e5e7eb',
-              borderRadius: '10px',
-              color: '#111827',
-              fontSize: '0.82rem',
-              fontWeight: '600',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            <option value="SBIN.NS">SBIN.NS (State Bank of India)</option>
-            <option value="RELIANCE.NS">RELIANCE.NS (Reliance Industries)</option>
-            <option value="HDFCBANK.NS">HDFCBANK.NS (HDFC Bank)</option>
-            <option value="ICICIBANK.NS">ICICIBANK.NS (ICICI Bank)</option>
-            <option value="TATAMOTORS.NS">TATAMOTORS.NS (Tata Motors)</option>
-            <option value="TCS.NS">TCS.NS (Tata Consultancy Services)</option>
-            <option value="INFY.NS">INFY.NS (Infosys Ltd)</option>
-          </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <span style={{ fontSize: '0.68rem', color: '#6b7280', fontWeight: '700', textTransform: 'uppercase' }}>Instrument</span>
+            <select
+              value={symbol}
+              onChange={(e) => {
+                const newSym = e.target.value;
+                userSelectedSymbolRef.current = true;
+                setSymbol(newSym);
+                handleControl("START", newSym, strategy);
+              }}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: '10px',
+                color: '#111827',
+                fontSize: '0.82rem',
+                fontWeight: '600',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              {symbol && !["BHARTIARTL.NS", "SBIN.NS", "RELIANCE.NS", "HDFCBANK.NS", "ICICIBANK.NS", "TATAMOTORS.NS", "TCS.NS", "INFY.NS", "LT.NS", "AXISBANK.NS", "ITC.NS", "BAJFINANCE.NS", "KOTAKBANK.NS", "MARUTI.NS"].includes(symbol) && (
+                <option value={symbol}>⚡ {symbol} (Active Scanner Pick)</option>
+              )}
+              <option value="BHARTIARTL.NS">BHARTIARTL.NS (Bharti Airtel)</option>
+              <option value="SBIN.NS">SBIN.NS (State Bank of India)</option>
+              <option value="RELIANCE.NS">RELIANCE.NS (Reliance Industries)</option>
+              <option value="HDFCBANK.NS">HDFCBANK.NS (HDFC Bank)</option>
+              <option value="ICICIBANK.NS">ICICIBANK.NS (ICICI Bank)</option>
+              <option value="TATAMOTORS.NS">TATAMOTORS.NS (Tata Motors)</option>
+              <option value="TCS.NS">TCS.NS (Tata Consultancy Services)</option>
+              <option value="INFY.NS">INFY.NS (Infosys Ltd)</option>
+              <option value="LT.NS">LT.NS (Larsen & Toubro)</option>
+              <option value="AXISBANK.NS">AXISBANK.NS (Axis Bank)</option>
+              <option value="ITC.NS">ITC.NS (ITC Ltd)</option>
+              <option value="BAJFINANCE.NS">BAJFINANCE.NS (Bajaj Finance)</option>
+              <option value="KOTAKBANK.NS">KOTAKBANK.NS (Kotak Mahindra Bank)</option>
+              <option value="MARUTI.NS">MARUTI.NS (Maruti Suzuki)</option>
+            </select>
+          </div>
+
+          {/* Strategy Selector Dropdown */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <span style={{ fontSize: '0.68rem', color: '#6b7280', fontWeight: '700', textTransform: 'uppercase' }}>Active Strategy</span>
+            <select
+              value={strategy}
+              onChange={(e) => {
+                const newStrat = e.target.value;
+                userSelectedStrategyRef.current = true;
+                setStrategy(newStrat);
+                handleControl("START", symbol, newStrat);
+              }}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: '10px',
+                color: '#059669',
+                fontSize: '0.82rem',
+                fontWeight: '700',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="NSE Midday VWAP Pullback">NSE Midday VWAP Pullback</option>
+              <option value="NSE Intraday ORB Breakout">NSE Intraday ORB Breakout</option>
+              <option value="Intraday VWAP + RSI Mean Reversion">Intraday VWAP + RSI Mean Reversion</option>
+              <option value="9/21 EMA Dynamic Momentum">9/21 EMA Dynamic Momentum</option>
+              <option value="NSE Failed-Gap Fade">NSE Failed-Gap Fade</option>
+              <option value="SuperTrend ATR Intraday Trend">SuperTrend ATR Intraday Trend</option>
+            </select>
+          </div>
 
           {/* DYNAMIC PLAY / PAUSE TOGGLE BUTTON */}
           <button
@@ -483,7 +559,7 @@ export default function LiveBotDashboard({
       </div>
 
       {/* ── Quixotic Row 1: The 3 Hero Telemetry Cards ─────────────────── */}
-      <div style={{
+      <div className="quant-hero-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(300px, 340px) 1fr minmax(280px, 320px)',
         gap: '20px'
@@ -862,7 +938,7 @@ export default function LiveBotDashboard({
       </div>
 
       {/* ── Quixotic Row 2: Live Terminal Logs Console + Previous Trades Ledger ── */}
-      <div style={{
+      <div className="quant-grid-split" style={{
         display: 'grid',
         gridTemplateColumns: activeBottomView === "DUAL" ? '1fr 1fr' : '1fr',
         gap: '20px'

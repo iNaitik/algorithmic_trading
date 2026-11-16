@@ -670,6 +670,11 @@ def _scheduler_worker():
                         cfg["active_symbol"] = top_sym
                         cfg["user_selected_stock"] = True
                         save_active_config(cfg)
+                        try:
+                            from engine.live_trader import command_bot_control
+                            command_bot_control("START", symbol=top_sym, strategy_name=cfg.get("strategy"))
+                        except Exception as eng_err:
+                            print(f"[SCHEDULER] Live engine bind error: {eng_err}")
                         send_telegram_alert(
                             f"⏰ <b>09:20 AM AUTO-PICK ACTIVATED:</b>\n\n"
                             f"The bot has auto-locked on <b>{top_sym}</b> (Top Ranked Volume Breakout).\n"

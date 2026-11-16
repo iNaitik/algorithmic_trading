@@ -167,7 +167,7 @@ export default function App() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f2f4f7', color: '#111827', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       {/* ── Left Slim Floating Icon Rail (Matches Quixotic Left Rail) ── */}
-      <aside style={{
+      <aside className="app-sidebar" style={{
         width: '74px',
         minWidth: '74px',
         backgroundColor: '#ffffff',
@@ -265,7 +265,7 @@ export default function App() {
       {/* ── Main Canvas ───────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* ── Quixotic Top Navigation Bar ─────────────────────────────── */}
-        <header style={{
+        <header className="app-header" style={{
           height: '74px',
           backgroundColor: '#ffffff',
           borderBottom: '1px solid #e5e7eb',
@@ -295,11 +295,13 @@ export default function App() {
           </div>
 
           {/* Center: Rounded Navigation Pills Bar */}
-          <div style={{
+          <div className="app-nav-pills" style={{
             display: 'flex',
             backgroundColor: '#f3f4f6',
             padding: '4px',
-            borderRadius: '16px'
+            borderRadius: '16px',
+            overflowX: 'auto',
+            maxWidth: '100%'
           }}>
             {topNavTabs.map(tab => (
               <button
@@ -395,68 +397,8 @@ export default function App() {
           </div>
         </header>
 
-        {/* ── Sub-header: Welcome Back, Naitik + Date Filter ───────────── */}
-        <div style={{
-          padding: '24px 36px 0 36px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px'
-        }}>
-          <div>
-            <h1 style={{ fontSize: '1.65rem', fontWeight: '700', color: '#111827', letterSpacing: '-0.02em' }}>
-              Welcome Back, Naitik
-            </h1>
-            <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '2px' }}>
-              Institutional Quantitative Terminal • Live Execution & Factor Backtesting
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Date filter pill */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '8px 16px',
-              backgroundColor: '#ffffff',
-              border: '1px solid #e5e7eb',
-              borderRadius: '12px',
-              fontSize: '0.8rem',
-              color: '#374151',
-              fontWeight: '600',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-            }}>
-              <Calendar size={14} color="#6b7280" />
-              <span>Session: 9:15 AM - 3:30 PM IST</span>
-            </div>
-
-            {/* Quick Action Button */}
-            <button
-              onClick={() => setActiveTab("backtester")}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 18px',
-                backgroundColor: '#059669',
-                color: '#ffffff',
-                borderRadius: '12px',
-                fontSize: '0.8rem',
-                fontWeight: '700',
-                border: 'none',
-                boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
-                cursor: 'pointer'
-              }}
-            >
-              <Plus size={15} /> Run Strategy Backtest
-            </button>
-          </div>
-        </div>
-
         {/* ── Dynamic Main View Canvas ─────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="app-content-area" style={{ flex: 1, overflowY: 'auto' }}>
           {/* VIEW 1: DASHBOARD (Live Paper Bot) */}
           {activeTab === "dashboard" && (
             <LiveBotDashboard
