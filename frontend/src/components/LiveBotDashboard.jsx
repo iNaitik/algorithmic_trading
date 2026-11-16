@@ -223,6 +223,7 @@ export default function LiveBotDashboard({
 
   // All real bot fills (excluding any backtest data)
   const allBotFills = botData?.all_trades || [];
+  const allFills = allBotFills;
 
   // Separate Today's Live Trades from Previous Bot Sessions
   const todayFills = allBotFills.filter(t => t.Timestamp && t.Timestamp.startsWith(todayIso));
@@ -855,7 +856,7 @@ export default function LiveBotDashboard({
             }}
           >
             <FileText size={13} />
-            <span>Previous Trades ({allFills.length})</span>
+            <span>Previous Trades ({allBotFills.length})</span>
           </button>
         </div>
       </div>
@@ -1340,7 +1341,7 @@ export default function LiveBotDashboard({
               color: '#6b7280'
             }}>
               <div>
-                Total Logged Executions: <b style={{ color: '#111827' }}>{allFills.length}</b>
+                Total Logged Executions: <b style={{ color: '#111827' }}>{allBotFills.length}</b>
               </div>
               <span
                 onClick={onNavigateToBacktest}
