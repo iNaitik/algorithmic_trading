@@ -39,11 +39,12 @@ export default function LiveBotDashboard({
   const [actionLoading, setActionLoading] = useState(false);
   const [logFilter, setLogFilter] = useState("ALL");
   const [autoScroll, setAutoScroll] = useState(true);
-  const [tradeScope, setTradeScope] = useState("ALL"); // "ALL" or "SYMBOL"
+  const [tradeSessionTab, setTradeSessionTab] = useState("TODAY"); // "TODAY", "PREVIOUS", "ALL"
+  const [tradeSymbolFilter, setTradeSymbolFilter] = useState("ALL"); // "ALL", "CURRENT"
   const [activeBottomView, setActiveBottomView] = useState("DUAL"); // "DUAL", "LOGS", "TRADES"
   const [countdownText, setCountdownText] = useState("");
 
-  const logsEndRef = useRef(null);
+  const terminalBodyRef = useRef(null);
 
   // Live Market Countdown Timer (09:15 AM IST Open / 03:15 PM MIS / 03:30 PM Close)
   useEffect(() => {
@@ -112,10 +113,10 @@ export default function LiveBotDashboard({
     return () => clearInterval(interval);
   }, [symbol, market]);
 
-  // Auto-scroll logs to bottom
+  // Auto-scroll terminal container ONLY (prevents page from scrolling down)
   useEffect(() => {
-    if (autoScroll && logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll && terminalBodyRef.current) {
+      terminalBodyRef.current.scrollTop = terminalBodyRef.current.scrollHeight;
     }
   }, [botData?.logs, autoScroll]);
 
@@ -169,7 +170,7 @@ export default function LiveBotDashboard({
   };
 
   const handleExportTradesCSV = () => {
-    const trades = tradeScope === "SYMBOL" ? (botData?.recent_trades || []) : (botData?.all_trades || []);
+    const trades = displayedTrades;
     if (!trades.length) return;
     const headers = ["Timestamp", "Action", "Symbol", "Shares", "Execution_Price", "Cash_Change", "Status"];
     const rows = trades.map(t => [
@@ -185,7 +186,7 @@ export default function LiveBotDashboard({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `trade_history_${symbol}.csv`);
+    link.setAttribute("download", `algo_bot_trades_${tradeSessionTab.toLowerCase()}_${symbol}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -214,10 +215,31 @@ export default function LiveBotDashboard({
   const totalReturnPct = ((totalNetWorth - initialCapital) / initialCapital) * 100;
   const unrealizedPnl = isInPosition ? (currentLtp - bot.entry_price) * bot.shares : 0;
 
-  // Real trades from backend
-  const allFills = botData?.all_trades || [];
-  const symbolFills = botData?.recent_trades || [];
-  const activeFills = tradeScope === "SYMBOL" ? symbolFills : allFills;
+  // Derive date in IST format 'YYYY-MM-DD'
+  const now = new Date();
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const istDate = new Date(utc + (3600000 * 5.5));
+  const todayIso = istDate.toISOString().slice(0, 10);
+
+  // All real bot fills (excluding any backtest data)
+  const allBotFills = botData?.all_trades || [];
+
+  // Separate Today's Live Trades from Previous Bot Sessions
+  const todayFills = allBotFills.filter(t => t.Timestamp && t.Timestamp.startsWith(todayIso));
+  const previousFills = allBotFills.filter(t => t.Timestamp && !t.Timestamp.startsWith(todayIso));
+
+  // Determine active list based on selected session tab
+  let activeFillsBySession = allBotFills;
+  if (tradeSessionTab === "TODAY") {
+    activeFillsBySession = todayFills;
+  } else if (tradeSessionTab === "PREVIOUS") {
+    activeFillsBySession = previousFills;
+  }
+
+  // Filter by symbol if requested
+  const displayedTrades = tradeSymbolFilter === "CURRENT"
+    ? activeFillsBySession.filter(t => t.Symbol === symbol)
+    : activeFillsBySession;
 
   // Logs filtering
   const allLogs = botData?.logs || [];
@@ -959,11 +981,13 @@ export default function LiveBotDashboard({
             </div>
 
             {/* Terminal Body */}
-            <div style={{
-              flex: 1,
-              padding: '16px 18px',
-              overflowY: 'auto',
-              maxHeight: '440px',
+            <div
+              ref={terminalBodyRef}
+              style={{
+                flex: 1,
+                padding: '16px 18px',
+                overflowY: 'auto',
+                maxHeight: '440px',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace',
               fontSize: '0.78rem',
               lineHeight: '1.6',
@@ -1020,7 +1044,6 @@ export default function LiveBotDashboard({
                   animation: 'pulse 1s infinite'
                 }} />
               </div>
-              <div ref={logsEndRef} />
             </div>
 
             {/* Terminal Status Footer */}
@@ -1059,19 +1082,22 @@ export default function LiveBotDashboard({
               {/* Table Header & Scope Toggle */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
                 <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#111827' }}>
-                    Trade History & Executions
+                  <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#111827', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>Bot Execution History</span>
+                    <span style={{ fontSize: '0.68rem', backgroundColor: '#e6f4ea', color: '#059669', padding: '2px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                      BOT FILLS ONLY
+                    </span>
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                    Verified paper fills logged to <code>data/trade_history.csv</code>
+                  <div style={{ fontSize: '0.74rem', color: '#6b7280' }}>
+                    Real-time paper execution ledger (excludes historical backtests)
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {/* Scope filter: Current Symbol vs All Symbols */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  {/* Scope filter: Today vs Previous vs All */}
                   <div style={{ display: 'flex', backgroundColor: '#f3f4f6', padding: '3px', borderRadius: '10px' }}>
                     <button
-                      onClick={() => setTradeScope("ALL")}
+                      onClick={() => setTradeSessionTab("TODAY")}
                       style={{
                         padding: '4px 10px',
                         borderRadius: '7px',
@@ -1079,15 +1105,15 @@ export default function LiveBotDashboard({
                         cursor: 'pointer',
                         fontSize: '0.72rem',
                         fontWeight: '700',
-                        backgroundColor: tradeScope === "ALL" ? '#059669' : 'transparent',
-                        color: tradeScope === "ALL" ? '#ffffff' : '#6b7280',
+                        backgroundColor: tradeSessionTab === "TODAY" ? '#059669' : 'transparent',
+                        color: tradeSessionTab === "TODAY" ? '#ffffff' : '#6b7280',
                         transition: 'all 0.2s ease'
                       }}
                     >
-                      All ({allFills.length})
+                      Today ({todayFills.length})
                     </button>
                     <button
-                      onClick={() => setTradeScope("SYMBOL")}
+                      onClick={() => setTradeSessionTab("PREVIOUS")}
                       style={{
                         padding: '4px 10px',
                         borderRadius: '7px',
@@ -1095,14 +1121,48 @@ export default function LiveBotDashboard({
                         cursor: 'pointer',
                         fontSize: '0.72rem',
                         fontWeight: '700',
-                        backgroundColor: tradeScope === "SYMBOL" ? '#059669' : 'transparent',
-                        color: tradeScope === "SYMBOL" ? '#ffffff' : '#6b7280',
+                        backgroundColor: tradeSessionTab === "PREVIOUS" ? '#059669' : 'transparent',
+                        color: tradeSessionTab === "PREVIOUS" ? '#ffffff' : '#6b7280',
                         transition: 'all 0.2s ease'
                       }}
                     >
-                      {symbol} ({symbolFills.length})
+                      Previous ({previousFills.length})
+                    </button>
+                    <button
+                      onClick={() => setTradeSessionTab("ALL")}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '7px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.72rem',
+                        fontWeight: '700',
+                        backgroundColor: tradeSessionTab === "ALL" ? '#059669' : 'transparent',
+                        color: tradeSessionTab === "ALL" ? '#ffffff' : '#6b7280',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      All ({allBotFills.length})
                     </button>
                   </div>
+
+                  {/* Symbol Toggle */}
+                  <button
+                    onClick={() => setTradeSymbolFilter(tradeSymbolFilter === "ALL" ? "CURRENT" : "ALL")}
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: tradeSymbolFilter === "CURRENT" ? '#e6f4ea' : '#ffffff',
+                      color: tradeSymbolFilter === "CURRENT" ? '#059669' : '#4b5563',
+                      fontSize: '0.72rem',
+                      fontWeight: '700',
+                      cursor: 'pointer'
+                    }}
+                    title={tradeSymbolFilter === "CURRENT" ? "Showing current symbol only" : "Showing all symbols"}
+                  >
+                    {tradeSymbolFilter === "CURRENT" ? `${symbol}` : "All Stocks"}
+                  </button>
 
                   <button
                     onClick={handleExportTradesCSV}
@@ -1127,105 +1187,145 @@ export default function LiveBotDashboard({
                 </div>
               </div>
 
-              {/* Real Trades Table */}
+              {/* Real Trades Table or Session Empty State */}
               <div style={{ overflowX: 'auto', maxHeight: '340px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
-                  <thead style={{ position: 'sticky', top: 0, backgroundColor: '#ffffff', zIndex: 1 }}>
-                    <tr style={{ color: '#9ca3af', borderBottom: '1px solid #f3f4f6', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      <th style={{ padding: '8px 10px' }}>Order / ID</th>
-                      <th style={{ padding: '8px 10px' }}>Symbol</th>
-                      <th style={{ padding: '8px 10px' }}>Action</th>
-                      <th style={{ padding: '8px 10px' }}>Shares</th>
-                      <th style={{ padding: '8px 10px' }}>Price</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'right' }}>Cash Impact</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'center' }}>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activeFills.length === 0 ? (
-                      <tr>
-                        <td colSpan="7" style={{ padding: '32px 12px', textAlign: 'center', color: '#9ca3af' }}>
-                          No paper fills found for {tradeScope === "SYMBOL" ? symbol : "any symbol"}. Run or start the bot to execute simulated orders.
-                        </td>
-                      </tr>
-                    ) : (
-                      activeFills.slice().reverse().map((trade, idx) => {
-                        const isBuy = trade.Action?.includes("BUY");
-                        const isShort = trade.Action?.includes("SHORT");
-                        const isCover = trade.Action?.includes("COVER");
-                        const isSquareOff = trade.Action?.includes("SQUARE_OFF");
-
-                        return (
-                          <tr key={idx} style={{ borderBottom: '1px solid #f9fafb', transition: 'background-color 0.15s ease' }}>
-                            <td style={{ padding: '12px 10px' }}>
-                              <div style={{ fontWeight: '700', color: '#111827' }}>
-                                {trade.id || `TRD-${1000 + idx}`}
-                              </div>
-                              <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
-                                {trade.Date || trade.Timestamp?.slice(0, 10)} {trade.Time ? `• ${trade.Time}` : ''}
-                              </div>
-                            </td>
-
-                            <td style={{ padding: '12px 10px', fontWeight: '700', color: '#111827' }}>
-                              {trade.Symbol}
-                            </td>
-
-                            <td style={{ padding: '12px 10px' }}>
-                              <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                padding: '2px 8px',
-                                borderRadius: '6px',
-                                fontSize: '0.72rem',
-                                fontWeight: '700',
-                                backgroundColor: isBuy
-                                  ? '#e6f4ea'
-                                  : (isShort ? '#fef2f2' : (isCover ? '#eff6ff' : '#fef3c7')),
-                                color: isBuy
-                                  ? '#059669'
-                                  : (isShort ? '#dc2626' : (isCover ? '#2563eb' : '#d97706'))
-                              }}>
-                                {trade.Action}
-                              </span>
-                            </td>
-
-                            <td style={{ padding: '12px 10px', color: '#374151', fontWeight: '600' }}>
-                              {trade.Shares} shs
-                            </td>
-
-                            <td style={{ padding: '12px 10px', fontWeight: '700', color: '#111827' }}>
-                              {currency}{Number(trade.Execution_Price || 0).toFixed(2)}
-                            </td>
-
-                            <td style={{
-                              padding: '12px 10px',
-                              textAlign: 'right',
-                              fontWeight: '800',
-                              color: String(trade.Amount || trade.Cash_Change).startsWith('+') ? '#059669' : '#dc2626'
-                            }}>
-                              {trade.Amount || trade.Cash_Change}
-                            </td>
-
-                            <td style={{ padding: '12px 10px', textAlign: 'center' }}>
-                              <span style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.72rem',
-                                fontWeight: '700',
-                                color: '#059669'
-                              }}>
-                                <CheckCircle2 size={13} color="#059669" />
-                                {trade.Status || "FILLED"}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })
+                {tradeSessionTab === "TODAY" && todayFills.length === 0 ? (
+                  <div style={{
+                    padding: '36px 20px',
+                    textAlign: 'center',
+                    backgroundColor: '#f9fafb',
+                    borderRadius: '14px',
+                    border: '1px dashed #e5e7eb',
+                    margin: '12px 0'
+                  }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#e6f4ea', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                      <Clock size={20} color="#059669" />
+                    </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: '800', color: '#111827', marginBottom: '4px' }}>
+                      Waiting for Today's Market Signals (Session {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })})
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: '#6b7280', maxWidth: '440px', margin: '0 auto', lineHeight: '1.5' }}>
+                      No live paper orders executed yet today. Market session opens at <b>09:15 AM IST</b>.
+                      As the bot enters positions on {symbol}, fills will appear here instantly.
+                    </div>
+                    {previousFills.length > 0 && (
+                      <button
+                        onClick={() => setTradeSessionTab("PREVIOUS")}
+                        style={{
+                          marginTop: '14px',
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #d1d5db',
+                          color: '#059669',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        View Previous Bot Sessions ({previousFills.length} trades) →
+                      </button>
                     )}
-                  </tbody>
-                </table>
+                  </div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: '#ffffff', zIndex: 1 }}>
+                      <tr style={{ color: '#9ca3af', borderBottom: '1px solid #f3f4f6', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <th style={{ padding: '8px 10px' }}>Order / ID</th>
+                        <th style={{ padding: '8px 10px' }}>Symbol</th>
+                        <th style={{ padding: '8px 10px' }}>Action</th>
+                        <th style={{ padding: '8px 10px' }}>Shares</th>
+                        <th style={{ padding: '8px 10px' }}>Price</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'right' }}>Cash Impact</th>
+                        <th style={{ padding: '8px 10px', textAlign: 'center' }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayedTrades.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" style={{ padding: '32px 12px', textAlign: 'center', color: '#9ca3af' }}>
+                            No bot fills found for the selected filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        displayedTrades.slice().reverse().map((trade, idx) => {
+                          const isBuy = trade.Action?.includes("BUY");
+                          const isShort = trade.Action?.includes("SHORT");
+                          const isCover = trade.Action?.includes("COVER");
+                          const isSquareOff = trade.Action?.includes("SQUARE_OFF");
+
+                          return (
+                            <tr key={idx} style={{ borderBottom: '1px solid #f9fafb', transition: 'background-color 0.15s ease' }}>
+                              <td style={{ padding: '12px 10px' }}>
+                                <div style={{ fontWeight: '700', color: '#111827' }}>
+                                  {trade.id || `TRD-${1000 + idx}`}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
+                                  {trade.Date || trade.Timestamp?.slice(0, 10)} {trade.Time ? `• ${trade.Time}` : ''}
+                                </div>
+                              </td>
+
+                              <td style={{ padding: '12px 10px', fontWeight: '700', color: '#111827' }}>
+                                {trade.Symbol}
+                              </td>
+
+                              <td style={{ padding: '12px 10px' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 8px',
+                                  borderRadius: '6px',
+                                  fontSize: '0.72rem',
+                                  fontWeight: '700',
+                                  backgroundColor: isBuy
+                                    ? '#e6f4ea'
+                                    : (isShort ? '#fef2f2' : (isCover ? '#eff6ff' : '#fef3c7')),
+                                  color: isBuy
+                                    ? '#059669'
+                                    : (isShort ? '#dc2626' : (isCover ? '#2563eb' : '#d97706'))
+                                }}>
+                                  {trade.Action}
+                                </span>
+                              </td>
+
+                              <td style={{ padding: '12px 10px', color: '#374151', fontWeight: '600' }}>
+                                {trade.Shares} shs
+                              </td>
+
+                              <td style={{ padding: '12px 10px', fontWeight: '700', color: '#111827' }}>
+                                {currency}{Number(trade.Execution_Price || 0).toFixed(2)}
+                              </td>
+
+                              <td style={{
+                                padding: '12px 10px',
+                                textAlign: 'right',
+                                fontWeight: '800',
+                                color: String(trade.Amount || trade.Cash_Change).startsWith('+') ? '#059669' : '#dc2626'
+                              }}>
+                                {trade.Amount || trade.Cash_Change}
+                              </td>
+
+                              <td style={{ padding: '12px 10px', textAlign: 'center' }}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontSize: '0.72rem',
+                                  fontWeight: '700',
+                                  color: '#059669'
+                                }}>
+                                  <CheckCircle2 size={13} color="#059669" />
+                                  {trade.Status || "FILLED"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
 
