@@ -65,13 +65,23 @@ export default function BloombergTerminalApp({
           fetch('/api/strategies')
         ]);
         if (mRes.ok) setMarketDefs(await mRes.json());
-        if (sRes.ok) setStrategiesList(await sRes.json());
+        if (sRes.ok) {
+          const strats = await sRes.json();
+          setStrategiesList(strats);
+        }
       } catch (err) {
         console.error("Failed to init Bloomberg Terminal metadata:", err);
       }
     };
     initData();
   }, []);
+
+  // Auto-run initial backtest when strategies load
+  useEffect(() => {
+    if (strategiesList.length > 0 && !backtestResult) {
+      runBacktest();
+    }
+  }, [strategiesList]);
 
   // Parse capital
   useEffect(() => {

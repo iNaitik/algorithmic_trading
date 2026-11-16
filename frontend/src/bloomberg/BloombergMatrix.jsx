@@ -30,7 +30,7 @@ export default function BloombergMatrix({
     fetchSummary();
   }, []);
 
-  const rawRows = matrixData?.leaderboard || matrixData?.runs || [];
+  const rawRows = matrixData?.matrix || matrixData?.leaderboard || matrixData?.runs || [];
 
   // Filtered & Sorted Rows
   const filteredRows = rawRows
@@ -41,7 +41,7 @@ export default function BloombergMatrix({
     })
     .sort((a, b) => {
       if (sortBy === "win_rate") return (b.win_rate || 0) - (a.win_rate || 0);
-      if (sortBy === "return_pct") return (b.net_return_pct || b.return_pct || 0) - (a.net_return_pct || a.return_pct || 0);
+      if (sortBy === "return_pct") return (b.return_pct || b.net_return_pct || 0) - (a.return_pct || a.net_return_pct || 0);
       if (sortBy === "net_pnl") return (b.net_pnl || 0) - (a.net_pnl || 0);
       return (b.sharpe || b.sharpe_ratio || 0) - (a.sharpe || a.sharpe_ratio || 0);
     });
@@ -100,7 +100,7 @@ export default function BloombergMatrix({
               outline: 'none'
             }}
           >
-            <option value="ALL">ALL STRATEGIES</option>
+            <option value="ALL">ALL STRATEGIES ({uniqueStrategies.length})</option>
             {uniqueStrategies.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
@@ -119,7 +119,7 @@ export default function BloombergMatrix({
               outline: 'none'
             }}
           >
-            <option value="ALL">ALL ASSETS</option>
+            <option value="ALL">ALL ASSETS ({uniqueAssets.length})</option>
             {uniqueAssets.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
         </div>
@@ -141,7 +141,7 @@ export default function BloombergMatrix({
             <option value="sharpe">Sharpe Ratio</option>
             <option value="win_rate">Win Rate %</option>
             <option value="return_pct">Net Return %</option>
-            <option value="net_pnl">Net P&L</option>
+            <option value="net_pnl">Net P&amp;L</option>
           </select>
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function BloombergMatrix({
                   <th>SHARPE</th>
                   <th>MAX DD %</th>
                   <th>TRADES</th>
-                  <th>NET P&L</th>
+                  <th>NET P&amp;L</th>
                   <th>ACTION</th>
                 </tr>
               </thead>
@@ -182,8 +182,8 @@ export default function BloombergMatrix({
                   filteredRows.map((row, idx) => {
                     const sym = row.asset || row.symbol || '---';
                     const strat = row.strategy || '---';
-                    const tf = row.timeframe || row.interval || '5m';
-                    const retPct = row.net_return_pct || row.return_pct || 0;
+                    const tf = row.timeframe || row.interval || '2m';
+                    const retPct = row.return_pct || row.net_return_pct || 0;
                     const isPositive = retPct >= 0;
                     const sharpe = row.sharpe || row.sharpe_ratio || 0;
 
@@ -207,7 +207,7 @@ export default function BloombergMatrix({
                         <td style={{ color: '#ff3344' }}>
                           -{Math.abs(Number(row.max_drawdown_pct || row.max_drawdown || 0)).toFixed(2)}%
                         </td>
-                        <td style={{ fontWeight: '700' }}>{row.total_trades || row.trades || 0}</td>
+                        <td style={{ fontWeight: '700' }}>{row.trades || row.total_trades || 0}</td>
                         <td style={{ color: isPositive ? '#00ff66' : '#ff3344', fontWeight: '800' }}>
                           {currency}{Number(row.net_pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
@@ -237,8 +237,8 @@ export default function BloombergMatrix({
             ALPHA HEATMAP (SHARPE &amp; RETURN DENSITY)
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '6px' }}>
-            {filteredRows.slice(0, 36).map((row, i) => {
-              const ret = row.net_return_pct || row.return_pct || 0;
+            {filteredRows.slice(0, 48).map((row, i) => {
+              const ret = row.return_pct || row.net_return_pct || 0;
               const isWin = ret >= 0;
               return (
                 <div
@@ -246,7 +246,7 @@ export default function BloombergMatrix({
                   onClick={() => onSelectCombination({
                     asset: row.asset || row.symbol,
                     strategy: row.strategy,
-                    timeframe: row.timeframe || row.interval || '5m'
+                    timeframe: row.timeframe || row.interval || '2m'
                   })}
                   style={{
                     backgroundColor: isWin ? 'rgba(0, 255, 102, 0.1)' : 'rgba(255, 51, 68, 0.1)',

@@ -69,20 +69,27 @@ export default function BloombergScanner({
     }
   };
 
-  const rawBreakouts = scannerData?.breakouts || [];
-  const sentiment = scannerData?.market_sentiment || { advancers: 32, decliners: 18, dominant_sector: 'Banking & Financials' };
-  const metrics = scannerData?.metrics || { average_rvol: 2.14, daemon_status: 'AUTO-LOCKED (09:16 AM)' };
+  const rawStocks = scannerData?.stocks || scannerData?.breakouts || [];
+  const breadth = scannerData?.market_breadth || {};
+  const advancers = breadth.advancers || 0;
+  const decliners = breadth.decliners || 0;
+  const adRatio = breadth.advance_decline_ratio || (decliners > 0 ? (advancers / decliners).toFixed(2) : advancers);
+  const avgRvol = breadth.avg_rvol || 1.0;
+  const dominantSector = breadth.dominant_sector || 'Banking & Financials';
 
   // Filtered & Sorted Breakouts
-  const filteredBreakouts = rawBreakouts
+  const filteredBreakouts = rawStocks
     .filter(item => {
       const q = searchQuery.toLowerCase();
       const matchQuery = !q || item.symbol.toLowerCase().includes(q) || (item.name && item.name.toLowerCase().includes(q)) || (item.sector && item.sector.toLowerCase().includes(q));
       if (!matchQuery) return false;
 
-      if (filterType === "LONGS") return item.signal === "LONG" || (item.change_pct || 0) > 0;
-      if (filterType === "SHORTS") return item.signal === "SHORT" || (item.change_pct || 0) < 0;
-      if (filterType === "HIGHRVOL") return (item.rvol || 0) >= 1.5;
+      const isLong = item.setup_action === "BUY" || item.setup_signal?.includes("LONG") || (item.change_pct || 0) > 0;
+      const isShort = item.setup_action === "SELL" || item.setup_signal?.includes("SHORT") || (item.change_pct || 0) < 0;
+
+      if (filterType === "LONGS") return isLong;
+      if (filterType === "SHORTS") return isShort;
+      if (filterType === "HIGHRVOL") return (item.rvol || 0) >= 1.0;
       if (filterType === "GAPS") return Math.abs(item.gap_pct || 0) >= 0.5;
       return true;
     })
@@ -103,7 +110,7 @@ export default function BloombergScanner({
             SCANNER // 09:16 AM OPENING BREAKOUT &amp; RVOL RADAR
           </span>
           <span style={{ fontSize: '0.7rem', color: '#64748b' }}>
-            {scannerData?.timestamp || 'SESSION TICK SYNCED'}
+            {scannerData?.scan_executed_at || scannerData?.timestamp || 'SESSION TICK SYNCED'}
           </span>
         </div>
 
@@ -125,9 +132,9 @@ export default function BloombergScanner({
         <div className="bbg-panel" style={{ padding: '8px' }}>
           <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>MARKET BREADTH (A/D)</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: '2px' }}>
-            <span style={{ fontSize: '1.1rem', fontWeight: '800', color: '#00ff66' }}>{sentiment.advancers || 0}▲</span>
-            <span style={{ fontSize: '1.1rem', fontWeight: '800', color: '#ff3344' }}>{sentiment.decliners || 0}▼</span>
-            <span style={{ fontSize: '0.7rem', color: '#00e5ff' }}>({((sentiment.advancers || 1) / (sentiment.decliners || 1)).toFixed(2)}x)</span>
+            <span style={{ fontSize: '1.1rem', fontWeight: '800', color: '#00ff66' }}>{advancers}▲</span>
+            <span style={{ fontSize: '1.1rem', fontWeight: '800', color: '#ff3344' }}>{decliners}▼</span>
+            <span style={{ fontSize: '0.7rem', color: '#00e5ff' }}>({adRatio}x)</span>
           </div>
           <div style={{ fontSize: '0.65rem', color: '#64748b' }}>ADVANCE/DECLINE FLOW</div>
         </div>
@@ -135,7 +142,7 @@ export default function BloombergScanner({
         <div className="bbg-panel" style={{ padding: '8px' }}>
           <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>VOLUME SURGE VELOCITY</div>
           <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#00e5ff', marginTop: '2px' }}>
-            {metrics.average_rvol || 2.1}x RVOL
+            {avgRvol}x RVOL
           </div>
           <div style={{ fontSize: '0.65rem', color: '#64748b' }}>VS 20-DAY OPENING NORM</div>
         </div>
@@ -143,7 +150,7 @@ export default function BloombergScanner({
         <div className="bbg-panel" style={{ padding: '8px' }}>
           <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>DOMINANT SECTOR MOMENTUM</div>
           <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#ff9900', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {sentiment.dominant_sector || 'Banking & Fin.'}
+            {dominantSector}
           </div>
           <div style={{ fontSize: '0.65rem', color: '#64748b' }}>PRIMARY FLOW CONCENTRATION</div>
         </div>
@@ -151,7 +158,7 @@ export default function BloombergScanner({
         <div className="bbg-panel" style={{ padding: '8px' }}>
           <div style={{ fontSize: '0.62rem', color: '#94a3b8' }}>DAEMON SCHEDULER</div>
           <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#00ff66', marginTop: '2px' }}>
-            {metrics.daemon_status || 'ARMED (09:16 AM)'}
+            AUTO-LOCKED (09:16 AM)
           </div>
           <div style={{ fontSize: '0.65rem', color: '#64748b' }}>AUTO-LOCK MIS BREAKOUT</div>
         </div>
@@ -161,10 +168,10 @@ export default function BloombergScanner({
       <div className="bbg-panel" style={{ padding: '6px 10px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
           {[
-            { id: "ALL", label: `ALL (${rawBreakouts.length})` },
-            { id: "LONGS", label: `LONGS (${rawBreakouts.filter(x => x.signal === "LONG" || (x.change_pct || 0) > 0).length})` },
-            { id: "SHORTS", label: `SHORTS (${rawBreakouts.filter(x => x.signal === "SHORT" || (x.change_pct || 0) < 0).length})` },
-            { id: "HIGHRVOL", label: `HIGH RVOL >1.5x` },
+            { id: "ALL", label: `ALL (${rawStocks.length})` },
+            { id: "LONGS", label: `LONGS (${rawStocks.filter(x => x.setup_action === "BUY" || (x.change_pct || 0) > 0).length})` },
+            { id: "SHORTS", label: `SHORTS (${rawStocks.filter(x => x.setup_action === "SELL" || (x.change_pct || 0) < 0).length})` },
+            { id: "HIGHRVOL", label: `HIGH RVOL >1.0x` },
             { id: "GAPS", label: `GAP PLAYS >0.5%` }
           ].map(f => (
             <button
@@ -252,8 +259,11 @@ export default function BloombergScanner({
                 </tr>
               ) : (
                 filteredBreakouts.map((item, index) => {
-                  const isLong = item.signal === "LONG" || (item.change_pct || 0) >= 0;
+                  const isLong = item.setup_action === "BUY" || (item.change_pct || 0) >= 0;
                   const isArmed = armLoadingSymbol === item.symbol;
+                  const itemPrice = Number(item.price || item.last_price || 0);
+                  const itemTarget = Number(item.target_2r || item.target || itemPrice * 1.02);
+                  const itemSl = Number(item.stop_loss || itemPrice * 0.99);
 
                   return (
                     <tr key={item.symbol || index}>
@@ -268,7 +278,7 @@ export default function BloombergScanner({
                         <div style={{ color: '#64748b', fontSize: '0.65rem' }}>{item.sector || 'NSE Largecap'}</div>
                       </td>
                       <td style={{ color: '#00e5ff', fontWeight: '700' }}>
-                        {currency}{Number(item.last_price || 0).toFixed(2)}
+                        {currency}{itemPrice.toFixed(2)}
                       </td>
                       <td>
                         <span className={isLong ? 'bbg-badge-up' : 'bbg-badge-down'}>
@@ -285,13 +295,13 @@ export default function BloombergScanner({
                       </td>
                       <td>
                         <span className={isLong ? 'bbg-badge-up' : 'bbg-badge-down'}>
-                          {item.signal || (isLong ? 'LONG' : 'SHORT')}
+                          {item.setup_action || (isLong ? 'BUY' : 'SELL')}
                         </span>
                       </td>
-                      <td style={{ color: '#94a3b8' }}>{currency}{Number(item.orb_high || item.last_price * 1.005).toFixed(2)}</td>
-                      <td style={{ color: '#94a3b8' }}>{currency}{Number(item.orb_low || item.last_price * 0.995).toFixed(2)}</td>
-                      <td style={{ color: '#00ff66', fontWeight: '700' }}>{currency}{Number(item.target || item.last_price * 1.02).toFixed(2)}</td>
-                      <td style={{ color: '#ff3344', fontWeight: '700' }}>{currency}{Number(item.stop_loss || item.last_price * 0.99).toFixed(2)}</td>
+                      <td style={{ color: '#94a3b8' }}>{currency}{Number(item.orb_high || itemPrice * 1.005).toFixed(2)}</td>
+                      <td style={{ color: '#94a3b8' }}>{currency}{Number(item.orb_low || itemPrice * 0.995).toFixed(2)}</td>
+                      <td style={{ color: '#00ff66', fontWeight: '700' }}>{currency}{itemTarget.toFixed(2)}</td>
+                      <td style={{ color: '#ff3344', fontWeight: '700' }}>{currency}{itemSl.toFixed(2)}</td>
                       <td style={{ color: '#ff9900', fontWeight: '800' }}>{Number(item.alpha_score || 85).toFixed(0)}</td>
                       <td>
                         <div style={{ display: 'flex', gap: '4px' }}>
@@ -310,7 +320,7 @@ export default function BloombergScanner({
                             {isArmed ? 'ARMING...' : '<ARM BOT>'}
                           </button>
                           <button
-                            onClick={() => onSelectForBacktest(item.symbol, "NSE Intraday ORB Breakout")}
+                            onClick={() => onSelectForBacktest(item.symbol, item.suggested_strategy || "NSE Intraday ORB Breakout")}
                             className="bbg-fkey-btn"
                             style={{ fontSize: '0.65rem', padding: '2px 6px' }}
                           >
