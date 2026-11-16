@@ -81,11 +81,16 @@ export default function BloombergScanner({
   const filteredBreakouts = rawStocks
     .filter(item => {
       const q = searchQuery.toLowerCase();
-      const matchQuery = !q || item.symbol.toLowerCase().includes(q) || (item.name && item.name.toLowerCase().includes(q)) || (item.sector && item.sector.toLowerCase().includes(q));
+      const sym = String(item.symbol || '').toLowerCase();
+      const name = String(item.name || '').toLowerCase();
+      const sec = String(item.sector || '').toLowerCase();
+      const matchQuery = !q || sym.includes(q) || name.includes(q) || sec.includes(q);
       if (!matchQuery) return false;
 
-      const isLong = item.setup_action === "BUY" || item.setup_signal?.includes("LONG") || (item.change_pct || 0) > 0;
-      const isShort = item.setup_action === "SELL" || item.setup_signal?.includes("SHORT") || (item.change_pct || 0) < 0;
+      const sig = String(item.setup_signal || '');
+      const act = String(item.setup_action || '');
+      const isLong = act === "BUY" || sig.includes("LONG") || (item.change_pct || 0) > 0;
+      const isShort = act === "SELL" || sig.includes("SHORT") || (item.change_pct || 0) < 0;
 
       if (filterType === "LONGS") return isLong;
       if (filterType === "SHORTS") return isShort;

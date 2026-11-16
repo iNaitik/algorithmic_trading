@@ -40,11 +40,14 @@ export default function BloombergLogs() {
     }
   };
 
-  const filtered = logs.filter(l => {
+  const filtered = logs.filter(item => {
+    const text = typeof item === 'string'
+      ? item
+      : `${item.timestamp || ''} ${item.level || ''} ${item.symbol || ''} ${item.message || ''}`;
     if (filter === "ALL") return true;
-    if (filter === "ORDERS") return l.includes("ORDER") || l.includes("FILL") || l.includes("BUY") || l.includes("SELL");
-    if (filter === "RISK") return l.includes("RISK") || l.includes("CIRCUIT") || l.includes("DRAWDOWN") || l.includes("MIS");
-    if (filter === "ERRORS") return l.includes("ERROR") || l.includes("FAIL") || l.includes("EXCEPTION");
+    if (filter === "ORDERS") return /ORDER|FILL|BUY|SELL|SHORT|COVER/i.test(text);
+    if (filter === "RISK") return /RISK|CIRCUIT|DRAWDOWN|MIS|STOP/i.test(text);
+    if (filter === "ERRORS") return /ERROR|FAIL|EXCEPTION/i.test(text);
     return true;
   });
 
@@ -113,16 +116,20 @@ export default function BloombergLogs() {
               &gt; No log entries match the selected filter.
             </div>
           ) : (
-            filtered.map((log, i) => {
+            filtered.map((item, i) => {
+              const text = typeof item === 'string'
+                ? item
+                : `[${item.timestamp || ''}] [${item.level || 'INFO'}]${item.symbol ? ` [${item.symbol}]` : ''} ${item.message || ''}`;
+
               let color = '#94a3b8';
-              if (log.includes("BUY") || log.includes("FILLED") || log.includes("PROFIT") || log.includes("SUCCESS")) color = '#00ff66';
-              else if (log.includes("SELL") || log.includes("STOP") || log.includes("HALT") || log.includes("ERROR") || log.includes("FAIL")) color = '#ff3344';
-              else if (log.includes("RISK") || log.includes("WARNING") || log.includes("CIRCUIT")) color = '#ffaa00';
-              else if (log.includes("TICK") || log.includes("DAEMON") || log.includes("SCAN")) color = '#00e5ff';
+              if (/BUY|FILLED|PROFIT|SUCCESS/i.test(text)) color = '#00ff66';
+              else if (/SELL|STOP|HALT|ERROR|FAIL/i.test(text)) color = '#ff3344';
+              else if (/RISK|WARNING|CIRCUIT/i.test(text)) color = '#ffaa00';
+              else if (/TICK|DAEMON|SCAN/i.test(text)) color = '#00e5ff';
 
               return (
                 <div key={i} style={{ color, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                  {log}
+                  {text}
                 </div>
               );
             })

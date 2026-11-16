@@ -246,7 +246,8 @@ export default function BloombergChart({
     try {
       const chartMarkers = markers
         .map(m => {
-          const isBuy = m.position === 'belowBar' || (m.text && m.text.includes("BUY")) || (m.shape === 'arrowUp');
+          const txt = typeof m.text === 'string' ? m.text : '';
+          const isBuy = m.position === 'belowBar' || txt.includes("BUY") || (m.shape === 'arrowUp');
           return {
             time: typeof m.time === 'string' ? Math.floor(new Date(m.time).getTime() / 1000) : Number(m.time),
             position: isBuy ? 'belowBar' : 'aboveBar',

@@ -131,12 +131,16 @@ export default function BloombergBotMonitor({
   const winRate = totalTrades > 0 ? 66.7 : 0;
   const friction = totalTrades * 120.0;
 
-  // Filter logs
-  const filteredLogs = (botData?.logs || []).filter(line => {
+  // Filter logs safely
+  const rawLogs = botData?.logs || [];
+  const filteredLogs = rawLogs.filter(item => {
+    const text = typeof item === 'string'
+      ? item
+      : `${item.timestamp || ''} ${item.level || ''} ${item.symbol || ''} ${item.message || ''}`;
     if (logFilter === "ALL") return true;
-    if (logFilter === "ORDERS") return line.includes("ORDER") || line.includes("FILL") || line.includes("ENTRY") || line.includes("EXIT") || line.includes("BUY") || line.includes("SHORT");
-    if (logFilter === "RISK") return line.includes("RISK") || line.includes("CIRCUIT") || line.includes("STOP");
-    if (logFilter === "TICKS") return line.includes("TICK") || line.includes("CANDLE") || line.includes("Evaluating");
+    if (logFilter === "ORDERS") return /ORDER|FILL|ENTRY|EXIT|BUY|SHORT|COVER/i.test(text);
+    if (logFilter === "RISK") return /RISK|CIRCUIT|STOP|DRAWDOWN/i.test(text);
+    if (logFilter === "TICKS") return /TICK|CANDLE|Evaluating|MONITOR/i.test(text);
     return true;
   });
 
@@ -571,16 +575,20 @@ export default function BloombergBotMonitor({
               &gt; Telemetry stream idle. Awaiting engine events...
             </div>
           ) : (
-            filteredLogs.map((log, index) => {
+            filteredLogs.map((item, index) => {
+              const text = typeof item === 'string'
+                ? item
+                : `[${item.timestamp || ''}] [${item.level || 'INFO'}]${item.symbol ? ` [${item.symbol}]` : ''} ${item.message || ''}`;
+
               let color = '#94a3b8';
-              if (log.includes("BUY") || log.includes("LONG") || log.includes("PROFIT") || log.includes("FILLED")) color = '#00ff66';
-              else if (log.includes("SELL") || log.includes("SHORT") || log.includes("STOP LOSS") || log.includes("HALT") || log.includes("ERROR")) color = '#ff3344';
-              else if (log.includes("RISK") || log.includes("WARNING") || log.includes("PAUSE") || log.includes("MIS")) color = '#ffaa00';
-              else if (log.includes("CANDLE") || log.includes("TICK") || log.includes("Evaluating")) color = '#38bdf8';
+              if (/BUY|LONG|PROFIT|FILLED/i.test(text)) color = '#00ff66';
+              else if (/SELL|SHORT|STOP LOSS|HALT|ERROR/i.test(text)) color = '#ff3344';
+              else if (/RISK|WARNING|PAUSE|MIS/i.test(text)) color = '#ffaa00';
+              else if (/CANDLE|TICK|Evaluating/i.test(text)) color = '#38bdf8';
 
               return (
                 <div key={index} style={{ color, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                  {log}
+                  {text}
                 </div>
               );
             })
