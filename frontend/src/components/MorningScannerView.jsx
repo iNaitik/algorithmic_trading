@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Zap,
   TrendingUp,
@@ -18,23 +18,7 @@ import {
   Bot,
   Calendar,
   Globe,
-  Radio,
-  Search,
-  LayoutGrid,
-  List,
-  Sparkles,
-  AlertCircle,
-  Activity,
-  Award,
-  ChevronRight,
-  Terminal,
-  Cpu,
-  Flame,
-  Compass,
-  ArrowUp,
-  ArrowDown,
-  SlidersHorizontal,
-  Maximize2
+  Radio
 } from 'lucide-react';
 
 export default function MorningScannerView({
@@ -48,25 +32,7 @@ export default function MorningScannerView({
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState("ALL"); // ALL, LONGS, SHORTS, HIGHRVOL, GAPS
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState("ALPHA"); // ALPHA, RVOL, CHANGE, GAP
-  const [viewMode, setViewMode] = useState("TABLE"); // "TABLE", "GRID"
-  const [armingSymbol, setArmingSymbol] = useState(null);
-  const [clockTime, setClockTime] = useState("");
 
-  // Live IST Clock
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-      const ist = new Date(utc + (3600000 * 5.5));
-      setClockTime(ist.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }));
-    };
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Fetch scanner telemetry
   const fetchScan = async (force = false, market = selectedMarket, mode = snapshotMode) => {
     setLoading(true);
     try {
@@ -98,1452 +64,764 @@ export default function MorningScannerView({
     fetchScan(false, selectedMarket, snapshotMode);
   }, [selectedMarket, snapshotMode]);
 
-  // One-click Direct Arm Live Bot
-  const handleArmBot = async (symbol, strategyName) => {
-    setArmingSymbol(symbol);
-    try {
-      await fetch('/api/bot/control', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: "START",
-          symbol,
-          strategy_name: strategyName || "NSE Midday VWAP Pullback",
-          capital: 1000000.0
-        })
-      });
-      onSelectForBot(symbol);
-    } catch (e) {
-      console.error("Arm bot error:", e);
-      onSelectForBot(symbol);
-    } finally {
-      setArmingSymbol(null);
-    }
-  };
-
   const stocks = scanData?.stocks || [];
   const breadth = scanData?.market_breadth || {};
   const topLong = scanData?.top_longs?.[0] || null;
   const topShort = scanData?.top_shorts?.[0] || null;
+
   const currentCurrency = scanData?.currency || (selectedMarket === "INDIA" ? "₹" : (selectedMarket === "US" ? "$" : ""));
 
-  // Filter and sort stocks
-  const processedStocks = useMemo(() => {
-    let list = stocks.filter(s => {
-      const q = searchQuery.toUpperCase().trim();
-      const matchQuery = !q || s.symbol.includes(q) || s.name.toUpperCase().includes(q) || (s.sector && s.sector.toUpperCase().includes(q));
-      if (!matchQuery) return false;
+  // Filter logic
+  const filteredStocks = stocks.filter(s => {
+    const query = searchQuery.toUpperCase();
+    const matchQuery = s.symbol.includes(query) || s.name.toUpperCase().includes(query) || (s.sector && s.sector.toUpperCase().includes(query));
+    if (!matchQuery) return false;
 
-      if (filterType === "LONGS") return s.setup_action === "BUY" || s.setup_action === "BUY ON RETEST";
-      if (filterType === "SHORTS") return s.setup_action === "SELL / SHORT";
-      if (filterType === "HIGHRVOL") return s.rvol >= 1.0;
-      if (filterType === "GAPS") return Math.abs(s.gap_pct) >= 0.5;
-      return true;
-    });
-
-    return list.sort((a, b) => {
-      if (sortBy === "ALPHA") return (b.alpha_score || 0) - (a.alpha_score || 0);
-      if (sortBy === "RVOL") return (b.rvol || 0) - (a.rvol || 0);
-      if (sortBy === "CHANGE") return (b.change_pct || 0) - (a.change_pct || 0);
-      if (sortBy === "GAP") return Math.abs(b.gap_pct || 0) - Math.abs(a.gap_pct || 0);
-      return 0;
-    });
-  }, [stocks, searchQuery, filterType, sortBy]);
-
-  // Counts for filter pills
-  const counts = useMemo(() => {
-    return {
-      all: stocks.length,
-      longs: stocks.filter(s => s.setup_action === "BUY" || s.setup_action === "BUY ON RETEST").length,
-      shorts: stocks.filter(s => s.setup_action === "SELL / SHORT").length,
-      highRvol: stocks.filter(s => s.rvol >= 1.0).length,
-      gaps: stocks.filter(s => Math.abs(s.gap_pct) >= 0.5).length
-    };
-  }, [stocks]);
-
-  const advancers = breadth.advancers || 0;
-  const decliners = breadth.decliners || 0;
-  const totalBreadth = advancers + decliners || 1;
-  const advancePct = Math.round((advancers / totalBreadth) * 100);
+    if (filterType === "LONGS") return s.setup_action === "BUY" || s.setup_action === "BUY ON RETEST";
+    if (filterType === "SHORTS") return s.setup_action === "SELL / SHORT";
+    if (filterType === "HIGHRVOL") return s.rvol >= 1.0;
+    if (filterType === "GAPS") return Math.abs(s.gap_pct) >= 0.7;
+    return true;
+  });
 
   return (
-    <div style={{
-      backgroundColor: '#06080f',
-      color: '#f1f5f9',
-      minHeight: '100%',
-      padding: '24px 32px',
-      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '24px'
-    }}>
-
-      {/* ── 1. ULTIMATE COMMAND HUD HEADER ───────────────────────────────── */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '28px 36px', maxWidth: '1440px', margin: '0 auto' }}>
+      
+      {/* ── Page Header Banner ─────────────────────────────────────────── */}
       <div style={{
-        background: 'radial-gradient(ellipse at top left, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0) 70%), #0b0f19',
-        borderRadius: '24px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        padding: '22px 28px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '20px',
-        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
-        position: 'relative',
-        overflow: 'hidden'
+        gap: '16px'
       }}>
-        {/* Subtle Top Ambient Gradient Line */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          height: '2px',
-          background: 'linear-gradient(90deg, transparent 0%, #10b981 50%, transparent 100%)',
-          opacity: 0.8
-        }} />
-
-        {/* Left: Brand Identity & Live Radar Signal */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{
-            position: 'relative',
-            width: '48px',
-            height: '48px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(6, 78, 59, 0.6) 100%)',
-            border: '1px solid rgba(16, 185, 129, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#10b981',
-            boxShadow: '0 0 25px rgba(16, 185, 129, 0.3)'
-          }}>
-            <Zap size={24} />
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#111827', letterSpacing: '-0.02em' }}>
+              Multi-Market Opening & Intraday Scanner
+            </h1>
             <span style={{
-              position: 'absolute',
-              top: '-3px',
-              right: '-3px',
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: '#10b981',
-              boxShadow: '0 0 10px #10b981'
-            }} />
-          </div>
-
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h1 style={{
-                fontSize: '1.6rem',
-                fontWeight: '900',
-                letterSpacing: '-0.03em',
-                color: '#ffffff',
-                margin: 0
-              }}>
-                Breakout Alpha Radar
-              </h1>
-              <span style={{
-                fontSize: '0.68rem',
-                fontWeight: '800',
-                padding: '3px 10px',
-                borderRadius: '20px',
-                backgroundColor: scanData?.is_market_open ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                color: scanData?.is_market_open ? '#34d399' : '#fbbf24',
-                border: `1px solid ${scanData?.is_market_open ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase'
-              }}>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: scanData?.is_market_open ? '#10b981' : '#f59e0b',
-                  boxShadow: scanData?.is_market_open ? '0 0 8px #10b981' : 'none'
-                }} />
-                {scanData?.market_status || "NSE LIVE FEED"}
-              </span>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              marginTop: '4px',
-              fontSize: '0.78rem',
-              color: '#94a3b8'
+              fontSize: '0.72rem',
+              fontWeight: '700',
+              padding: '3px 9px',
+              borderRadius: '20px',
+              backgroundColor: '#e6f4ea',
+              color: '#059669',
+              letterSpacing: '0.04em'
             }}>
-              <span>09:16 AM Volume Surge Discovery</span>
-              <span>•</span>
-              <span>15-Min ORB Channels</span>
-              <span>•</span>
-              <span style={{ color: '#cbd5e1', fontFamily: "'JetBrains Mono', monospace" }}>
-                IST {clockTime || "09:16:00 AM"}
-              </span>
-            </div>
+              {selectedMarket === "INDIA" ? "NSE MIS 09:16 AM" : (selectedMarket === "US" ? "US EQUITIES 09:31 AM ET" : "FOREX 24/5 ANYTIME")}
+            </span>
           </div>
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>
+            Automated Relative Volume (RVOL), 15m ORB Breakouts, VWAP Reversals & Gap Setups
+          </p>
         </div>
 
-        {/* Right: Quick Controls, Market Switcher, Rescan Action */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Market Switcher */}
-          <div style={{
-            display: 'flex',
-            backgroundColor: '#0f172a',
-            padding: '4px',
-            borderRadius: '14px',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}>
-            {[
-              { id: "INDIA", label: "🇮🇳 NSE India" },
-              { id: "US", label: "🇺🇸 US Equities" },
-              { id: "FOREX", label: "🌍 Forex" }
-            ].map(m => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedMarket(m.id)}
-                style={{
-                  padding: '7px 15px',
-                  borderRadius: '10px',
-                  fontSize: '0.76rem',
-                  fontWeight: selectedMarket === m.id ? '800' : '600',
-                  border: 'none',
-                  backgroundColor: selectedMarket === m.id ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-                  color: selectedMarket === m.id ? '#34d399' : '#94a3b8',
-                  borderBottom: selectedMarket === m.id ? '2px solid #10b981' : '2px solid transparent',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Mode Selector */}
-          {selectedMarket !== "FOREX" && (
-            <div style={{
-              display: 'flex',
-              backgroundColor: '#0f172a',
-              padding: '4px',
-              borderRadius: '14px',
-              border: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
-              <button
-                onClick={() => setSnapshotMode("916_OPEN")}
-                style={{
-                  padding: '7px 13px',
-                  borderRadius: '10px',
-                  fontSize: '0.74rem',
-                  fontWeight: snapshotMode === "916_OPEN" ? '800' : '600',
-                  border: 'none',
-                  backgroundColor: snapshotMode === "916_OPEN" ? '#059669' : 'transparent',
-                  color: snapshotMode === "916_OPEN" ? '#ffffff' : '#94a3b8',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}
-              >
-                <Zap size={13} />
-                <span>09:16 AM Snapshot</span>
-              </button>
-              <button
-                onClick={() => setSnapshotMode("LIVE")}
-                style={{
-                  padding: '7px 13px',
-                  borderRadius: '10px',
-                  fontSize: '0.74rem',
-                  fontWeight: snapshotMode === "LIVE" ? '800' : '600',
-                  border: 'none',
-                  backgroundColor: snapshotMode === "LIVE" ? '#059669' : 'transparent',
-                  color: snapshotMode === "LIVE" ? '#ffffff' : '#94a3b8',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px'
-                }}
-              >
-                <Activity size={13} />
-                <span>Live Intraday</span>
-              </button>
-            </div>
-          )}
-
-          {/* Instant Trigger Button */}
+        {/* Scan Status & Refresh */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={() => fetchScan(true, selectedMarket, snapshotMode)}
             disabled={loading}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '7px',
+              gap: '6px',
               padding: '9px 18px',
-              borderRadius: '14px',
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              borderRadius: '12px',
+              backgroundColor: '#059669',
               color: '#ffffff',
-              fontSize: '0.8rem',
-              fontWeight: '800',
+              fontSize: '0.82rem',
+              fontWeight: '700',
               border: 'none',
               cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 0 20px rgba(16, 185, 129, 0.4)',
-              transition: 'all 0.2s ease'
+              boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
+              transition: 'background-color 0.15s'
             }}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-            <span>{loading ? "Evaluating..." : "Scan Market Flow"}</span>
+            <span>Scan {selectedMarket} Now</span>
           </button>
         </div>
       </div>
 
-      {/* ── 2. INSTITUTIONAL MARKET INTELLIGENCE STRIP (4 METRICS) ───────── */}
+      {/* ── Market & Snapshot Mode Control Bar ──────────────────────────── */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '16px'
+        backgroundColor: '#ffffff',
+        borderRadius: '18px',
+        padding: '16px 22px',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.03)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '14px'
       }}>
-        {/* Metric 1: Advance / Decline Breadth Spectrum */}
-        <div style={{
-          backgroundColor: '#0b0f19',
-          borderRadius: '18px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '18px 22px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Market Sentiment Breadth
-            </span>
-            <span style={{
-              fontSize: '0.68rem',
-              fontWeight: '800',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              backgroundColor: advancePct >= 50 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
-              color: advancePct >= 50 ? '#34d399' : '#f43f5e',
-              border: `1px solid ${advancePct >= 50 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)'}`
-            }}>
-              Ratio {breadth.advance_decline_ratio || (advancers / (decliners || 1)).toFixed(1)}x
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '10px 0 6px 0' }}>
-            <span style={{ fontSize: '1.6rem', fontWeight: '900', color: '#10b981', fontFamily: "'JetBrains Mono', monospace" }}>
-              ▲ {advancers}
-            </span>
-            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>vs</span>
-            <span style={{ fontSize: '1.6rem', fontWeight: '900', color: '#f43f5e', fontFamily: "'JetBrains Mono', monospace" }}>
-              ▼ {decliners}
-            </span>
-            <span style={{ fontSize: '0.74rem', color: '#94a3b8', marginLeft: 'auto', fontWeight: '700' }}>
-              {advancePct}% Bullish Flow
-            </span>
-          </div>
-
-          {/* Neon Breadth Flow Bar */}
-          <div style={{ width: '100%', height: '6px', backgroundColor: '#270e17', borderRadius: '4px', overflow: 'hidden' }}>
-            <div style={{
-              width: `${advancePct}%`,
-              height: '100%',
-              backgroundColor: '#10b981',
-              boxShadow: '0 0 12px #10b981',
-              borderRadius: '4px',
-              transition: 'width 0.4s ease'
-            }} />
+        {/* Market Selector Tabs */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            Market:
+          </span>
+          <div style={{ display: 'flex', backgroundColor: '#f3f4f6', padding: '3px', borderRadius: '10px' }}>
+            {[
+              { id: "INDIA", label: "🇮🇳 NSE India", sub: "09:16 AM Auto" },
+              { id: "US", label: "🇺🇸 US Equities", sub: "09:31 AM ET" },
+              { id: "FOREX", label: "🌍 Forex", sub: "24/5 Any Time" }
+            ].map(m => (
+              <button
+                key={m.id}
+                onClick={() => setSelectedMarket(m.id)}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.78rem',
+                  fontWeight: selectedMarket === m.id ? '700' : '500',
+                  border: 'none',
+                  backgroundColor: selectedMarket === m.id ? '#ffffff' : 'transparent',
+                  color: selectedMarket === m.id ? '#059669' : '#6b7280',
+                  boxShadow: selectedMarket === m.id ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Metric 2: Average RVOL Surge Multiplier */}
-        <div style={{
-          backgroundColor: '#0b0f19',
-          borderRadius: '18px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '18px 22px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Volume Surge Velocity
+        {/* Snapshot Mode (Opening vs Live) */}
+        {selectedMarket !== "FOREX" ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Snapshot Mode:
             </span>
-            <span style={{
-              fontSize: '0.68rem',
-              fontWeight: '800',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              backgroundColor: 'rgba(56, 189, 248, 0.15)',
-              color: '#38bdf8',
-              border: '1px solid rgba(56, 189, 248, 0.3)'
-            }}>
-              INSTITUTIONAL
-            </span>
+            <div style={{ display: 'flex', backgroundColor: '#f3f4f6', padding: '3px', borderRadius: '10px' }}>
+              <button
+                onClick={() => setSnapshotMode("916_OPEN")}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: snapshotMode === "916_OPEN" ? '700' : '500',
+                  border: 'none',
+                  backgroundColor: snapshotMode === "916_OPEN" ? '#059669' : 'transparent',
+                  color: snapshotMode === "916_OPEN" ? '#ffffff' : '#6b7280',
+                  cursor: 'pointer'
+                }}
+              >
+                ⚡ {selectedMarket === "INDIA" ? "09:16 AM Opening" : "09:31 AM Opening"}
+              </button>
+              <button
+                onClick={() => setSnapshotMode("LIVE")}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: snapshotMode === "LIVE" ? '700' : '500',
+                  border: 'none',
+                  backgroundColor: snapshotMode === "LIVE" ? '#059669' : 'transparent',
+                  color: snapshotMode === "LIVE" ? '#ffffff' : '#6b7280',
+                  cursor: 'pointer'
+                }}
+              >
+                🔄 Live Intraday (Fetch Anytime)
+              </button>
+            </div>
           </div>
-
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '10px 0 4px 0' }}>
-            <span style={{ fontSize: '1.65rem', fontWeight: '900', color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-              {breadth.avg_rvol || 1.1}x
-            </span>
-            <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-              Relative to 20-Day Avg Volume
-            </span>
+        ) : (
+          <div style={{ fontSize: '0.75rem', color: '#059669', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Radio size={14} className="animate-pulse" />
+            Continuous 24/5 Live Session Ingestion
           </div>
+        )}
 
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-            Aggressive morning liquidity injection
-          </div>
-        </div>
-
-        {/* Metric 3: Dominant Sector Leadership */}
-        <div style={{
-          backgroundColor: '#0b0f19',
-          borderRadius: '18px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '18px 22px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Dominant Sector Velocity
-            </span>
-            <span style={{
-              fontSize: '0.68rem',
-              fontWeight: '800',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              backgroundColor: 'rgba(168, 85, 247, 0.15)',
-              color: '#c084fc',
-              border: '1px solid rgba(168, 85, 247, 0.3)'
-            }}>
-              ALPHA ROTATION
-            </span>
+        {/* Timestamp & Schedule Badges */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '0.72rem' }}>
+          <div style={{
+            padding: '4px 10px',
+            borderRadius: '8px',
+            backgroundColor: '#f3f4f6',
+            color: '#374151',
+            fontWeight: '600'
+          }}>
+            📅 Session: <strong>{scanData?.session_date || "Live"}</strong>
           </div>
 
           <div style={{
-            fontSize: '1.3rem',
-            fontWeight: '900',
-            color: '#34d399',
-            margin: '10px 0 4px 0',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
+            padding: '4px 10px',
+            borderRadius: '8px',
+            backgroundColor: '#e6f4ea',
+            color: '#059669',
+            fontWeight: '700'
           }}>
-            {breadth.dominant_sector || "Banking & Financials"}
+            🕒 Candle As-Of: <strong>{scanData?.latest_bar_time || "Evaluating..."}</strong>
           </div>
 
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-            Highest concentration of qualified breakouts
-          </div>
-        </div>
-
-        {/* Metric 4: Scheduler Daemon & Telemetry Bar */}
-        <div style={{
-          backgroundColor: '#0b0f19',
-          borderRadius: '18px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          padding: '18px 22px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Lifecycle Daemon Health
-            </span>
-            <span style={{
-              fontSize: '0.68rem',
-              fontWeight: '800',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              backgroundColor: 'rgba(16, 185, 129, 0.15)',
-              color: '#34d399',
-              border: '1px solid rgba(16, 185, 129, 0.3)'
-            }}>
-              ACTIVE DAEMON
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '10px 0 4px 0' }}>
-            <Clock size={18} color="#10b981" />
-            <span style={{ fontSize: '1.35rem', fontWeight: '900', color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-              {scanData?.next_scheduled_scan || "09:16 AM IST"}
-            </span>
-          </div>
-
-          <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-            Candle As-Of: <b style={{ color: '#94a3b8' }}>{scanData?.latest_bar_time || "09:15 AM"}</b>
+          <div style={{
+            padding: '4px 10px',
+            borderRadius: '8px',
+            backgroundColor: scanData?.is_market_open ? '#e6f4ea' : '#fef2f2',
+            color: scanData?.is_market_open ? '#059669' : '#dc2626',
+            fontWeight: '700'
+          }}>
+            {scanData?.market_status || "Session Status"}
           </div>
         </div>
       </div>
 
-      {/* ── 3. FEATURED BREAKOUT SPOTLIGHT PODIUM (DUAL HERO ASSETS) ────── */}
-      <div className="quant-grid-split" style={{
+      {/* ── Scheduled Cron Banner ──────────────────────────────────────── */}
+      <div style={{
+        backgroundColor: '#f8fafc',
+        borderRadius: '12px',
+        padding: '10px 18px',
+        border: '1px solid #e2e8f0',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: '8px',
+        fontSize: '0.75rem'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#475569' }}>
+          <Clock size={14} color="#059669" />
+          <span>
+            Automated Cron Scheduler: <strong>{scanData?.next_scheduled_scan || "Every weekday 09:16 AM IST"}</strong>.
+          </span>
+          <span style={{ color: '#94a3b8' }}>•</span>
+          <span style={{ color: '#64748b' }}>
+            Snapshot preserved automatically; click <strong>"Live Intraday"</strong> to evaluate subsequent market hours anytime!
+          </span>
+        </div>
+
+        <span style={{
+          fontSize: '0.7rem',
+          fontWeight: '700',
+          padding: '2px 8px',
+          borderRadius: '6px',
+          backgroundColor: '#e6f4ea',
+          color: '#059669'
+        }}>
+          Scheduler Daemon: Active
+        </span>
+      </div>
+
+      {/* ── Top 3 Quixotic Hero Cards ──────────────────────────────────── */}
+      <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        gridTemplateColumns: 'minmax(320px, 380px) 1fr minmax(300px, 340px)',
         gap: '20px'
       }}>
-        {/* Spotlight Card 1: Prime Long Breakout Asset */}
+        {/* Card 1: Emerald Hero Card (Top Long Breakout) */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(6, 78, 59, 0.25) 0%, rgba(11, 15, 25, 0.95) 100%)',
-          borderRadius: '24px',
-          border: '1px solid rgba(16, 185, 129, 0.4)',
-          boxShadow: '0 15px 40px rgba(16, 185, 129, 0.15)',
-          padding: '26px',
+          background: 'linear-gradient(135deg, #059669 0%, #007a4d 100%)',
+          borderRadius: '20px',
+          padding: '24px',
+          color: '#ffffff',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          position: 'relative',
-          overflow: 'hidden'
+          minHeight: '230px',
+          boxShadow: '0 8px 24px -4px rgba(5, 150, 105, 0.35)',
+          position: 'relative'
         }}>
-          {/* Top Edge Glow */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '120px',
-            height: '2px',
-            backgroundColor: '#10b981',
-            boxShadow: '0 0 12px #10b981'
-          }} />
-
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  fontSize: '0.68rem',
-                  fontWeight: '800',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  padding: '3px 9px',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(16, 185, 129, 0.2)',
-                  color: '#34d399',
-                  border: '1px solid rgba(16, 185, 129, 0.4)'
-                }}>
-                  ⚡ PRIME LONG BREAKOUT
-                </span>
-                <span style={{
-                  fontSize: '0.68rem',
-                  fontWeight: '800',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: '#10b981',
-                  color: '#06080f'
-                }}>
-                  Rank #1 Pick
-                </span>
-              </div>
-
+              <span style={{ fontSize: '0.72rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.9 }}>
+                ⚡ Prime Long Breakout
+              </span>
               <span style={{
-                fontSize: '0.74rem',
-                fontWeight: '800',
-                padding: '3px 10px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                color: '#34d399',
-                border: '1px solid rgba(16, 185, 129, 0.3)'
+                fontSize: '0.72rem',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                fontWeight: '700'
               }}>
-                RVOL {topLong?.rvol || 1.2}x
+                RVOL {topLong?.rvol || 1.0}x
               </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '18px' }}>
-              <div>
-                <div style={{ fontSize: '1.9rem', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.03em' }}>
-                  {topLong ? topLong.symbol : "Scanning Breakouts..."}
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '2px' }}>
-                  {topLong ? `${topLong.name} • ${topLong.sector}` : "Evaluating morning opening surge"}
-                </div>
-              </div>
-
-              {topLong && (
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {currentCurrency}{topLong.price.toFixed(2)}
-                  </div>
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '0.82rem',
-                    fontWeight: '800',
-                    color: '#34d399',
-                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                    padding: '3px 9px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    marginTop: '2px'
-                  }}>
-                    <ArrowUpRight size={14} />
-                    <span>{topLong.change_pct >= 0 ? '+' : ''}{topLong.change_pct}%</span>
-                  </div>
-                </div>
-              )}
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', marginTop: '10px' }}>
+              {topLong ? topLong.symbol : (topShort ? "Bearish Opening Flow" : "Scanning Universe...")}
+            </div>
+            <div style={{ fontSize: '0.82rem', opacity: 0.9, marginTop: '2px' }}>
+              {topLong ? `${topLong.name} • ${topLong.sector}` : "Market opened with widespread selling; check Short Breakdowns"}
             </div>
 
-            {/* Target 2R, Stop Loss, and Strategy Specification */}
-            {topLong && (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
-                marginTop: '20px',
-                padding: '14px 16px',
-                borderRadius: '14px',
-                backgroundColor: 'rgba(0, 0, 0, 0.45)',
-                border: '1px solid rgba(255, 255, 255, 0.06)'
-              }}>
-                <div>
-                  <div style={{ fontSize: '0.64rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800' }}>Setup Signal</div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#34d399', marginTop: '3px' }}>{topLong.setup_signal}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.64rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800' }}>Target 2R</div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: '900', color: '#6ee7b7', marginTop: '3px', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {currentCurrency}{topLong.target_2r}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.64rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800' }}>Stop Loss</div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: '900', color: '#fca5a5', marginTop: '3px', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {currentCurrency}{topLong.stop_loss}
-                  </div>
-                </div>
+            {topLong ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
+                <span style={{ fontSize: '1.25rem', fontWeight: '800' }}>
+                  {currentCurrency}{topLong.price.toFixed(2)}
+                </span>
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '2px',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  backgroundColor: '#ffffff',
+                  color: '#059669',
+                  fontSize: '0.75rem',
+                  fontWeight: '800'
+                }}>
+                  <ArrowUpRight size={13} />
+                  {topLong.change_pct >= 0 ? '+' : ''}{topLong.change_pct}%
+                </span>
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.85rem', opacity: 0.85, marginTop: '12px', fontStyle: 'italic' }}>
+                No opening long breakouts qualify RVOL &gt; 1.0 threshold
               </div>
             )}
           </div>
 
-          {/* Action Footer */}
-          {topLong && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-              paddingTop: '16px',
-              marginTop: '18px'
-            }}>
-              <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                Strategy: <b style={{ color: '#ffffff' }}>{topLong.suggested_strategy.replace('NSE ', '')}</b>
-              </span>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            borderTop: '1px solid rgba(255,255,255,0.2)',
+            paddingTop: '12px',
+            marginTop: '12px'
+          }}>
+            <div>
+              <div style={{ fontSize: '0.68rem', opacity: 0.8 }}>Target (2R) / SL</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: '700' }}>
+                {topLong ? `${currentCurrency}${topLong.target_2r} / ${currentCurrency}${topLong.stop_loss}` : "N/A"}
+              </div>
+            </div>
 
-              <div style={{ display: 'flex', gap: '8px' }}>
+            {topLong && (
+              <div style={{ display: 'flex', gap: '6px' }}>
                 <button
                   onClick={() => onSelectForBacktest(topLong.symbol, topLong.suggested_strategy)}
                   style={{
-                    padding: '8px 15px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                    color: '#e2e8f0',
-                    fontSize: '0.76rem',
+                    padding: '5px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: '#ffffff',
+                    color: '#059669',
+                    fontSize: '0.72rem',
                     fontWeight: '700',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
+                    border: 'none',
+                    cursor: 'pointer'
                   }}
                 >
-                  Backtest Studio ↗
+                  Backtest →
                 </button>
                 <button
-                  onClick={() => handleArmBot(topLong.symbol, topLong.suggested_strategy)}
-                  disabled={armingSymbol === topLong.symbol}
+                  onClick={() => onSelectForBot(topLong.symbol)}
                   style={{
-                    padding: '8px 18px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    padding: '5px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(255,255,255,0.2)',
                     color: '#ffffff',
-                    fontSize: '0.78rem',
-                    fontWeight: '800',
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
                     border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: '0 0 20px rgba(16, 185, 129, 0.45)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.15s ease'
+                    cursor: 'pointer'
                   }}
                 >
-                  {armingSymbol === topLong.symbol ? (
-                    <RefreshCw size={13} className="animate-spin" />
-                  ) : (
-                    <Bot size={13} />
-                  )}
-                  <span>Arm Live Bot ⚡</span>
+                  Deploy 🤖
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Spotlight Card 2: Prime Short Breakdown Asset */}
+        {/* Card 2: Market Breadth & Sector Velocity */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(76, 17, 34, 0.25) 0%, rgba(11, 15, 25, 0.95) 100%)',
-          borderRadius: '24px',
-          border: '1px solid rgba(244, 63, 94, 0.4)',
-          boxShadow: '0 15px 40px rgba(244, 63, 94, 0.15)',
-          padding: '26px',
+          backgroundColor: '#ffffff',
+          borderRadius: '20px',
+          padding: '22px 26px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
-          position: 'relative',
-          overflow: 'hidden'
+          justifyContent: 'space-between'
         }}>
-          {/* Top Edge Glow */}
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '120px',
-            height: '2px',
-            backgroundColor: '#f43f5e',
-            boxShadow: '0 0 12px #f43f5e'
-          }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#111827' }}>
+                Market Breadth & Flow Velocity
+              </span>
+              <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>Directional sentiment across {selectedMarket} universe</div>
+            </div>
+            <span style={{
+              fontSize: '0.72rem',
+              fontWeight: '700',
+              padding: '3px 8px',
+              borderRadius: '8px',
+              backgroundColor: '#e6f4ea',
+              color: '#059669'
+            }}>
+              {breadth.dominant_sector || "Active"}
+            </span>
+          </div>
 
+          {/* Advance / Decline Bar */}
+          <div style={{ margin: '14px 0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: '700', marginBottom: '6px' }}>
+              <span style={{ color: '#059669' }}>▲ {breadth.advancers || 0} Advancers</span>
+              <span style={{ color: '#dc2626' }}>▼ {breadth.decliners || 0} Decliners</span>
+            </div>
+            <div style={{ width: '100%', height: '10px', backgroundColor: '#fee2e2', borderRadius: '6px', overflow: 'hidden', display: 'flex' }}>
+              <div style={{
+                height: '100%',
+                width: `${Math.round(((breadth.advancers || 1) / ((breadth.advancers || 1) + (breadth.decliners || 1))) * 100)}%`,
+                backgroundColor: '#059669',
+                transition: 'width 0.3s'
+              }} />
+            </div>
+          </div>
+
+          {/* Sector leaders */}
+          <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '0.68rem', color: '#9ca3af' }}>Avg Market RVOL</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#111827' }}>
+                {breadth.avg_rvol || 1.0}x
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', color: '#9ca3af' }}>Leading Sector</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#059669' }}>
+                {breadth.dominant_sector || "Technology"}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', color: '#9ca3af' }}>A/D Ratio</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#111827' }}>
+                {breadth.advance_decline_ratio || 1.0}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Prime Short / Breakdown Pick */}
+        <div style={{
+          backgroundColor: '#ffffff',
+          borderRadius: '20px',
+          padding: '22px 24px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
+        }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  fontSize: '0.68rem',
-                  fontWeight: '800',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  padding: '3px 9px',
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(244, 63, 94, 0.2)',
-                  color: '#fb7185',
-                  border: '1px solid rgba(244, 63, 94, 0.4)'
-                }}>
-                  🔻 PRIME SHORT BREAKDOWN
-                </span>
-                <span style={{
-                  fontSize: '0.68rem',
-                  fontWeight: '800',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: '#f43f5e',
-                  color: '#ffffff'
-                }}>
-                  Rank #1 Pick
-                </span>
-              </div>
-
+              <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                🔻 Prime Short Breakdown
+              </span>
               <span style={{
-                fontSize: '0.74rem',
-                fontWeight: '800',
-                padding: '3px 10px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(244, 63, 94, 0.15)',
-                color: '#fb7185',
-                border: '1px solid rgba(244, 63, 94, 0.3)'
+                fontSize: '0.72rem',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                backgroundColor: '#fef2f2',
+                color: '#dc2626',
+                fontWeight: '700'
               }}>
                 RVOL {topShort?.rvol || 1.0}x
               </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '18px' }}>
-              <div>
-                <div style={{ fontSize: '1.9rem', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.03em' }}>
-                  {topShort ? topShort.symbol : "No Active Breakdown"}
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '2px' }}>
-                  {topShort ? `${topShort.name} • ${topShort.sector}` : "Market displaying neutral or bullish morning flow"}
-                </div>
-              </div>
-
-              {topShort && (
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {currentCurrency}{topShort.price.toFixed(2)}
-                  </div>
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '0.82rem',
-                    fontWeight: '800',
-                    color: '#fb7185',
-                    backgroundColor: 'rgba(244, 63, 94, 0.15)',
-                    padding: '3px 9px',
-                    borderRadius: '8px',
-                    border: '1px solid rgba(244, 63, 94, 0.3)',
-                    marginTop: '2px'
-                  }}>
-                    <ArrowDownRight size={14} />
-                    <span>{topShort.change_pct}%</span>
-                  </div>
-                </div>
-              )}
+            <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#111827', marginTop: '10px' }}>
+              {topShort?.symbol || "None"}
+            </div>
+            <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '2px' }}>
+              {topShort?.name || "No short breakdowns active"}
             </div>
 
-            {/* Target 2R, Stop Loss, and Strategy Specification */}
-            {topShort && (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
-                marginTop: '20px',
-                padding: '14px 16px',
-                borderRadius: '14px',
-                backgroundColor: 'rgba(0, 0, 0, 0.45)',
-                border: '1px solid rgba(255, 255, 255, 0.06)'
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+              <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#111827' }}>
+                {currentCurrency}{topShort?.price?.toFixed(2) || "0.00"}
+              </span>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                backgroundColor: '#fef2f2',
+                color: '#dc2626',
+                fontSize: '0.72rem',
+                fontWeight: '800'
               }}>
-                <div>
-                  <div style={{ fontSize: '0.64rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800' }}>Setup Signal</div>
-                  <div style={{ fontSize: '0.8rem', fontWeight: '800', color: '#fb7185', marginTop: '3px' }}>{topShort.setup_signal}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.64rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800' }}>Target 2R</div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: '900', color: '#6ee7b7', marginTop: '3px', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {currentCurrency}{topShort.target_2r}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.64rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '800' }}>Stop Loss</div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: '900', color: '#fca5a5', marginTop: '3px', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {currentCurrency}{topShort.stop_loss}
-                  </div>
-                </div>
-              </div>
-            )}
+                <ArrowDownRight size={13} />
+                {topShort?.change_pct || 0}%
+              </span>
+            </div>
           </div>
 
-          {/* Action Footer */}
-          {topShort && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-              paddingTop: '16px',
-              marginTop: '18px'
-            }}>
-              <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
-                Strategy: <b style={{ color: '#ffffff' }}>{topShort.suggested_strategy.replace('NSE ', '')}</b>
-              </span>
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  onClick={() => onSelectForBacktest(topShort.symbol, topShort.suggested_strategy)}
-                  style={{
-                    padding: '8px 15px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                    color: '#e2e8f0',
-                    fontSize: '0.76rem',
-                    fontWeight: '700',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  Backtest Studio ↗
-                </button>
-                <button
-                  onClick={() => handleArmBot(topShort.symbol, topShort.suggested_strategy)}
-                  disabled={armingSymbol === topShort.symbol}
-                  style={{
-                    padding: '8px 18px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
-                    color: '#ffffff',
-                    fontSize: '0.78rem',
-                    fontWeight: '800',
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: '0 0 20px rgba(244, 63, 94, 0.45)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {armingSymbol === topShort.symbol ? (
-                    <RefreshCw size={13} className="animate-spin" />
-                  ) : (
-                    <Bot size={13} />
-                  )}
-                  <span>Arm Short Bot</span>
-                </button>
+          <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: '0.68rem', color: '#9ca3af' }}>Target / SL</div>
+              <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#374151' }}>
+                {currentCurrency}{topShort?.target_2r} / {currentCurrency}{topShort?.stop_loss}
               </div>
             </div>
-          )}
+
+            {topShort && (
+              <button
+                onClick={() => onSelectForBacktest(topShort.symbol, topShort.suggested_strategy)}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: '#fef2f2',
+                  color: '#dc2626',
+                  fontSize: '0.72rem',
+                  fontWeight: '700',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                Backtest →
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ── 4. ADVANCED SCREENER TOOLBAR (FILTERS, SEARCH, SORT, VIEW) ───── */}
+      {/* ── Filter Pills & Search Bar ──────────────────────────────────── */}
       <div style={{
-        backgroundColor: '#0b0f19',
-        borderRadius: '18px',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        padding: '14px 20px',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '14px',
-        boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)'
+        gap: '12px'
       }}>
-        {/* Filter Pills with Counts */}
+        {/* Filter Pills */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {[
-            { id: "ALL", label: "All Equities", count: counts.all },
-            { id: "LONGS", label: "🟢 Long Breakouts", count: counts.longs },
-            { id: "SHORTS", label: "🔴 Short Breakdowns", count: counts.shorts },
-            { id: "HIGHRVOL", label: "⚡ High RVOL (>1.0x)", count: counts.highRvol },
-            { id: "GAPS", label: "🎯 Gap Plays (>0.5%)", count: counts.gaps }
+            { id: "ALL", label: `All Scanned Assets (${stocks.length})` },
+            { id: "LONGS", label: "🟢 Prime Longs" },
+            { id: "SHORTS", label: "🔴 Prime Shorts" },
+            { id: "HIGHRVOL", label: "⚡ High RVOL (>1.0x)" },
+            { id: "GAPS", label: "🎯 Gap Plays (>0.7%)" }
           ].map(f => (
             <button
               key={f.id}
               onClick={() => setFilterType(f.id)}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '7px',
-                padding: '7px 14px',
+                padding: '6px 14px',
                 borderRadius: '10px',
-                fontSize: '0.75rem',
-                fontWeight: filterType === f.id ? '800' : '600',
-                border: filterType === f.id ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.08)',
-                backgroundColor: filterType === f.id ? 'rgba(16, 185, 129, 0.2)' : '#0f172a',
-                color: filterType === f.id ? '#34d399' : '#94a3b8',
+                fontSize: '0.78rem',
+                fontWeight: filterType === f.id ? '700' : '500',
+                border: 'none',
+                backgroundColor: filterType === f.id ? '#059669' : '#ffffff',
+                color: filterType === f.id ? '#ffffff' : '#4b5563',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease'
               }}
             >
-              <span>{f.label}</span>
-              <span style={{
-                fontSize: '0.68rem',
-                padding: '1px 6px',
-                borderRadius: '5px',
-                backgroundColor: filterType === f.id ? 'rgba(16, 185, 129, 0.4)' : '#1e293b',
-                color: filterType === f.id ? '#ffffff' : '#94a3b8'
-              }}>
-                {f.count}
-              </span>
+              {f.label}
             </button>
           ))}
         </div>
 
-        {/* Right Search, Sort, View Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {/* Instant Search Bar */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: '#0f172a',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '12px',
-            padding: '7px 14px'
-          }}>
-            <Search size={14} color="#64748b" />
-            <input
-              type="text"
-              placeholder="Search ticker, company..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                border: 'none',
-                outline: 'none',
-                backgroundColor: 'transparent',
-                fontSize: '0.78rem',
-                width: '190px',
-                color: '#ffffff',
-                fontFamily: 'inherit'
-              }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                style={{ border: 'none', background: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.75rem' }}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Sort Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '0.74rem', color: '#64748b', fontWeight: '700' }}>Sort:</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              style={{
-                padding: '7px 12px',
-                borderRadius: '10px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                backgroundColor: '#0f172a',
-                color: '#f8fafc',
-                fontSize: '0.76rem',
-                fontWeight: '700',
-                outline: 'none',
-                cursor: 'pointer',
-                fontFamily: 'inherit'
-              }}
-            >
-              <option value="ALPHA">Alpha Score</option>
-              <option value="RVOL">RVOL (Surge)</option>
-              <option value="CHANGE">% Change</option>
-              <option value="GAP">Gap %</option>
-            </select>
-          </div>
-
-          {/* View Toggle */}
-          <div style={{
-            display: 'flex',
-            backgroundColor: '#0f172a',
-            padding: '4px',
+        {/* Search input */}
+        <input
+          type="text"
+          placeholder="Filter by symbol, company, or sector..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            padding: '7px 14px',
             borderRadius: '10px',
-            border: '1px solid rgba(255, 255, 255, 0.08)'
-          }}>
-            <button
-              onClick={() => setViewMode("TABLE")}
-              title="Data Ledger View"
-              style={{
-                padding: '6px 9px',
-                borderRadius: '8px',
-                border: 'none',
-                backgroundColor: viewMode === "TABLE" ? '#1e293b' : 'transparent',
-                color: viewMode === "TABLE" ? '#10b981' : '#64748b',
-                cursor: 'pointer'
-              }}
-            >
-              <List size={14} />
-            </button>
-            <button
-              onClick={() => setViewMode("GRID")}
-              title="Cards Grid View"
-              style={{
-                padding: '6px 9px',
-                borderRadius: '8px',
-                border: 'none',
-                backgroundColor: viewMode === "GRID" ? '#1e293b' : 'transparent',
-                color: viewMode === "GRID" ? '#10b981' : '#64748b',
-                cursor: 'pointer'
-              }}
-            >
-              <LayoutGrid size={14} />
-            </button>
-          </div>
-        </div>
+            border: '1px solid #e5e7eb',
+            fontSize: '0.78rem',
+            width: '280px',
+            outline: 'none',
+            backgroundColor: '#ffffff'
+          }}
+        />
       </div>
 
-      {/* ── 5. MAIN CONTENT: OBSIDIAN DATA LEDGER (TABLE) OR CARDS GRID ── */}
-      {viewMode === "TABLE" ? (
-        <div style={{
-          backgroundColor: '#0b0f19',
-          borderRadius: '24px',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          overflow: 'hidden',
-          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.4)'
-        }}>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
-              <thead>
-                <tr style={{
-                  backgroundColor: '#080c14',
-                  color: '#64748b',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-                  textTransform: 'uppercase',
-                  fontSize: '0.67rem',
-                  letterSpacing: '0.06em',
-                  fontWeight: '800'
-                }}>
-                  <th style={{ padding: '14px 20px' }}>Instrument & Sector</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'right' }}>Price</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'right' }}>Change %</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'right' }}>Opening Gap %</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'center' }}>RVOL</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'right' }}>VWAP</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'center' }}>15m ORB Channel</th>
-                  <th style={{ padding: '14px 20px' }}>Setup Signal</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'right' }}>Target (2R) / SL</th>
-                  <th style={{ padding: '14px 20px', textAlign: 'center' }}>Quick Action</th>
+      {/* ── Scanned Equities Ledger Table ──────────────────────────────── */}
+      <div style={{
+        backgroundColor: '#ffffff',
+        borderRadius: '20px',
+        border: '1px solid #e5e7eb',
+        boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+        overflow: 'hidden'
+      }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f9fafb', color: '#6b7280', borderBottom: '1px solid #e5e7eb', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+                <th style={{ padding: '12px 18px' }}>Instrument & Sector</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Price</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Change %</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Open Gap %</th>
+                <th style={{ padding: '12px 18px', textAlign: 'center' }}>RVOL</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>VWAP</th>
+                <th style={{ padding: '12px 18px', textAlign: 'center' }}>ORB Range</th>
+                <th style={{ padding: '12px 18px' }}>Setup Signal</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Stop / 2R Target</th>
+                <th style={{ padding: '12px 18px', textAlign: 'center' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredStocks.length === 0 ? (
+                <tr>
+                  <td colSpan={10} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+                    No instruments matching the selected filter.
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {processedStocks.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} style={{ padding: '60px', textAlign: 'center', color: '#64748b' }}>
-                      <AlertCircle size={32} color="#64748b" style={{ margin: '0 auto 10px' }} />
-                      <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#94a3b8' }}>No instruments match the selected filter</div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '3px' }}>Try switching filter tabs or clearing your search term</div>
-                    </td>
-                  </tr>
-                ) : (
-                  processedStocks.map((stock) => {
-                    const isLong = stock.setup_action === "BUY" || stock.setup_action === "BUY ON RETEST";
-                    const isShort = stock.setup_action === "SELL / SHORT";
-                    const isArming = armingSymbol === stock.symbol;
+              ) : (
+                filteredStocks.map((stock) => {
+                  const isLong = stock.setup_action === "BUY" || stock.setup_action === "BUY ON RETEST";
+                  const isShort = stock.setup_action === "SELL / SHORT";
 
-                    return (
-                      <tr
-                        key={stock.symbol}
-                        style={{
-                          borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
-                          transition: 'background-color 0.15s ease'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0e1526'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                      >
-                        {/* Ticker & Sector */}
-                        <td style={{ padding: '15px 20px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: '900', color: '#ffffff', fontSize: '0.9rem' }}>
-                              {stock.symbol}
-                            </span>
-                            <span style={{
-                              fontSize: '0.62rem',
-                              fontWeight: '800',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                              color: '#34d399',
-                              border: '1px solid rgba(16, 185, 129, 0.3)'
-                            }}>
-                              Score: {stock.alpha_score || 85}
-                            </span>
-                          </div>
-                          <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '3px' }}>
-                            {stock.name} • <span style={{ color: '#94a3b8', fontWeight: '600' }}>{stock.sector}</span>
-                          </div>
-                        </td>
+                  return (
+                    <tr
+                      key={stock.symbol}
+                      style={{
+                        borderBottom: '1px solid #f3f4f6',
+                        transition: 'background-color 0.15s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      {/* Ticker & Sector */}
+                      <td style={{ padding: '14px 18px' }}>
+                        <div style={{ fontWeight: '700', color: '#111827', fontSize: '0.85rem' }}>
+                          {stock.symbol}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280' }}>
+                          {stock.name} • <span style={{ color: '#059669', fontWeight: '600' }}>{stock.sector}</span>
+                        </div>
+                      </td>
 
-                        {/* Price */}
-                        <td style={{ padding: '15px 20px', textAlign: 'right', fontWeight: '900', color: '#ffffff', fontSize: '0.9rem', fontFamily: "'JetBrains Mono', monospace" }}>
-                          {currentCurrency}{stock.price.toFixed(2)}
-                        </td>
+                      {/* Price */}
+                      <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: '700', color: '#111827' }}>
+                        {currentCurrency}{stock.price.toFixed(2)}
+                      </td>
 
-                        {/* Change % */}
-                        <td style={{ padding: '15px 20px', textAlign: 'right', fontWeight: '900', fontFamily: "'JetBrains Mono', monospace" }}>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '2px',
-                            color: stock.change_pct >= 0 ? '#34d399' : '#fb7185'
-                          }}>
-                            {stock.change_pct >= 0 ? '+' : ''}{stock.change_pct}%
-                          </span>
-                        </td>
+                      {/* Change % */}
+                      <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: '700', color: stock.change_pct >= 0 ? '#059669' : '#dc2626' }}>
+                        {stock.change_pct >= 0 ? '+' : ''}{stock.change_pct}%
+                      </td>
 
-                        {/* Opening Gap % */}
-                        <td style={{ padding: '15px 20px', textAlign: 'right', fontWeight: '800', fontFamily: "'JetBrains Mono', monospace", color: stock.gap_pct >= 0 ? '#34d399' : '#fb7185' }}>
-                          {stock.gap_pct >= 0 ? '+' : ''}{stock.gap_pct}%
-                        </td>
+                      {/* Open Gap % */}
+                      <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: '600', color: stock.gap_pct >= 0 ? '#059669' : '#dc2626' }}>
+                        {stock.gap_pct >= 0 ? '+' : ''}{stock.gap_pct}%
+                      </td>
 
-                        {/* RVOL Badge */}
-                        <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                          <span style={{
-                            padding: '3px 10px',
-                            borderRadius: '6px',
-                            fontSize: '0.74rem',
-                            fontWeight: '900',
-                            fontFamily: "'JetBrains Mono', monospace",
-                            backgroundColor: stock.rvol >= 1.2 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                            color: stock.rvol >= 1.2 ? '#34d399' : (stock.rvol >= 0.9 ? '#e2e8f0' : '#f43f5e'),
-                            border: `1px solid ${stock.rvol >= 1.2 ? 'rgba(16, 185, 129, 0.4)' : 'rgba(255, 255, 255, 0.08)'}`
-                          }}>
-                            {stock.rvol}x
-                          </span>
-                        </td>
+                      {/* RVOL Badge */}
+                      <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        <span style={{
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: '800',
+                          backgroundColor: stock.rvol >= 1.2 ? '#e6f4ea' : (stock.rvol >= 0.8 ? '#f3f4f6' : '#fff1f2'),
+                          color: stock.rvol >= 1.2 ? '#059669' : (stock.rvol >= 0.8 ? '#374151' : '#be123c')
+                        }}>
+                          {stock.rvol}x
+                        </span>
+                      </td>
 
-                        {/* VWAP */}
-                        <td style={{ padding: '15px 20px', textAlign: 'right' }}>
-                          <div style={{ fontWeight: '800', color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-                            {currentCurrency}{stock.vwap}
-                          </div>
-                          <span style={{ fontSize: '0.64rem', fontWeight: '800', color: stock.is_above_vwap ? '#34d399' : '#fb7185' }}>
-                            {stock.is_above_vwap ? '▲ Above' : '▼ Below'}
-                          </span>
-                        </td>
+                      {/* VWAP */}
+                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                        <div style={{ fontWeight: '600', color: '#374151' }}>{currentCurrency}{stock.vwap}</div>
+                        <span style={{ fontSize: '0.65rem', fontWeight: '700', color: stock.is_above_vwap ? '#059669' : '#dc2626' }}>
+                          {stock.is_above_vwap ? '▲ Above' : '▼ Below'}
+                        </span>
+                      </td>
 
-                        {/* 15m ORB Channel */}
-                        <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                          <div style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: "'JetBrains Mono', monospace" }}>
-                            H: {stock.orb_high} | L: {stock.orb_low}
-                          </div>
-                          <span style={{
-                            fontSize: '0.66rem',
-                            fontWeight: '800',
-                            color: stock.orb_status === 'BREAKOUT_HIGH' ? '#34d399' : (stock.orb_status === 'BREAKDOWN_LOW' ? '#fb7185' : '#64748b')
-                          }}>
-                            {stock.orb_status === 'BREAKOUT_HIGH' ? '⚡ High Breakout' : (stock.orb_status === 'BREAKDOWN_LOW' ? '🔻 Low Breakdown' : 'Inside Range')}
-                          </span>
-                        </td>
+                      {/* 15m ORB Range */}
+                      <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+                          H: {currentCurrency}{stock.orb_high} | L: {currentCurrency}{stock.orb_low}
+                        </div>
+                        <span style={{
+                          fontSize: '0.65rem',
+                          fontWeight: '700',
+                          color: stock.orb_status === 'BREAKOUT_HIGH' ? '#059669' : (stock.orb_status === 'BREAKDOWN_LOW' ? '#dc2626' : '#9ca3af')
+                        }}>
+                          {stock.orb_status === 'BREAKOUT_HIGH' ? '⚡ High Breakout' : (stock.orb_status === 'BREAKDOWN_LOW' ? '🔻 Low Breakdown' : 'Inside Range')}
+                        </span>
+                      </td>
 
-                        {/* Setup Signal */}
-                        <td style={{ padding: '15px 20px' }}>
-                          <span style={{
-                            padding: '3px 9px',
-                            borderRadius: '6px',
-                            fontSize: '0.7rem',
-                            fontWeight: '800',
-                            backgroundColor: isLong ? 'rgba(16, 185, 129, 0.15)' : (isShort ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)'),
-                            color: isLong ? '#34d399' : (isShort ? '#fb7185' : '#94a3b8'),
-                            border: `1px solid ${isLong ? 'rgba(16, 185, 129, 0.35)' : (isShort ? 'rgba(244, 63, 94, 0.35)' : 'rgba(255, 255, 255, 0.08)')}`
-                          }}>
-                            {stock.setup_signal}
-                          </span>
-                          <div style={{ fontSize: '0.67rem', color: '#64748b', marginTop: '3px' }}>
-                            {stock.suggested_strategy.replace('NSE ', '')}
-                          </div>
-                        </td>
+                      {/* Setup Signal */}
+                      <td style={{ padding: '14px 18px' }}>
+                        <span style={{
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          fontSize: '0.7rem',
+                          fontWeight: '700',
+                          backgroundColor: isLong ? '#e6f4ea' : (isShort ? '#fef2f2' : '#f3f4f6'),
+                          color: isLong ? '#059669' : (isShort ? '#dc2626' : '#4b5563')
+                        }}>
+                          {stock.setup_signal}
+                        </span>
+                        <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '2px' }}>
+                          Strategy: {stock.suggested_strategy.replace('NSE ', '')}
+                        </div>
+                      </td>
 
-                        {/* Levels */}
-                        <td style={{ padding: '15px 20px', textAlign: 'right' }}>
-                          <div style={{ color: '#34d399', fontWeight: '900', fontSize: '0.78rem', fontFamily: "'JetBrains Mono', monospace" }}>
-                            TP: {currentCurrency}{stock.target_2r}
-                          </div>
-                          <div style={{ color: '#fb7185', fontSize: '0.72rem', fontWeight: '800', fontFamily: "'JetBrains Mono', monospace" }}>
-                            SL: {currentCurrency}{stock.stop_loss}
-                          </div>
-                        </td>
+                      {/* Levels */}
+                      <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                        <div style={{ color: '#059669', fontWeight: '700', fontSize: '0.75rem' }}>
+                          Target: {currentCurrency}{stock.target_2r}
+                        </div>
+                        <div style={{ color: '#dc2626', fontSize: '0.7rem' }}>
+                          SL: {currentCurrency}{stock.stop_loss}
+                        </div>
+                      </td>
 
-                        {/* Quick Deploy Actions */}
-                        <td style={{ padding: '15px 20px', textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', gap: '6px' }}>
-                            <button
-                              onClick={() => handleArmBot(stock.symbol, stock.suggested_strategy)}
-                              disabled={isArming}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                padding: '6px 12px',
-                                borderRadius: '8px',
-                                background: isLong ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : (isShort ? 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)' : '#1e293b'),
-                                color: '#ffffff',
-                                fontSize: '0.74rem',
-                                fontWeight: '800',
-                                border: 'none',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
-                              }}
-                              title="Arm live bot on this instrument immediately"
-                            >
-                              {isArming ? (
-                                <RefreshCw size={12} className="animate-spin" />
-                              ) : (
-                                <Bot size={12} />
-                              )}
-                              <span>Arm</span>
-                            </button>
+                      {/* 1-Click Action Buttons */}
+                      <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        <div style={{ display: 'inline-flex', gap: '6px' }}>
+                          <button
+                            onClick={() => onSelectForBacktest(stock.symbol, stock.suggested_strategy)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '5px 9px',
+                              borderRadius: '7px',
+                              backgroundColor: '#059669',
+                              color: '#ffffff',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                            title="Open in Backtester Studio"
+                          >
+                            Studio <ArrowRight size={11} />
+                          </button>
 
-                            <button
-                              onClick={() => onSelectForBacktest(stock.symbol, stock.suggested_strategy)}
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
-                                padding: '6px 10px',
-                                borderRadius: '8px',
-                                backgroundColor: '#1e293b',
-                                color: '#cbd5e1',
-                                fontSize: '0.74rem',
-                                fontWeight: '700',
-                                border: '1px solid #334155',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
-                              }}
-                              title="Open in Strategy Backtester Studio"
-                            >
-                              <span>Studio</span>
-                              <ChevronRight size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                          <button
+                            onClick={() => onSelectForBot(stock.symbol)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '5px 9px',
+                              borderRadius: '7px',
+                              backgroundColor: '#f3f4f6',
+                              color: '#374151',
+                              fontSize: '0.72rem',
+                              fontWeight: '700',
+                              border: 'none',
+                              cursor: 'pointer'
+                            }}
+                            title="Deploy to Live Bot Monitor"
+                          >
+                            <Bot size={11} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      ) : (
-        /* Visual Cards Grid View */
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '20px'
-        }}>
-          {processedStocks.map((stock) => {
-            const isLong = stock.setup_action === "BUY" || stock.setup_action === "BUY ON RETEST";
-            const isShort = stock.setup_action === "SELL / SHORT";
-            const isArming = armingSymbol === stock.symbol;
-
-            return (
-              <div
-                key={stock.symbol}
-                style={{
-                  backgroundColor: '#0b0f19',
-                  borderRadius: '20px',
-                  padding: '20px',
-                  border: isLong ? '1px solid rgba(16, 185, 129, 0.35)' : (isShort ? '1px solid rgba(244, 63, 94, 0.35)' : '1px solid rgba(255, 255, 255, 0.08)'),
-                  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  gap: '16px',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-3px)';
-                  e.currentTarget.style.boxShadow = '0 15px 40px rgba(0, 0, 0, 0.5)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 10px 30px rgba(0, 0, 0, 0.3)';
-                }}
-              >
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ fontSize: '1.15rem', fontWeight: '900', color: '#ffffff' }}>
-                        {stock.symbol}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748b' }}>
-                        {stock.name} • {stock.sector}
-                      </div>
-                    </div>
-
-                    <span style={{
-                      padding: '3px 9px',
-                      borderRadius: '6px',
-                      fontSize: '0.72rem',
-                      fontWeight: '900',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      backgroundColor: stock.rvol >= 1.2 ? 'rgba(16, 185, 129, 0.2)' : '#1e293b',
-                      color: stock.rvol >= 1.2 ? '#34d399' : '#94a3b8',
-                      border: `1px solid ${stock.rvol >= 1.2 ? 'rgba(16, 185, 129, 0.4)' : '#334155'}`
-                    }}>
-                      RVOL {stock.rvol}x
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '14px' }}>
-                    <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ffffff', fontFamily: "'JetBrains Mono', monospace" }}>
-                      {currentCurrency}{stock.price.toFixed(2)}
-                    </div>
-                    <div style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '3px',
-                      fontSize: '0.8rem',
-                      fontWeight: '900',
-                      fontFamily: "'JetBrains Mono', monospace",
-                      color: stock.change_pct >= 0 ? '#34d399' : '#fb7185'
-                    }}>
-                      {stock.change_pct >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                      <span>{stock.change_pct >= 0 ? '+' : ''}{stock.change_pct}%</span>
-                    </div>
-                  </div>
-
-                  {/* Quantitative Attributes Matrix */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '10px',
-                    marginTop: '14px',
-                    padding: '12px',
-                    borderRadius: '12px',
-                    backgroundColor: '#0f172a',
-                    border: '1px solid rgba(255, 255, 255, 0.06)',
-                    fontSize: '0.72rem',
-                    fontFamily: "'JetBrains Mono', monospace"
-                  }}>
-                    <div>
-                      <span style={{ color: '#64748b' }}>VWAP: </span>
-                      <b style={{ color: '#ffffff' }}>{stock.vwap}</b>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Gap: </span>
-                      <b style={{ color: stock.gap_pct >= 0 ? '#34d399' : '#fb7185' }}>{stock.gap_pct}%</b>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Target: </span>
-                      <b style={{ color: '#34d399' }}>{stock.target_2r}</b>
-                    </div>
-                    <div>
-                      <span style={{ color: '#64748b' }}>Stop: </span>
-                      <b style={{ color: '#fb7185' }}>{stock.stop_loss}</b>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: '12px' }}>
-                    <span style={{
-                      display: 'inline-block',
-                      padding: '4px 9px',
-                      borderRadius: '6px',
-                      fontSize: '0.68rem',
-                      fontWeight: '800',
-                      backgroundColor: isLong ? 'rgba(16, 185, 129, 0.15)' : (isShort ? 'rgba(244, 63, 94, 0.15)' : 'rgba(255, 255, 255, 0.05)'),
-                      color: isLong ? '#34d399' : (isShort ? '#fb7185' : '#94a3b8'),
-                      border: `1px solid ${isLong ? 'rgba(16, 185, 129, 0.35)' : (isShort ? 'rgba(244, 63, 94, 0.35)' : 'rgba(255, 255, 255, 0.08)')}`
-                    }}>
-                      {stock.setup_signal}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Bottom Actions */}
-                <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '12px' }}>
-                  <button
-                    onClick={() => handleArmBot(stock.symbol, stock.suggested_strategy)}
-                    disabled={isArming}
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      padding: '9px',
-                      borderRadius: '10px',
-                      background: isLong ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : (isShort ? 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)' : '#1e293b'),
-                      color: '#ffffff',
-                      fontSize: '0.76rem',
-                      fontWeight: '800',
-                      border: 'none',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {isArming ? <RefreshCw size={12} className="animate-spin" /> : <Bot size={12} />}
-                    <span>Arm Live Bot</span>
-                  </button>
-
-                  <button
-                    onClick={() => onSelectForBacktest(stock.symbol, stock.suggested_strategy)}
-                    style={{
-                      padding: '9px 14px',
-                      borderRadius: '10px',
-                      backgroundColor: '#1e293b',
-                      color: '#cbd5e1',
-                      fontSize: '0.76rem',
-                      fontWeight: '700',
-                      border: '1px solid #334155',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Studio
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </div>
 
     </div>
   );
