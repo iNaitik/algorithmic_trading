@@ -734,6 +734,17 @@ def command_bot_control(action: str, symbol: Optional[str] = None, strategy_name
                 from server import add_bot_log
                 add_bot_log("ORDER", f"Manual square-off requested for {state['symbol']}, but no open position exists.", state['symbol'])
 
+        elif act in ("UPDATE_QUOTA", "CONFIG", "UPDATE"):
+            from server import add_bot_log
+            q_label = f"{state.get('max_trades_per_symbol', 1)} trade(s)/day" if state.get('max_trades_per_symbol', 1) > 0 else "Unlimited"
+            add_bot_log("CONTROL", f"Daily trade quota set to {q_label} on {state['symbol']}.", state['symbol'])
+
+        # Recalculate lock status based on updated settings
+        completed = get_today_completed_trades(state.get("symbol", "SBIN.NS"))
+        max_t = state.get("max_trades_per_symbol", 1)
+        state["daily_completed_trades"] = completed
+        state["symbol_locked_for_day"] = bool(max_t > 0 and completed >= max_t)
+
         save_live_state(state)
         return state
 

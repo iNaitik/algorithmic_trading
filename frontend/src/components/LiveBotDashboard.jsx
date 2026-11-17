@@ -34,6 +34,7 @@ export default function LiveBotDashboard({
 }) {
   const [symbol, setSymbol] = useState("SBIN.NS");
   const [strategy, setStrategy] = useState("NSE Intraday ORB Breakout");
+  const [maxTradesPerSymbol, setMaxTradesPerSymbol] = useState(1);
   const [botData, setBotData] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
@@ -47,6 +48,7 @@ export default function LiveBotDashboard({
 
   const userSelectedSymbolRef = useRef(false);
   const userSelectedStrategyRef = useRef(false);
+  const userSelectedQuotaRef = useRef(false);
   const terminalBodyRef = useRef(null);
 
   // Live Market Countdown Timer (09:15 AM IST Open / 03:15 PM MIS / 03:30 PM Close)
@@ -146,6 +148,9 @@ export default function LiveBotDashboard({
         if (!userSelectedStrategyRef.current && (json.active_strategy || json.bot_state?.strategy)) {
           setStrategy(json.active_strategy || json.bot_state.strategy);
         }
+        if (!userSelectedQuotaRef.current && json.bot_state?.max_trades_per_symbol !== undefined) {
+          setMaxTradesPerSymbol(json.bot_state.max_trades_per_symbol);
+        }
       }
       if (wlRes.ok) setWatchlist(await wlRes.json());
     } catch (e) {
@@ -167,19 +172,21 @@ export default function LiveBotDashboard({
   }, [botData?.logs, autoScroll]);
 
   // Bot Control Actions with Instant Optimistic UI Feedback
-  const handleControl = async (action, overrideSymbol = null, overrideStrategy = null) => {
+  const handleControl = async (action, overrideSymbol = null, overrideStrategy = null, overrideQuota = null) => {
     const targetSymbol = overrideSymbol || symbol;
     const targetStrategy = overrideStrategy || strategy;
+    const targetQuota = overrideQuota !== null && overrideQuota !== undefined ? overrideQuota : maxTradesPerSymbol;
 
     // Instant optimistic update so Play / Pause button reacts immediately without waiting
-    const newStatus = action === "PAUSE" ? "PAUSED" : (action === "START" ? "ACTIVE (MONITORING)" : "STOPPED");
+    const newStatus = action === "PAUSE" ? "PAUSED" : (action === "START" ? "ACTIVE (MONITORING)" : (action.startsWith("UPDATE") ? (botData?.bot_state?.status || "ACTIVE (MONITORING)") : "STOPPED"));
     setBotData(prev => prev ? {
       ...prev,
       bot_state: {
         ...prev.bot_state,
         status: newStatus,
         symbol: targetSymbol,
-        strategy: targetStrategy
+        strategy: targetStrategy,
+        max_trades_per_symbol: targetQuota
       }
     } : null);
 
@@ -188,7 +195,13 @@ export default function LiveBotDashboard({
       const res = await fetch('/api/bot/control', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, symbol: targetSymbol, strategy_name: targetStrategy, capital: 1000000.0 })
+        body: JSON.stringify({
+          action,
+          symbol: targetSymbol,
+          strategy_name: targetStrategy,
+          capital: 1000000.0,
+          max_trades_per_symbol: targetQuota
+        })
       });
       if (res.ok) {
         const json = await res.json();
@@ -199,6 +212,7 @@ export default function LiveBotDashboard({
           }));
           if (json.bot_state.symbol) setSymbol(json.bot_state.symbol);
           if (json.bot_state.strategy) setStrategy(json.bot_state.strategy);
+          if (json.bot_state.max_trades_per_symbol !== undefined) setMaxTradesPerSymbol(json.bot_state.max_trades_per_symbol);
         }
       }
     } catch (e) {
@@ -548,6 +562,72 @@ export default function LiveBotDashboard({
               <option value="NSE Failed-Gap Fade">NSE Failed-Gap Fade</option>
               <option value="SuperTrend ATR Intraday Trend">SuperTrend ATR Intraday Trend</option>
             </select>
+          </div>
+
+          {/* Daily Quota / Max Trades Per Stock */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            <span style={{ fontSize: '0.68rem', color: '#6b7280', fontWeight: '700', textTransform: 'uppercase' }}>Daily Trade Limit</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <select
+                value={maxTradesPerSymbol}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  userSelectedQuotaRef.current = true;
+                  setMaxTradesPerSymbol(val);
+                  handleControl("UPDATE_QUOTA", symbol, strategy, val);
+                }}
+                style={{
+                  padding: '8px 10px',
+                  backgroundColor: '#f9fafb',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '10px',
+                  color: maxTradesPerSymbol === 1 ? '#059669' : (maxTradesPerSymbol === 0 ? '#b45309' : '#2563eb'),
+                  fontSize: '0.82rem',
+                  fontWeight: '700',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value={1}>1 Trade (Strict • Recommended)</option>
+                <option value={2}>2 Trades / Stock</option>
+                <option value={3}>3 Trades / Stock</option>
+                <option value={5}>5 Trades / Stock</option>
+                <option value={0}>Unlimited (0 - No Lock)</option>
+              </select>
+
+              <input
+                type="number"
+                min="0"
+                max="20"
+                value={maxTradesPerSymbol}
+                onChange={(e) => {
+                  const val = Math.max(0, parseInt(e.target.value || "0", 10));
+                  userSelectedQuotaRef.current = true;
+                  setMaxTradesPerSymbol(val);
+                }}
+                onBlur={() => {
+                  handleControl("UPDATE_QUOTA", symbol, strategy, maxTradesPerSymbol);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleControl("UPDATE_QUOTA", symbol, strategy, maxTradesPerSymbol);
+                  }
+                }}
+                title="Type custom maximum trades per stock per day (0 = Unlimited)"
+                style={{
+                  width: '46px',
+                  padding: '7px 4px',
+                  textAlign: 'center',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '8px',
+                  fontSize: '0.82rem',
+                  fontWeight: '700',
+                  color: '#111827',
+                  outline: 'none'
+                }}
+              />
+            </div>
           </div>
 
           {/* DYNAMIC PLAY / PAUSE TOGGLE BUTTON */}
