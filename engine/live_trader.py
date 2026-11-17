@@ -69,13 +69,26 @@ def calculate_sell_proceeds(shares: int, price: float) -> Tuple[float, float]:
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. State & History Persistence
 # ─────────────────────────────────────────────────────────────────────────────
+def is_nse_market_open(now_ist: Optional[datetime] = None) -> bool:
+    """Returns True if within Indian equity market regular hours (Mon-Fri, 09:15 - 15:30 IST)."""
+    if now_ist is None:
+        now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+    return (now_ist.weekday() < 5 and (
+        (now_ist.hour == 9 and now_ist.minute >= 15) or
+        (9 < now_ist.hour < 15) or
+        (now_ist.hour == 15 and now_ist.minute <= 30)
+    ))
+
+
 def get_live_state() -> Dict[str, Any]:
     """Loads the active live bot state from config."""
+    now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+    default_status = "ACTIVE (MONITORING)" if is_nse_market_open(now_ist) else "ARMED (STANDBY • MARKET CLOSED)"
     state = {
         "symbol": "SBIN.NS",
         "strategy": "NSE Midday VWAP Pullback",
         "timeframe": "2m",
-        "status": "ACTIVE (MONITORING)",
+        "status": default_status,
         "cash": DEFAULT_CASH,
         "in_position": False,
         "shares": 0,
@@ -100,6 +113,12 @@ def get_live_state() -> Dict[str, Any]:
                     state["symbol"] = saved["active_symbol"]
         except Exception:
             pass
+
+    # If market is closed and state was marked ACTIVE (and not in an active position), normalize to ARMED STANDBY
+    if not is_nse_market_open(now_ist) and not state.get("in_position"):
+        if state.get("status", "").startswith("ACTIVE"):
+            state["status"] = "ARMED (STANDBY • MARKET CLOSED)"
+
     return state
 
 
@@ -280,6 +299,7 @@ def _execution_worker():
     """Autonomous live loop running throughout market hours (09:15 - 15:30 IST)."""
     global _ENGINE_RUNNING
     print("🚀 [LIVE ENGINE] Autonomous Execution Worker started.")
+    last_standby_pulse = time.time()
 
     while _ENGINE_RUNNING:
         try:
@@ -287,23 +307,66 @@ def _execution_worker():
                 state = get_live_state()
 
             status = state.get("status", "STOPPED")
-            if not status.startswith("ACTIVE"):
-                time.sleep(5)
-                continue
-
             symbol = state.get("symbol", "SBIN.NS")
             strategy_name = state.get("strategy", "NSE Midday VWAP Pullback")
             timeframe = state.get("timeframe", "2m")
             in_pos = state.get("in_position", False)
             cash = state.get("cash", DEFAULT_CASH)
 
-            # Check if within market session (09:15 - 15:30 IST)
+            # If bot is stopped or paused, sleep and continue
+            if status in ("STOPPED", "PAUSED"):
+                time.sleep(5)
+                continue
+
+            # Check if within market session (09:15 - 15:30 IST Mon-Fri)
             now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
-            is_market_hours = (now_ist.weekday() < 5 and (
-                (now_ist.hour == 9 and now_ist.minute >= 15) or
-                (9 < now_ist.hour < 15) or
-                (now_ist.hour == 15 and now_ist.minute <= 30)
-            ))
+            is_market_hours = is_nse_market_open(now_ist)
+
+            # ─────────────────────────────────────────────────────────
+            # 1. OUTSIDE MARKET HOURS: Standby Gate (Zero tick spam)
+            # ─────────────────────────────────────────────────────────
+            if not is_market_hours:
+                # If bot was marked ACTIVE, transition to ARMED STANDBY
+                if status.startswith("ACTIVE"):
+                    state["status"] = "ARMED (STANDBY • MARKET CLOSED)"
+                    with _ENGINE_LOCK:
+                        save_live_state(state)
+                    from server import add_bot_log
+                    add_bot_log(
+                        "STANDBY",
+                        f"⏸️ NSE Market is CLOSED (Hours: Mon-Fri 09:15 - 15:30 IST). Engine in STANDBY mode on {symbol}. Auto-execution engages at 09:15 AM opening bell.",
+                        symbol
+                    )
+
+                # Periodic heartbeat pulse every 15 minutes
+                now_ts = time.time()
+                if now_ts - last_standby_pulse > 900:
+                    last_standby_pulse = now_ts
+                    from server import add_bot_log
+                    add_bot_log(
+                        "STANDBY",
+                        f"⏸️ Standby Heartbeat: Outside market hours. Engine armed on {symbol} for 09:15 AM IST open.",
+                        symbol
+                    )
+
+                # Sleep 15 seconds before checking clock again (zero fake tick calculations)
+                time.sleep(15)
+                continue
+
+            # ─────────────────────────────────────────────────────────
+            # 2. MARKET IS OPEN: Engage Active Execution
+            # ─────────────────────────────────────────────────────────
+            # If bot was in ARMED standby mode, transition to ACTIVE!
+            if "ARMED" in status or "STANDBY" in status:
+                state["status"] = "ACTIVE (IN POSITION)" if in_pos else "ACTIVE (MONITORING)"
+                with _ENGINE_LOCK:
+                    save_live_state(state)
+                from server import add_bot_log
+                add_bot_log(
+                    "SYSTEM",
+                    f"🔔 NSE Market OPEN (09:15 AM IST). Armed execution engine activated for {symbol}. Live calculation loop engaged.",
+                    symbol
+                )
 
             # 1. Fetch live data & LTP
             df = fetch_intraday_data(symbol, interval=timeframe)
@@ -515,11 +578,18 @@ def command_bot_control(action: str, symbol: Optional[str] = None, strategy_name
                 state["cash"] = capital
 
         act = action.upper()
+        now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+        market_open = is_nse_market_open(now_ist)
 
         if act == "START":
-            state["status"] = "ACTIVE (IN POSITION)" if state.get("in_position") else "ACTIVE (MONITORING)"
             from server import add_bot_log
-            add_bot_log("CONTROL", f"Bot STARTED on {state['symbol']}. Strategy: '{state['strategy']}' [{state.get('timeframe', '2m')}]. Real-time calculation loop engaged.", state['symbol'])
+            if market_open:
+                state["status"] = "ACTIVE (IN POSITION)" if state.get("in_position") else "ACTIVE (MONITORING)"
+                add_bot_log("CONTROL", f"Bot STARTED on {state['symbol']}. Strategy: '{state['strategy']}' [{state.get('timeframe', '2m')}]. Real-time calculation loop engaged.", state['symbol'])
+            else:
+                state["status"] = "ARMED (STANDBY • MARKET CLOSED)"
+                add_bot_log("CONTROL", f"Bot ARMED on {state['symbol']}. Strategy: '{state['strategy']}' [{state.get('timeframe', '2m')}].", state['symbol'])
+                add_bot_log("STANDBY", f"⏸️ NSE Market is currently CLOSED (Trading Hours: Mon-Fri 09:15 - 15:30 IST). Bot placed in STANDBY mode. Auto-execution engages automatically at 09:15 AM IST opening bell.", state['symbol'])
 
         elif act == "PAUSE":
             state["status"] = "PAUSED"
@@ -532,7 +602,7 @@ def command_bot_control(action: str, symbol: Optional[str] = None, strategy_name
             add_bot_log("CONTROL", f"Bot STOPPED on {state['symbol']}.", state['symbol'])
 
         elif act == "RESET":
-            state["status"] = "ACTIVE (MONITORING)"
+            state["status"] = "ACTIVE (MONITORING)" if market_open else "ARMED (STANDBY • MARKET CLOSED)"
             state["cash"] = capital or DEFAULT_CASH
             state["in_position"] = False
             state["shares"] = 0
@@ -542,7 +612,7 @@ def command_bot_control(action: str, symbol: Optional[str] = None, strategy_name
             state["stop_loss"] = None
             state["target_price"] = None
             from server import add_bot_log
-            add_bot_log("SYSTEM", f"Bot state reset: Cash set to ₹{state['cash']:,.2f}. All positions cleared.", state['symbol'])
+            add_bot_log("SYSTEM", f"Bot state reset: Margin set to ₹{state['cash']:,.2f}. All positions cleared.", state['symbol'])
 
         elif act == "SQUARE_OFF":
             if state.get("in_position") and state.get("shares", 0) > 0:

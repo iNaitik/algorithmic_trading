@@ -33,9 +33,7 @@ export default function App() {
         return "bloomberg";
       }
     }
-    const saved = localStorage.getItem("terminal_edition");
-    // Default to bloomberg for first look unless user previously chose classic
-    return saved === "classic" ? "classic" : "bloomberg";
+    return localStorage.getItem("terminal_edition") || "classic";
   });
 
   // Hotkey listener for F12 to switch terminal mode
@@ -189,8 +187,7 @@ export default function App() {
     { id: "matrix", label: "Factor Matrix" },
     { id: "scanner", label: "⚡ Morning Scanner" },
     { id: "journal", label: "Trade Journal" },
-    { id: "risk", label: "Risk Guardrails" },
-    { id: "bloomberg", label: "🖥️ Bloomberg Terminal [F12]" }
+    { id: "risk", label: "Risk Guardrails" }
   ];
 
   const currentMarketDef = marketDefs?.markets.find(m => m.id === selectedMarket);
@@ -283,34 +280,6 @@ export default function App() {
                 </button>
               );
             })}
-
-            {/* Bloomberg Terminal Left Rail Button */}
-            <button
-              onClick={() => {
-                setTerminalMode("bloomberg");
-                localStorage.setItem("terminal_edition", "bloomberg");
-              }}
-              title="Switch to Bloomberg Terminal Pro Edition [F12]"
-              style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '12px',
-                border: '1.5px solid #ff9900',
-                backgroundColor: '#05070a',
-                color: '#ff9900',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                fontWeight: '900',
-                fontSize: '0.72rem',
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
-                boxShadow: '0 2px 8px rgba(255, 153, 0, 0.35)',
-                marginTop: '8px'
-              }}
-            >
-              BBG
-            </button>
           </div>
         </div>
 
@@ -379,22 +348,15 @@ export default function App() {
             {topNavTabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => {
-                  if (tab.id === "bloomberg") {
-                    setTerminalMode("bloomberg");
-                    localStorage.setItem("terminal_edition", "bloomberg");
-                  } else {
-                    setActiveTab(tab.id);
-                  }
-                }}
+                onClick={() => setActiveTab(tab.id)}
                 style={{
                   padding: '8px 18px',
                   borderRadius: '12px',
-                  border: tab.id === "bloomberg" ? '1px solid #ff9900' : 'none',
-                  backgroundColor: tab.id === "bloomberg" ? '#05070a' : (activeTab === tab.id ? '#ffffff' : 'transparent'),
-                  color: tab.id === "bloomberg" ? '#ff9900' : (activeTab === tab.id ? '#111827' : '#6b7280'),
+                  border: 'none',
+                  backgroundColor: activeTab === tab.id ? '#ffffff' : 'transparent',
+                  color: activeTab === tab.id ? '#111827' : '#6b7280',
                   fontSize: '0.825rem',
-                  fontWeight: (activeTab === tab.id || tab.id === "bloomberg") ? '700' : '500',
+                  fontWeight: activeTab === tab.id ? '700' : '500',
                   boxShadow: activeTab === tab.id ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
@@ -612,40 +574,6 @@ export default function App() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Floating Bloomberg Quick Access Button */}
-      <div style={{
-        position: 'fixed',
-        bottom: '22px',
-        right: '24px',
-        zIndex: 1000
-      }}>
-        <button
-          onClick={() => {
-            setTerminalMode("bloomberg");
-            localStorage.setItem("terminal_edition", "bloomberg");
-          }}
-          title="Switch to Bloomberg Terminal Edition (F12)"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: '#05070a',
-            color: '#ff9900',
-            border: '2px solid #ff9900',
-            padding: '10px 18px',
-            borderRadius: '24px',
-            fontWeight: '800',
-            fontSize: '0.825rem',
-            fontFamily: "'JetBrains Mono', Consolas, monospace",
-            cursor: 'pointer',
-            boxShadow: '0 6px 20px rgba(0, 0, 0, 0.35)',
-            letterSpacing: '0.02em'
-          }}
-        >
-          🖥️ Bloomberg Terminal Pro [F12]
-        </button>
       </div>
 
       {/* Telegram Push Notification Settings Modal */}

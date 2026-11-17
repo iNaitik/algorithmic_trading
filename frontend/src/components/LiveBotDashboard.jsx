@@ -42,6 +42,7 @@ export default function LiveBotDashboard({
   const [tradeSessionTab, setTradeSessionTab] = useState("TODAY"); // "TODAY", "PREVIOUS", "ALL"
   const [tradeSymbolFilter, setTradeSymbolFilter] = useState("ALL"); // "ALL", "CURRENT"
   const [activeBottomView, setActiveBottomView] = useState("DUAL"); // "DUAL", "LOGS", "TRADES"
+  const [marketSessionState, setMarketSessionState] = useState("CLOSED"); // "CLOSED", "PRE_MARKET", "OPEN", "POST_MIS"
   const [countdownText, setCountdownText] = useState("");
 
   const userSelectedSymbolRef = useRef(false);
@@ -56,31 +57,69 @@ export default function LiveBotDashboard({
       const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
       const ist = new Date(utc + (3600000 * 5.5));
 
+      const dayOfWeek = ist.getDay(); // 0 is Sunday, 6 is Saturday
       const hours = ist.getHours();
       const minutes = ist.getMinutes();
       const seconds = ist.getSeconds();
       const currentSeconds = hours * 3600 + minutes * 60 + seconds;
 
-      const openSeconds = 9 * 3600 + 15 * 60; // 09:15:00
-      const sqSeconds = 15 * 3600 + 15 * 60;  // 15:15:00
-      const closeSeconds = 15 * 3600 + 30 * 60; // 15:30:00
+      const preMarketSeconds = 9 * 3600;              // 09:00:00 AM
+      const openSeconds = 9 * 3600 + 15 * 60;          // 09:15:00 AM
+      const sqSeconds = 15 * 3600 + 15 * 60;           // 15:15:00 PM
+      const closeSeconds = 15 * 3600 + 30 * 60;        // 15:30:00 PM
 
-      if (currentSeconds < openSeconds) {
+      // Weekend handling (Saturday or Sunday)
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        setMarketSessionState("CLOSED");
+        if (dayOfWeek === 6) {
+          setCountdownText("NSE Market Closed for Weekend • Opens Monday at 09:15 AM IST");
+        } else {
+          setCountdownText("NSE Market Closed for Weekend • Opens Tomorrow (Monday) at 09:15 AM IST");
+        }
+        return;
+      }
+
+      // Weekday (Monday - Friday)
+      if (currentSeconds < preMarketSeconds) {
+        // Early morning before 09:00 AM
+        setMarketSessionState("CLOSED");
+        const diff = openSeconds - currentSeconds;
+        const h = Math.floor(diff / 3600);
+        const m = Math.floor((diff % 3600) / 60);
+        const s = diff % 60;
+        const timeStr = h > 0 ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+        setCountdownText(`NSE Market Closed • Opens Today at 09:15 AM IST (in ${timeStr})`);
+      } else if (currentSeconds >= preMarketSeconds && currentSeconds < openSeconds) {
+        // Pre-market 09:00 - 09:15 AM
+        setMarketSessionState("PRE_MARKET");
         const diff = openSeconds - currentSeconds;
         const m = Math.floor(diff / 60);
         const s = diff % 60;
-        setCountdownText(`Market Opens in ${m}m ${s}s (09:15 AM)`);
+        setCountdownText(`🟡 Pre-Market Discovery Session • Regular Trading opens in ${m}m ${s}s (09:15 AM)`);
       } else if (currentSeconds >= openSeconds && currentSeconds < sqSeconds) {
+        // Regular session 09:15 AM - 03:15 PM
+        setMarketSessionState("OPEN");
         const diff = sqSeconds - currentSeconds;
         const h = Math.floor(diff / 3600);
         const m = Math.floor((diff % 3600) / 60);
-        setCountdownText(`Market LIVE • MIS Square-Off in ${h}h ${m}m`);
+        const s = diff % 60;
+        const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m ${s}s`;
+        setCountdownText(`🟢 NSE Market LIVE • MIS Auto-Square-Off in ${timeStr}`);
       } else if (currentSeconds >= sqSeconds && currentSeconds < closeSeconds) {
+        // Post MIS 03:15 - 03:30 PM
+        setMarketSessionState("POST_MIS");
         const diff = closeSeconds - currentSeconds;
         const m = Math.floor(diff / 60);
-        setCountdownText(`MIS Squared Off • Market Closes in ${m}m`);
+        const s = diff % 60;
+        setCountdownText(`⚠️ MIS Auto-Squared Off • Regular Market Closes in ${m}m ${s}s (15:30)`);
       } else {
-        setCountdownText("NSE Market Closed • Next Session Tomorrow 09:15 AM");
+        // After 03:30 PM
+        setMarketSessionState("CLOSED");
+        if (dayOfWeek === 5) {
+          setCountdownText("⏸️ NSE Market Closed for Weekend • Opens Monday at 09:15 AM IST");
+        } else {
+          setCountdownText("⏸️ NSE Market Closed • Next Session Tomorrow at 09:15 AM IST");
+        }
       }
     };
 
@@ -218,8 +257,10 @@ export default function LiveBotDashboard({
     document.body.removeChild(link);
   };
 
+  const isMarketOpen = marketSessionState === "OPEN" || marketSessionState === "POST_MIS";
+
   const bot = botData?.bot_state || {
-    status: "ACTIVE (MONITORING)",
+    status: isMarketOpen ? "ACTIVE (MONITORING)" : "ARMED (STANDBY • MARKET CLOSED)",
     cash: 1000000.0,
     in_position: false,
     shares: 0,
@@ -231,6 +272,7 @@ export default function LiveBotDashboard({
 
   const isRunning = Boolean(bot.status?.includes("ACTIVE"));
   const isPaused = Boolean(bot.status?.includes("PAUSED"));
+  const isArmed = Boolean(bot.status?.includes("ARMED") || bot.status?.includes("STANDBY"));
   const isInPosition = Boolean(bot.in_position && bot.shares > 0);
 
   const currentQuote = watchlist.find(w => w.symbol === symbol) || { price: 818.50, change_pct: 1.25, vwap: 814.20 };
@@ -289,6 +331,12 @@ export default function LiveBotDashboard({
         return { bg: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)' };
       case 'ERROR':
         return { bg: 'rgba(248, 113, 113, 0.15)', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.3)' };
+      case 'STANDBY':
+        return { bg: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.35)' };
+      case 'SYSTEM':
+        return { bg: 'rgba(99, 102, 241, 0.15)', color: '#a5b4fc', border: '1px solid rgba(99, 102, 241, 0.3)' };
+      case 'TICK':
+        return { bg: 'rgba(148, 163, 184, 0.12)', color: '#94a3b8', border: '1px solid rgba(148, 163, 184, 0.25)' };
       default:
         return { bg: 'rgba(148, 163, 184, 0.15)', color: '#94a3b8', border: '1px solid rgba(148, 163, 184, 0.3)' };
     }
@@ -310,23 +358,36 @@ export default function LiveBotDashboard({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#f0fdf4',
-        border: '1px solid #bbf7d0',
+        backgroundColor: isMarketOpen ? '#f0fdf4' : '#f8fafc',
+        border: `1px solid ${isMarketOpen ? '#bbf7d0' : '#e2e8f0'}`,
         borderRadius: '14px',
         padding: '10px 18px',
         fontSize: '0.82rem',
-        color: '#166534',
+        color: isMarketOpen ? '#166534' : '#334155',
         fontWeight: '600',
-        boxShadow: '0 2px 8px rgba(5, 150, 105, 0.05)'
+        boxShadow: isMarketOpen ? '0 2px 8px rgba(5, 150, 105, 0.05)' : '0 2px 8px rgba(0, 0, 0, 0.02)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Clock size={16} color="#059669" />
+          <Clock size={16} color={isMarketOpen ? '#059669' : '#64748b'} />
           <span>{countdownText}</span>
+          {!isMarketOpen && (
+            <span style={{
+              fontSize: '0.68rem',
+              fontWeight: '700',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              backgroundColor: '#f1f5f9',
+              color: '#64748b',
+              border: '1px solid #cbd5e1'
+            }}>
+              EXCHANGE CLOSED
+            </span>
+          )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.78rem' }}>
-          <span>Pre-Market Setup: <b style={{ color: '#059669' }}>09:00 AM IST</b></span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '0.78rem', color: isMarketOpen ? '#166534' : '#64748b' }}>
+          <span>Pre-Market: <b style={{ color: isMarketOpen ? '#059669' : '#334155' }}>09:00 AM IST</b></span>
           <span>•</span>
-          <span>Morning Momentum Scan: <b style={{ color: '#059669' }}>09:16 AM IST</b></span>
+          <span>Morning Scan: <b style={{ color: isMarketOpen ? '#059669' : '#334155' }}>09:16 AM IST</b></span>
           <span>•</span>
           <span>MIS Auto-Square-Off: <b style={{ color: '#dc2626' }}>03:15 PM IST</b></span>
         </div>
@@ -351,13 +412,13 @@ export default function LiveBotDashboard({
             width: '42px',
             height: '42px',
             borderRadius: '12px',
-            backgroundColor: isRunning ? '#e6f4ea' : (isPaused ? '#fef3c7' : '#fee2e2'),
+            backgroundColor: isRunning ? '#e6f4ea' : (isArmed ? '#fef3c7' : (isPaused ? '#fef3c7' : '#fee2e2')),
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             transition: 'all 0.3s ease'
           }}>
-            <Activity size={22} color={isRunning ? '#059669' : (isPaused ? '#d97706' : '#dc2626')} />
+            <Activity size={22} color={isRunning ? '#059669' : (isArmed ? '#d97706' : (isPaused ? '#d97706' : '#dc2626'))} />
           </div>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -374,9 +435,9 @@ export default function LiveBotDashboard({
                 fontWeight: '700',
                 padding: '3px 10px',
                 borderRadius: '8px',
-                backgroundColor: isRunning ? '#e6f4ea' : (isPaused ? '#fef3c7' : '#fee2e2'),
-                color: isRunning ? '#059669' : (isPaused ? '#b45309' : '#dc2626'),
-                border: `1px solid ${isRunning ? '#a7f3d0' : (isPaused ? '#fde68a' : '#fecaca')}`,
+                backgroundColor: isRunning ? '#e6f4ea' : (isArmed ? '#fef3c7' : (isPaused ? '#fef3c7' : '#fee2e2')),
+                color: isRunning ? '#059669' : (isArmed ? '#b45309' : (isPaused ? '#b45309' : '#dc2626')),
+                border: `1px solid ${isRunning ? '#a7f3d0' : (isArmed ? '#fde68a' : (isPaused ? '#fde68a' : '#fecaca'))}`,
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em'
               }}>
@@ -384,10 +445,10 @@ export default function LiveBotDashboard({
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  backgroundColor: isRunning ? '#059669' : (isPaused ? '#d97706' : '#dc2626'),
-                  boxShadow: isRunning ? '0 0 8px #059669' : 'none'
+                  backgroundColor: isRunning ? '#059669' : (isArmed ? '#d97706' : (isPaused ? '#d97706' : '#dc2626')),
+                  boxShadow: isRunning ? '0 0 8px #059669' : (isArmed ? '0 0 6px #d97706' : 'none')
                 }} />
-                {bot.status || "MONITORING"}
+                {bot.status || (isMarketOpen ? "ACTIVE (MONITORING)" : "ARMED (STANDBY • MARKET CLOSED)")}
               </span>
             </div>
             <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '2px' }}>
@@ -475,7 +536,7 @@ export default function LiveBotDashboard({
 
           {/* DYNAMIC PLAY / PAUSE TOGGLE BUTTON */}
           <button
-            onClick={() => handleControl(isRunning ? "PAUSE" : "START")}
+            onClick={() => handleControl((isRunning || isArmed) ? "PAUSE" : "START")}
             disabled={actionLoading}
             style={{
               display: 'flex',
@@ -483,28 +544,36 @@ export default function LiveBotDashboard({
               gap: '8px',
               padding: '9px 18px',
               borderRadius: '10px',
-              backgroundColor: isRunning ? '#d97706' : '#059669',
+              backgroundColor: (isRunning || isArmed) ? '#d97706' : '#059669',
               color: '#ffffff',
               fontSize: '0.82rem',
               fontWeight: '700',
               border: 'none',
-              boxShadow: isRunning ? '0 2px 10px rgba(217, 119, 6, 0.3)' : '0 2px 10px rgba(5, 150, 105, 0.35)',
+              boxShadow: (isRunning || isArmed) ? '0 2px 10px rgba(217, 119, 6, 0.3)' : '0 2px 10px rgba(5, 150, 105, 0.35)',
               cursor: 'pointer',
               transition: 'all 0.2s ease'
             }}
-            title={isRunning ? "Click to Pause Bot execution" : "Click to Start Bot execution"}
+            title={
+              isRunning
+                ? "Click to Pause live Bot execution"
+                : isArmed
+                ? "Click to Disarm / Pause bot standby"
+                : isMarketOpen
+                ? "Click to Start Bot execution"
+                : "Click to Arm Bot for 09:15 AM market opening"
+            }
           >
             {actionLoading ? (
               <RefreshCw size={14} className="animate-spin" />
-            ) : isRunning ? (
+            ) : (isRunning || isArmed) ? (
               <>
                 <Pause size={14} fill="#ffffff" />
-                <span>Pause Bot</span>
+                <span>{isRunning ? "Pause Bot" : "Disarm Bot"}</span>
               </>
             ) : (
               <>
                 <Play size={14} fill="#ffffff" />
-                <span>Start Bot</span>
+                <span>{isMarketOpen ? "Start Bot" : "Arm Bot (Standby)"}</span>
               </>
             )}
           </button>
@@ -1006,6 +1075,7 @@ export default function LiveBotDashboard({
                   <option value="RISK">RISK</option>
                   <option value="CONTROL">CONTROL</option>
                   <option value="SYSTEM">SYSTEM</option>
+                  <option value="STANDBY">STANDBY</option>
                 </select>
 
                 <button
@@ -1135,8 +1205,8 @@ export default function LiveBotDashboard({
               color: '#64748b',
               fontFamily: 'monospace'
             }}>
-              <span>STATUS: {isRunning ? 'TELEMETRY STREAM ACTIVE' : 'ENGINE IDLE'}</span>
-              <span>FEED LATENCY: 12ms • TIMEZONE: ASIA/KOLKATA</span>
+              <span>STATUS: {isRunning ? 'TELEMETRY STREAM ACTIVE' : (isArmed ? 'ARMED • STANDBY MODE (MARKET CLOSED)' : (isPaused ? 'ENGINE PAUSED' : 'ENGINE IDLE'))}</span>
+              <span>FEED LATENCY: 12ms • TIMEZONE: ASIA/KOLKATA (IST)</span>
             </div>
           </div>
         )}

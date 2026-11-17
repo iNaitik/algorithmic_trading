@@ -13,6 +13,7 @@ import math
 from typing import Dict, List, Optional, Any, Union
 import time
 from datetime import datetime, date
+from zoneinfo import ZoneInfo
 import csv
 import pandas as pd
 import numpy as np
@@ -433,8 +434,8 @@ def run_backtest_endpoint(req: BacktestRequest):
 _BOT_LOGS: List[Dict[str, Any]] = []
 
 def add_bot_log(level: str, message: str, symbol: Optional[str] = None):
-    """Appends a timestamped log to the in-memory terminal buffer and disk log."""
-    now_ist = datetime.now()
+    """Appends a timestamped log to the in-memory terminal buffer and disk log (Zone: Asia/Kolkata)."""
+    now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
     log_entry = {
         "timestamp": now_ist.strftime("%H:%M:%S"),
         "date": now_ist.strftime("%Y-%m-%d"),
@@ -456,11 +457,20 @@ def add_bot_log(level: str, message: str, symbol: Optional[str] = None):
 
 def _init_default_logs():
     if not _BOT_LOGS:
+        now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+        is_market_open = (now_ist.weekday() < 5 and (
+            (now_ist.hour == 9 and now_ist.minute >= 15) or
+            (9 < now_ist.hour < 15) or
+            (now_ist.hour == 15 and now_ist.minute <= 30)
+        ))
         add_bot_log("SYSTEM", "Algorithmic Trading Core v2.0 initialized (Zone: Asia/Kolkata).")
-        add_bot_log("SCHEDULE", "Market Lifecycle armed: 09:15 Open | 09:16 Morning Scan | 15:15 MIS Square-Off | 15:30 Close.")
+        add_bot_log("SCHEDULE", "Market Lifecycle: 09:15 Open | 09:16 Morning Scan | 15:15 MIS Square-Off | 15:30 Close.")
         add_bot_log("RISK", "Max daily drawdown guard armed at 2.0% (₹20,000). Pre-trade leverage cap 5x.")
         add_bot_log("TELEGRAM", "Two-way Telegram interactive push notifications active.")
-        add_bot_log("INFO", "NSE Gateway connected. Feed latency: 12ms. Ready for intraday execution.")
+        if is_market_open:
+            add_bot_log("INFO", "🟢 NSE Market is LIVE. Gateway connected. Ready for intraday execution.")
+        else:
+            add_bot_log("STANDBY", "⏸️ NSE Market is currently CLOSED (Hours: Mon-Fri 09:15 - 15:30 IST). Next session opens at 09:15 AM IST.")
 
 _init_default_logs()
 
@@ -590,11 +600,21 @@ def get_bot_state(symbol: Optional[str] = None):
         except Exception as e:
             print(f"[TRADES PARSE ERROR] {e}")
 
+    now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
+    is_market_open = (now_ist.weekday() < 5 and (
+        (now_ist.hour == 9 and now_ist.minute >= 15) or
+        (9 < now_ist.hour < 15) or
+        (now_ist.hour == 15 and now_ist.minute <= 30)
+    ))
+
     return {
         "bot_state": state_data,
         "active_symbol": active_sym,
         "active_strategy": live_state.get("strategy", "NSE Midday VWAP Pullback"),
         "active_status": live_state.get("status", "ACTIVE (MONITORING)"),
+        "is_market_open": is_market_open,
+        "ist_time": now_ist.strftime("%H:%M:%S"),
+        "ist_date": now_ist.strftime("%Y-%m-%d"),
         "recent_trades": recent_trades,
         "all_trades": all_trades,
         "logs": _BOT_LOGS[-60:]
