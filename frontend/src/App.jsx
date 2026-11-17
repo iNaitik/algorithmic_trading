@@ -20,37 +20,15 @@ import FactorMatrixView from './components/FactorMatrixView';
 import MorningScannerView from './components/MorningScannerView';
 import TelegramModal from './components/TelegramModal';
 import TradeJournal from './components/TradeJournal';
-import BloombergTerminalApp from './bloomberg/BloombergTerminalApp';
 
 export default function App() {
-  // Terminal Edition Mode: 'classic' | 'bloomberg'
-  const [terminalMode, setTerminalMode] = useState(() => {
-    if (typeof window !== "undefined") {
-      const search = window.location.search.toLowerCase();
-      const hash = window.location.hash.toLowerCase();
-      const path = window.location.pathname.toLowerCase();
-      if (search.includes("bloomberg") || hash.includes("bloomberg") || path.includes("bloomberg")) {
-        return "bloomberg";
-      }
-    }
-    return localStorage.getItem("terminal_edition") || "classic";
-  });
-
-  // Hotkey listener for F12 to switch terminal mode
+  // Clear any legacy terminal edition from localStorage
   useEffect(() => {
-    const handleKey = (e) => {
-      if (e.key === 'F12') {
-        e.preventDefault();
-        setTerminalMode(prev => {
-          const next = prev === "classic" ? "bloomberg" : "classic";
-          localStorage.setItem("terminal_edition", next);
-          return next;
-        });
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    try {
+      localStorage.removeItem("terminal_edition");
+    } catch (e) {}
   }, []);
+
   // Navigation active tab: 'dashboard', 'backtester', 'matrix', 'journal', 'risk'
   const [activeTab, setActiveTab] = useState("dashboard");
   const [isTelegramOpen, setIsTelegramOpen] = useState(false);
@@ -192,19 +170,6 @@ export default function App() {
 
   const currentMarketDef = marketDefs?.markets.find(m => m.id === selectedMarket);
   const currency = currentMarketDef?.currency || (selectedMarket === "INDIA" ? "₹" : "$");
-
-  // Render Bloomberg Terminal if selected
-  if (terminalMode === "bloomberg") {
-    return (
-      <BloombergTerminalApp
-        onSwitchToClassic={() => {
-          setTerminalMode("classic");
-          localStorage.setItem("terminal_edition", "classic");
-        }}
-        initialTab={activeTab === "backtester" ? "backtest" : (activeTab === "scanner" ? "scanner" : (activeTab === "matrix" ? "matrix" : "bot"))}
-      />
-    );
-  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f2f4f7', color: '#111827', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -400,33 +365,6 @@ export default function App() {
               }}
             >
               📱 Telegram Alerts
-            </button>
-
-            {/* Bloomberg Terminal Pro Mode Switcher */}
-            <button
-              onClick={() => {
-                setTerminalMode("bloomberg");
-                localStorage.setItem("terminal_edition", "bloomberg");
-              }}
-              title="Launch Bloomberg Terminal Pro Frontend (Hot-key: F12)"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 13px',
-                borderRadius: '10px',
-                backgroundColor: '#05070a',
-                color: '#ff9900',
-                border: '1px solid #ff9900',
-                fontSize: '0.75rem',
-                fontWeight: '800',
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(255, 153, 0, 0.25)',
-                fontFamily: "'JetBrains Mono', Consolas, monospace",
-                letterSpacing: '0.02em'
-              }}
-            >
-              🖥️ Bloomberg Pro [F12]
             </button>
 
             <div
