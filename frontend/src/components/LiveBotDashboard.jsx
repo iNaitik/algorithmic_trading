@@ -34,7 +34,8 @@ import {
   Plus,
   Briefcase,
   Zap,
-  BarChart2
+  BarChart2,
+  Globe
 } from 'lucide-react';
 
 import GrowwRocketEmptyState from './GrowwRocketEmptyState';
