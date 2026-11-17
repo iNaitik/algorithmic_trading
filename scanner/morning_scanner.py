@@ -778,14 +778,14 @@ def _scheduler_worker():
                     if cfg.get("skip_today"):
                         print("[SCHEDULER] User skipped today's session. Bot remains paused.")
                     elif not cfg.get("user_selected"):
-                        print("[SCHEDULER] No user selection by 09:14 AM. Applying default VWAP (2m)...")
-                        cfg["strategy"] = "NSE Midday VWAP Pullback"
+                        print("[SCHEDULER] No user selection by 09:14 AM. Applying default ORB Breakout (2m)...")
+                        cfg["strategy"] = "NSE Intraday ORB Breakout"
                         cfg["timeframe"] = "2m"
                         cfg["status"] = "ACTIVE (MONITORING)"
                         save_active_config(cfg)
                         send_telegram_alert(
                             "⏰ <b>09:14 AM AUTO-FALLBACK ACTIVATED:</b>\n\n"
-                            "• <b>Strategy:</b> NSE Midday VWAP Pullback\n"
+                            "• <b>Strategy:</b> NSE Intraday ORB Breakout\n"
                             "• <b>Timeframe:</b> 2-minute candles\n"
                             "• <b>Status:</b> ACTIVE (Monitoring)\n\n"
                             "<i>Ready for market open in 1 minute!</i>"

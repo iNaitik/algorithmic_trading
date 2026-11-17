@@ -65,7 +65,7 @@ def get_active_config() -> Dict[str, Any]:
     """Returns today's active strategy, symbol, and timeframe settings."""
     cfg = {
         "active_symbol": "SBIN.NS",
-        "strategy": "NSE Midday VWAP Pullback",
+        "strategy": "NSE Intraday ORB Breakout",
         "timeframe": "2m",
         "status": "ACTIVE (MONITORING)",
         "skip_today": False,
@@ -104,7 +104,7 @@ def save_active_config(cfg: Dict[str, Any]):
             pass
     st.update({
         "symbol": sym,
-        "strategy": cfg.get("strategy", "NSE Midday VWAP Pullback"),
+        "strategy": cfg.get("strategy", "NSE Intraday ORB Breakout"),
         "status": cfg.get("status", "ACTIVE (MONITORING)"),
         "timeframe": cfg.get("timeframe", "2m"),
         "last_updated": datetime.now().isoformat()
@@ -177,16 +177,17 @@ def prompt_morning_setup():
         "🌅 <b>GOOD MORNING! NSE PRE-MARKET SETUP</b>\n\n"
         "NSE Market opens in 15 minutes (09:15 AM IST).\n\n"
         "⚙️ <b>Select Your Strategy & Timeframe for Today:</b>\n"
-        "• <i>Default:</i> <b>VWAP Pullback (2-min)</b> will auto-activate at 09:14 AM if no choice is made.\n\n"
+        "• <i>Default:</i> <b>ORB Breakout (2-min, High Edge)</b> will auto-activate at 09:14 AM if no choice is made.\n\n"
         "👇 <b>Tap an option below:</b>"
     )
     buttons = [
         [
-            {"text": "🌊 VWAP Pullback (2m - Default)", "callback_data": "strat_vwap_2m"},
+            {"text": "⚡ ORB Breakout (2m - Recommended)", "callback_data": "strat_orb_2m"},
             {"text": "⚡ ORB Breakout (5m)", "callback_data": "strat_orb_5m"}
         ],
         [
-            {"text": "⏸️ Don't Start Today (Skip Session)", "callback_data": "strat_skip"}
+            {"text": "🌊 VWAP Pullback (2m)", "callback_data": "strat_vwap_2m"},
+            {"text": "⏸️ Skip Today's Session", "callback_data": "strat_skip"}
         ]
     ]
     send_telegram_interactive(msg, buttons)
@@ -217,13 +218,18 @@ def notify_morning_scan(scan_result: Dict[str, Any]):
         msg += f"🟢 <b>TOP LONG BREAKOUT:</b> <code>{tl['symbol']}</code>\n"
         msg += f"• Price: ₹{tl['price']:.2f} ({tl['change_pct']:+0.2f}%)\n"
         msg += f"• Institutional RVOL: <b>{tl['rvol']}x</b>\n"
+        if tl.get("edge_tier"):
+            msg += f"• Factor Edge: <b>Tier {tl.get('edge_tier')} ({tl.get('hist_wr')}% WR | PF {tl.get('hist_pf')})</b>\n"
         msg += f"• Target (2R): ₹{tl['target_2r']} | SL: ₹{tl['stop_loss']}\n\n"
 
     if len(top_longs) > 1:
         tl2 = top_longs[1]
         top_syms.append(tl2['symbol'])
         msg += f"🟢 <b>RUNNER-UP LONG:</b> <code>{tl2['symbol']}</code>\n"
-        msg += f"• Price: ₹{tl2['price']:.2f} ({tl2['change_pct']:+0.2f}%) | RVOL: <b>{tl2['rvol']}x</b>\n\n"
+        msg += f"• Price: ₹{tl2['price']:.2f} ({tl2['change_pct']:+0.2f}%) | RVOL: <b>{tl2['rvol']}x</b>\n"
+        if tl2.get("edge_tier"):
+            msg += f"• Factor Edge: <b>Tier {tl2.get('edge_tier')} ({tl2.get('hist_wr')}% WR | PF {tl2.get('hist_pf')})</b>\n"
+        msg += "\n"
 
     if top_shorts:
         ts = top_shorts[0]
@@ -298,8 +304,8 @@ def handle_telegram_callback(cb_data: str):
     """Processes button taps received from Telegram."""
     cfg = get_active_config()
 
-    if cb_data == "strat_vwap_2m":
-        cfg["strategy"] = "NSE Midday VWAP Pullback"
+    if cb_data == "strat_orb_2m":
+        cfg["strategy"] = "NSE Intraday ORB Breakout"
         cfg["timeframe"] = "2m"
         cfg["status"] = "ACTIVE (MONITORING)"
         cfg["skip_today"] = False
@@ -307,10 +313,10 @@ def handle_telegram_callback(cb_data: str):
         save_active_config(cfg)
         send_telegram_alert(
             "✅ <b>CONFIGURATION SAVED!</b>\n\n"
-            "• <b>Strategy:</b> NSE Midday VWAP Pullback\n"
+            "• <b>Strategy:</b> NSE Intraday ORB Breakout (High Edge)\n"
             "• <b>Timeframe:</b> 2-minute candles\n"
             "• <b>Status:</b> ACTIVE (Monitoring)\n\n"
-            "<i>The bot will monitor for VWAP entries once the market opens at 09:15 AM.</i>"
+            "<i>The bot will monitor for Opening Range Breakouts once the market opens at 09:15 AM.</i>"
         )
 
     elif cb_data == "strat_orb_5m":
@@ -326,6 +332,21 @@ def handle_telegram_callback(cb_data: str):
             "• <b>Timeframe:</b> 5-minute candles\n"
             "• <b>Status:</b> ACTIVE (Monitoring)\n\n"
             "<i>The bot will evaluate the 09:15-09:30 AM Opening Range breakout.</i>"
+        )
+
+    elif cb_data == "strat_vwap_2m":
+        cfg["strategy"] = "NSE Midday VWAP Pullback"
+        cfg["timeframe"] = "2m"
+        cfg["status"] = "ACTIVE (MONITORING)"
+        cfg["skip_today"] = False
+        cfg["user_selected"] = True
+        save_active_config(cfg)
+        send_telegram_alert(
+            "✅ <b>CONFIGURATION SAVED!</b>\n\n"
+            "• <b>Strategy:</b> NSE Midday VWAP Pullback\n"
+            "• <b>Timeframe:</b> 2-minute candles\n"
+            "• <b>Status:</b> ACTIVE (Monitoring)\n\n"
+            "<i>The bot will monitor for VWAP entries once the market opens at 09:15 AM.</i>"
         )
 
     elif cb_data in ["strat_skip", "pick_skip"]:
