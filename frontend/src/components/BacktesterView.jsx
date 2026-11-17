@@ -50,29 +50,36 @@ export default function BacktesterView({
   const isNetWin = summary && summary.net_pnl >= 0;
 
   return (
-    <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: 'calc(100vh - 70px)' }}>
+    <div style={{
+      display: 'flex',
+      flex: 1,
+      overflow: 'hidden',
+      height: 'calc(100vh - 70px)',
+      backgroundColor: '#0c0e14',
+      color: '#ffffff'
+    }}>
       {/* ── Left Parameter Studio Control Panel ───────────────────────── */}
       <aside style={{
         width: '320px',
         minWidth: '320px',
-        backgroundColor: '#ffffff',
-        borderRight: '1px solid #e5e7eb',
+        backgroundColor: '#161922',
+        borderRight: '1px solid #242938',
         padding: '24px 20px',
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
         overflowY: 'auto'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #f3f4f6', paddingBottom: '14px' }}>
-          <Sliders size={18} color="#059669" />
-          <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#111827' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #242938', paddingBottom: '14px' }}>
+          <Sliders size={18} color="#00d09c" />
+          <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#ffffff' }}>
             Strategy Studio
           </span>
         </div>
 
         {/* 1. Target Market */}
         <div>
-          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
             1. Target Market
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginTop: '6px' }}>
@@ -87,9 +94,9 @@ export default function BacktesterView({
                 style={{
                   padding: '7px 4px',
                   borderRadius: '10px',
-                  border: selectedMarket === m.id ? '1px solid #059669' : '1px solid #e5e7eb',
-                  backgroundColor: selectedMarket === m.id ? '#e6f4ea' : '#f9fafb',
-                  color: selectedMarket === m.id ? '#059669' : '#6b7280',
+                  border: selectedMarket === m.id ? '1px solid #00d09c' : '1px solid #242938',
+                  backgroundColor: selectedMarket === m.id ? 'rgba(0, 208, 156, 0.15)' : '#0c0e14',
+                  color: selectedMarket === m.id ? '#00d09c' : '#9ca3af',
                   fontWeight: '700',
                   fontSize: '0.72rem',
                   display: 'flex',
@@ -109,10 +116,10 @@ export default function BacktesterView({
         {/* 2. Ticker Symbol */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
               2. Ticker Symbol
             </label>
-            <span style={{ fontSize: '0.7rem', color: '#059669', fontFamily: "'JetBrains Mono', monospace", fontWeight: '700' }}>
+            <span style={{ fontSize: '0.7rem', color: '#00d09c', fontFamily: "'JetBrains Mono', monospace", fontWeight: '700' }}>
               {customSymbol || symbol}
             </span>
           </div>
@@ -127,9 +134,9 @@ export default function BacktesterView({
                   fontWeight: '600',
                   padding: '4px 8px',
                   borderRadius: '6px',
-                  backgroundColor: symbol === p.ticker && !customSymbol ? '#e6f4ea' : '#f9fafb',
-                  color: symbol === p.ticker && !customSymbol ? '#059669' : '#6b7280',
-                  border: symbol === p.ticker && !customSymbol ? '1px solid #059669' : '1px solid #e5e7eb',
+                  backgroundColor: symbol === p.ticker && !customSymbol ? 'rgba(0, 208, 156, 0.15)' : '#0c0e14',
+                  color: symbol === p.ticker && !customSymbol ? '#00d09c' : '#9ca3af',
+                  border: symbol === p.ticker && !customSymbol ? '1px solid #00d09c' : '1px solid #242938',
                   cursor: 'pointer'
                 }}
               >
@@ -140,17 +147,17 @@ export default function BacktesterView({
 
           <input
             type="text"
-            placeholder="Or custom ticker (e.g. BAJFINANCE)..."
+            placeholder="Or custom ticker (e.g. SBIN)..."
             value={customSymbol}
             onChange={(e) => setCustomSymbol(e.target.value.toUpperCase())}
             style={{
               width: '100%',
               marginTop: '6px',
               padding: '8px 10px',
-              backgroundColor: '#f9fafb',
-              border: '1px solid #e5e7eb',
+              backgroundColor: '#0c0e14',
+              border: '1px solid #242938',
               borderRadius: '8px',
-              color: '#111827',
+              color: '#ffffff',
               fontSize: '0.8rem',
               outline: 'none'
             }}
@@ -159,7 +166,7 @@ export default function BacktesterView({
 
         {/* 3. Timeframe */}
         <div>
-          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
             3. Candle Interval
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px', marginTop: '6px' }}>
@@ -177,9 +184,9 @@ export default function BacktesterView({
                   fontSize: '0.72rem',
                   fontWeight: '700',
                   borderRadius: '6px',
-                  backgroundColor: interval === tf ? '#059669' : '#f9fafb',
-                  color: interval === tf ? '#ffffff' : '#6b7280',
-                  border: interval === tf ? '1px solid #059669' : '1px solid #e5e7eb',
+                  backgroundColor: interval === tf ? '#00d09c' : '#0c0e14',
+                  color: interval === tf ? '#0c0e14' : '#9ca3af',
+                  border: interval === tf ? '1px solid #00d09c' : '1px solid #242938',
                   cursor: 'pointer'
                 }}
               >
@@ -192,10 +199,10 @@ export default function BacktesterView({
         {/* 4. Lookback Period */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
               4. Lookback Period
             </label>
-            <span style={{ fontSize: '0.75rem', color: '#111827', fontWeight: '700' }}>
+            <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: '700' }}>
               {lookbackDays} Days
             </span>
           </div>
@@ -205,17 +212,17 @@ export default function BacktesterView({
             max={interval === "1m" || interval === "2m" ? "7" : (interval === "1d" ? "730" : "60")}
             value={lookbackDays}
             onChange={(e) => setLookbackDays(Number(e.target.value))}
-            style={{ width: '100%', marginTop: '6px', accentColor: '#059669' }}
+            style={{ width: '100%', marginTop: '6px', accentColor: '#00d09c' }}
           />
         </div>
 
         {/* 5. Starting Capital */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
               5. Starting Capital
             </label>
-            <span style={{ fontSize: '0.7rem', color: '#059669', fontWeight: '700', fontFamily: "'JetBrains Mono', monospace" }}>
+            <span style={{ fontSize: '0.7rem', color: '#00d09c', fontWeight: '700', fontFamily: "'JetBrains Mono', monospace" }}>
               {currency}{initialCapital.toLocaleString()} {selectedMarket === "INDIA" && initialCapital >= 100000 ? `(${(initialCapital / 100000).toFixed(2)}L)` : ''}
             </span>
           </div>
@@ -228,10 +235,10 @@ export default function BacktesterView({
               width: '100%',
               marginTop: '6px',
               padding: '8px 10px',
-              backgroundColor: '#f9fafb',
-              border: '1px solid #e5e7eb',
+              backgroundColor: '#0c0e14',
+              border: '1px solid #242938',
               borderRadius: '8px',
-              color: '#111827',
+              color: '#ffffff',
               fontSize: '0.8rem',
               outline: 'none'
             }}
@@ -240,7 +247,7 @@ export default function BacktesterView({
 
         {/* 6. Trading Strategy */}
         <div>
-          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
             6. Quantitative Strategy
           </label>
           <select
@@ -250,13 +257,14 @@ export default function BacktesterView({
               width: '100%',
               marginTop: '6px',
               padding: '8px 10px',
-              backgroundColor: '#f9fafb',
-              border: '1px solid #e5e7eb',
+              backgroundColor: '#0c0e14',
+              border: '1px solid #242938',
               borderRadius: '8px',
-              color: '#111827',
-              fontWeight: '500',
+              color: '#00d09c',
+              fontWeight: '600',
               fontSize: '0.8rem',
-              outline: 'none'
+              outline: 'none',
+              cursor: 'pointer'
             }}
           >
             {filteredStrategies.map(s => (
@@ -274,20 +282,20 @@ export default function BacktesterView({
               width: '100%',
               padding: '12px',
               borderRadius: '12px',
-              backgroundColor: loading ? '#9ca3af' : '#059669',
-              color: '#ffffff',
-              fontWeight: '700',
+              backgroundColor: loading ? '#242938' : '#00d09c',
+              color: loading ? '#9ca3af' : '#0c0e14',
+              fontWeight: '800',
               fontSize: '0.85rem',
               border: 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              boxShadow: '0 4px 12px rgba(5, 150, 105, 0.25)',
+              boxShadow: '0 4px 14px rgba(0, 208, 156, 0.3)',
               cursor: loading ? 'not-allowed' : 'pointer'
             }}
           >
-            <Play size={14} fill="#ffffff" />
+            <Play size={14} fill={loading ? "#9ca3af" : "#0c0e14"} />
             {loading ? "EXECUTING SIMULATION..." : "RUN STRATEGY SIMULATION"}
           </button>
         </div>
@@ -299,9 +307,9 @@ export default function BacktesterView({
           <div style={{
             padding: '12px 16px',
             borderRadius: '12px',
-            backgroundColor: '#fee2e2',
-            border: '1px solid #fca5a5',
-            color: '#dc2626',
+            backgroundColor: 'rgba(235, 91, 60, 0.15)',
+            border: '1px solid #eb5b3c',
+            color: '#eb5b3c',
             fontSize: '0.85rem'
           }}>
             <b>Error:</b> {errorMsg}
@@ -313,34 +321,33 @@ export default function BacktesterView({
           <div style={{
             padding: '16px 20px',
             borderRadius: '16px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #a7f3d0',
+            backgroundColor: '#161922',
+            border: '1px solid #00d09c',
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.03)'
+            gap: '16px'
           }}>
             <div style={{
               width: '24px',
               height: '24px',
               minWidth: '24px',
-              border: '3px solid #e5e7eb',
-              borderTopColor: '#059669',
+              border: '3px solid #242938',
+              borderTopColor: '#00d09c',
               borderRadius: '50%',
               animation: 'spin 0.8s linear infinite'
             }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: '700', color: '#111827' }}>
+              <span style={{ fontSize: '0.875rem', fontWeight: '700', color: '#ffffff' }}>
                 Executing Quantitative Simulation for {customSymbol || symbol} ({interval})
               </span>
-              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                Fetching historical price bars, calculating indicators for {selectedStrategy}, and applying SEBI statutory friction...
+              <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
+                Calculating indicators for {selectedStrategy} and applying statutory friction...
               </span>
             </div>
           </div>
         )}
 
-        {/* Quixotic 4 KPI Cards */}
+        {/* Groww 4 KPI Cards */}
         {summary && (
           <div style={{
             display: 'grid',
@@ -349,17 +356,16 @@ export default function BacktesterView({
           }}>
             {/* Card 1: Net P&L */}
             <div style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #e5e7eb',
-              borderRadius: '20px',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+              backgroundColor: '#161922',
+              border: '1px solid #242938',
+              borderRadius: '16px',
               padding: '20px 22px',
               display: 'flex',
               flexDirection: 'column',
               gap: '6px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600' }}>
+                <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
                   Net Strategy P&L
                 </span>
                 <span style={{
@@ -367,90 +373,87 @@ export default function BacktesterView({
                   borderRadius: '6px',
                   fontSize: '0.72rem',
                   fontWeight: '700',
-                  backgroundColor: isNetWin ? '#e6f4ea' : '#fee2e2',
-                  color: isNetWin ? '#059669' : '#dc2626'
+                  backgroundColor: isNetWin ? 'rgba(0, 208, 156, 0.15)' : 'rgba(235, 91, 60, 0.15)',
+                  color: isNetWin ? '#00d09c' : '#eb5b3c'
                 }}>
                   {summary.total_return_pct >= 0 ? '+' : ''}{summary.total_return_pct}%
                 </span>
               </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: isNetWin ? '#059669' : '#dc2626' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: isNetWin ? '#00d09c' : '#eb5b3c' }}>
                 {summary.net_pnl >= 0 ? '+' : ''}{currency}{summary.net_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
+              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
                 {summary.net_pnl_formatted}
               </span>
             </div>
 
             {/* Card 2: Final Equity */}
             <div style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #e5e7eb',
-              borderRadius: '20px',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+              backgroundColor: '#161922',
+              border: '1px solid #242938',
+              borderRadius: '16px',
               padding: '20px 22px',
               display: 'flex',
               flexDirection: 'column',
               gap: '6px'
             }}>
-              <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600' }}>
+              <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
                 Final Portfolio Equity
               </span>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#111827' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>
                 {currency}{summary.final_equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
+              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
                 {summary.final_equity_formatted}
               </span>
             </div>
 
             {/* Card 3: Win Rate */}
             <div style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #e5e7eb',
-              borderRadius: '20px',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+              backgroundColor: '#161922',
+              border: '1px solid #242938',
+              borderRadius: '16px',
               padding: '20px 22px',
               display: 'flex',
               flexDirection: 'column',
               gap: '6px'
             }}>
-              <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600' }}>
+              <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
                 Win Rate
               </span>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: summary.win_rate >= 50 ? '#059669' : '#dc2626' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: summary.win_rate >= 50 ? '#00d09c' : '#eb5b3c' }}>
                 {summary.win_rate} %
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
+              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
                 {summary.winning_trades}W / {summary.losing_trades}L ({summary.total_trades} Trades)
               </span>
             </div>
 
             {/* Card 4: Sharpe Ratio */}
             <div style={{
-              backgroundColor: '#ffffff',
-              border: '1px solid #e5e7eb',
-              borderRadius: '20px',
-              boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+              backgroundColor: '#161922',
+              border: '1px solid #242938',
+              borderRadius: '16px',
               padding: '20px 22px',
               display: 'flex',
               flexDirection: 'column',
               gap: '6px'
             }}>
-              <span style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: '600' }}>
+              <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
                 Sharpe Ratio
               </span>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: summary.sharpe_ratio > 0 ? '#059669' : '#dc2626' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: summary.sharpe_ratio > 0 ? '#00d09c' : '#eb5b3c' }}>
                 {summary.sharpe_ratio}
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#9ca3af' }}>
-                Profit Factor: <b style={{ color: '#111827' }}>{summary.profit_factor}</b> • Fee: -{currency}{summary.total_charges.toFixed(0)}
+              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
+                Profit Factor: <b style={{ color: '#ffffff' }}>{summary.profit_factor}</b> • Fee: -{currency}{summary.total_charges.toFixed(0)}
               </span>
             </div>
           </div>
         )}
 
         {/* View Toggle Tabs */}
-        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '10px' }}>
+        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #242938', paddingBottom: '10px' }}>
           {[
             { id: "CHART", label: "📊 Candlestick Chart & Fills" },
             { id: "EQUITY", label: "📈 Portfolio Equity Curve" },
@@ -465,9 +468,8 @@ export default function BacktesterView({
                 fontWeight: '700',
                 borderRadius: '10px',
                 border: 'none',
-                backgroundColor: subView === tab.id ? '#059669' : '#ffffff',
-                color: subView === tab.id ? '#ffffff' : '#6b7280',
-                boxShadow: subView === tab.id ? '0 2px 8px rgba(5,150,105,0.2)' : 'none',
+                backgroundColor: subView === tab.id ? '#00d09c' : '#161922',
+                color: subView === tab.id ? '#0c0e14' : '#9ca3af',
                 cursor: 'pointer'
               }}
             >

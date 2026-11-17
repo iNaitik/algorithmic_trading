@@ -6,12 +6,13 @@ import {
   FileText,
   ShieldCheck,
   Settings,
-  HelpCircle,
   TrendingUp,
   Search,
   Bell,
-  Calendar,
-  Plus
+  Sliders,
+  ChevronDown,
+  Moon,
+  Sparkles
 } from 'lucide-react';
 
 import LiveBotDashboard from './components/LiveBotDashboard';
@@ -20,6 +21,7 @@ import FactorMatrixView from './components/FactorMatrixView';
 import MorningScannerView from './components/MorningScannerView';
 import TelegramModal from './components/TelegramModal';
 import TradeJournal from './components/TradeJournal';
+import GrowwUserProfileDropdown from './components/GrowwUserProfileDropdown';
 
 export default function App() {
   // Clear any legacy terminal edition from localStorage
@@ -29,11 +31,10 @@ export default function App() {
     } catch (e) {}
   }, []);
 
-  // Navigation active tab: 'dashboard', 'backtester', 'matrix', 'journal', 'risk'
-  const [activeTab, setActiveTab] = useState("dashboard");
+  // Primary Groww navigation category
+  const [activeTab, setActiveTab] = useState("dashboard"); // "dashboard", "backtester", "scanner", "matrix", "journal", "risk"
   const [isTelegramOpen, setIsTelegramOpen] = useState(false);
-
-  // Global search
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Market & API definitions
@@ -42,7 +43,7 @@ export default function App() {
 
   // Form selections for Backtester
   const [selectedMarket, setSelectedMarket] = useState("INDIA");
-  const [symbol, setSymbol] = useState("RELIANCE.NS");
+  const [symbol, setSymbol] = useState("SBIN.NS");
   const [customSymbol, setCustomSymbol] = useState("");
   const [interval, setInterval] = useState("5m");
   const [lookbackDays, setLookbackDays] = useState(60);
@@ -88,7 +89,7 @@ export default function App() {
       if (!isNaN(v)) parsed = v * 1000.0;
     } else if (raw.endsWith('m') || raw.endsWith('million')) {
       const v = parseFloat(raw.replace(/million|m/g, ''));
-      if (!isNaN(v)) parsed = v * 1000000.0;
+      if (!isNaN(v)) parsed = v * 100000.0;
     } else {
       const v = parseFloat(raw);
       if (!isNaN(v) && v > 0) parsed = v;
@@ -100,7 +101,7 @@ export default function App() {
   const handleMarketChange = (m) => {
     setSelectedMarket(m);
     if (m === "INDIA") {
-      setSymbol("RELIANCE.NS");
+      setSymbol("SBIN.NS");
       setCapitalInput("10L");
       setInterval("5m");
       setLookbackDays(60);
@@ -158,361 +159,383 @@ export default function App() {
     }
   }, [strategiesList]);
 
-  // Quixotic Top Navigation Pills
-  const topNavTabs = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "backtester", label: "Strategy Backtester" },
-    { id: "matrix", label: "Factor Matrix" },
-    { id: "scanner", label: "⚡ Morning Scanner" },
-    { id: "journal", label: "Trade Journal" },
-    { id: "risk", label: "Risk Guardrails" }
+  // Groww Top Navigation Items
+  const growwNavTabs = [
+    { id: "dashboard", label: "Stocks", badge: "BOT" },
+    { id: "scanner", label: "Morning Scanner", badge: "⚡" },
+    { id: "backtester", label: "Backtester", badge: null },
+    { id: "matrix", label: "Factor Matrix", badge: null },
+    { id: "journal", label: "Trade Journal", badge: null },
+    { id: "risk", label: "Risk Guardrails", badge: null }
   ];
 
   const currentMarketDef = marketDefs?.markets.find(m => m.id === selectedMarket);
   const currency = currentMarketDef?.currency || (selectedMarket === "INDIA" ? "₹" : "$");
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f2f4f7', color: '#111827', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-      {/* ── Left Slim Floating Icon Rail (Matches Quixotic Left Rail) ── */}
-      <aside className="app-sidebar" style={{
-        width: '74px',
-        minWidth: '74px',
-        backgroundColor: '#ffffff',
-        borderRight: '1px solid #e5e7eb',
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100vh',
+      backgroundColor: '#0c0e14',
+      color: '#ffffff',
+      fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    }}>
+
+      {/* ── Groww Main Header Bar (Matches Groww Desktop Screenshot 1 & 4) ── */}
+      <header style={{
+        height: '70px',
+        backgroundColor: '#0c0e14',
+        borderBottom: '1px solid #1f2430',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: '24px 0',
-        zIndex: 50
+        padding: '0 32px',
+        gap: '24px',
+        position: 'sticky',
+        top: 0,
+        zIndex: 1000
       }}>
-        {/* Top Floating App Icon */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+        {/* Left: Groww Iconic Logo + Category Navigation */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+          {/* Groww Iconic Brand Logo */}
           <div
             onClick={() => setActiveTab("dashboard")}
             style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              backgroundColor: '#059669',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+              gap: '12px',
               cursor: 'pointer'
             }}
           >
-            {/* 4 dots logo */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px' }}>
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
-              <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#ffffff' }} />
-            </div>
-          </div>
-
-          {/* Icon Navigation Buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
-            {[
-              { id: "dashboard", icon: Activity, title: "Live Paper Bot" },
-              { id: "backtester", icon: BarChart2, title: "Strategy Backtester" },
-              { id: "matrix", icon: Layers, title: "Factor Matrix" },
-              { id: "journal", icon: FileText, title: "Trade Journal" },
-              { id: "risk", icon: ShieldCheck, title: "Risk Controls" }
-            ].map(item => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  title={item.title}
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    backgroundColor: isActive ? '#e6f4ea' : 'transparent',
-                    color: isActive ? '#059669' : '#9ca3af',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <Icon size={20} color={isActive ? '#059669' : '#9ca3af'} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Bottom Settings Button */}
-        <button
-          onClick={() => setActiveTab("risk")}
-          title="Risk & Settings"
-          style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
-            border: 'none',
-            backgroundColor: 'transparent',
-            color: '#9ca3af',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer'
-          }}
-        >
-          <Settings size={20} color="#9ca3af" />
-        </button>
-      </aside>
-
-      {/* ── Main Canvas ───────────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {/* ── Quixotic Top Navigation Bar ─────────────────────────────── */}
-        <header className="app-header" style={{
-          height: '74px',
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e5e7eb',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 32px',
-          gap: '24px'
-        }}>
-          {/* Logo Brand: Quixotic */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Groww Teal Circular Emblem */}
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '38px',
+              height: '38px',
               borderRadius: '50%',
-              backgroundColor: '#e6f4ea',
+              backgroundColor: '#00d09c',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              border: '2px solid #059669'
+              boxShadow: '0 4px 14px rgba(0, 208, 156, 0.4)'
             }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#059669' }}>Q</span>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="9" stroke="#0c0e14" strokeWidth="2.5" />
+                <path d="M12 7V12L15.5 14" stroke="#0c0e14" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
             </div>
-            <span style={{ fontSize: '1.2rem', fontWeight: '700', color: '#111827', letterSpacing: '-0.02em' }}>
-              Quixotic <span style={{ color: '#059669', fontSize: '0.85rem' }}>Quant</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.02em' }}>
+              Groww
             </span>
           </div>
 
-          {/* Center: Rounded Navigation Pills Bar */}
-          <div className="app-nav-pills" style={{
+          {/* Primary Nav Category Links */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {growwNavTabs.map(tab => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '24px',
+                    border: 'none',
+                    backgroundColor: isActive ? 'rgba(0, 208, 156, 0.12)' : 'transparent',
+                    color: isActive ? '#00d09c' : '#9ca3af',
+                    fontSize: '0.9rem',
+                    fontWeight: isActive ? '700' : '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.color = '#ffffff';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.color = '#9ca3af';
+                  }}
+                >
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span style={{
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      fontSize: '0.68rem',
+                      fontWeight: '800',
+                      backgroundColor: isActive ? '#00d09c' : '#242938',
+                      color: isActive ? '#0c0e14' : '#00d09c'
+                    }}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Center: Universal Search Bar (Matches Groww Screenshot: "Search Groww.... Ctrl+K") */}
+        <div style={{ flex: 1, maxWidth: '440px', position: 'relative' }}>
+          <div style={{
             display: 'flex',
-            backgroundColor: '#f3f4f6',
-            padding: '4px',
-            borderRadius: '16px',
-            overflowX: 'auto',
-            maxWidth: '100%'
+            alignItems: 'center',
+            backgroundColor: '#161922',
+            border: '1px solid #242938',
+            borderRadius: '24px',
+            padding: '8px 16px',
+            gap: '10px'
           }}>
-            {topNavTabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: '8px 18px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  backgroundColor: activeTab === tab.id ? '#ffffff' : 'transparent',
-                  color: activeTab === tab.id ? '#111827' : '#6b7280',
-                  fontSize: '0.825rem',
-                  fontWeight: activeTab === tab.id ? '700' : '500',
-                  boxShadow: activeTab === tab.id ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
+            <Search size={16} color="#9ca3af" />
+            <input
+              type="text"
+              placeholder="Search Groww... (e.g. SBIN, ORB, Reliance)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                flex: 1,
+                backgroundColor: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: '#ffffff',
+                fontSize: '0.85rem'
+              }}
+            />
+            <span style={{
+              fontSize: '0.7rem',
+              color: '#6b7280',
+              backgroundColor: '#202534',
+              padding: '2px 6px',
+              borderRadius: '6px',
+              fontWeight: '600'
+            }}>
+              Ctrl+K
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Market Pill, Telegram Modal Button, Notifications & User Avatar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', position: 'relative' }}>
+          {/* Market selector pill */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 12px',
+            backgroundColor: '#161922',
+            borderRadius: '16px',
+            border: '1px solid #242938',
+            fontSize: '0.78rem',
+            fontWeight: '700',
+            color: '#00d09c'
+          }}>
+            <span>🇮🇳 NSE</span>
           </div>
 
-          {/* Right: Search, Notification Bell, User Avatar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{
+          {/* Telegram Push Alerts Button */}
+          <button
+            onClick={() => setIsTelegramOpen(true)}
+            style={{
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
-              backgroundColor: '#f3f4f6',
-              borderRadius: '12px',
-              fontSize: '0.75rem',
-              fontWeight: '600',
-              color: '#4b5563'
-            }}>
-              <span>{selectedMarket === "INDIA" ? "🇮🇳 NSE" : (selectedMarket === "US" ? "🇺🇸 US" : "💱 FX")}</span>
-            </div>
+              padding: '7px 14px',
+              borderRadius: '20px',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              color: '#00d09c',
+              fontSize: '0.78rem',
+              fontWeight: '700',
+              border: '1px solid rgba(0, 208, 156, 0.3)',
+              cursor: 'pointer'
+            }}
+          >
+            📱 Telegram
+          </button>
 
-            <button
-              onClick={() => setIsTelegramOpen(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '7px 12px',
-                borderRadius: '10px',
-                backgroundColor: '#e6f4ea',
-                color: '#059669',
-                fontSize: '0.75rem',
-                fontWeight: '700',
-                border: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              📱 Telegram Alerts
-            </button>
-
-            <div
-              onClick={() => setIsTelegramOpen(true)}
-              title="Configure Telegram Mobile Notifications"
-              style={{
-                width: '40px',
-                height: '40px',
-                borderRadius: '50%',
-                backgroundColor: '#f3f4f6',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer'
-              }}
-            >
-              <Bell size={17} color="#4b5563" />
-            </div>
-
-            {/* User Profile Avatar with green status ring */}
-            <div style={{
-              width: '40px',
-              height: '40px',
+          {/* Notification Bell */}
+          <div
+            onClick={() => setIsTelegramOpen(true)}
+            title="Telegram Alert Settings"
+            style={{
+              width: '38px',
+              height: '38px',
               borderRadius: '50%',
-              backgroundColor: '#e6f4ea',
-              border: '2px solid #059669',
+              backgroundColor: '#161922',
+              border: '1px solid #242938',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontWeight: '700',
-              color: '#059669',
-              fontSize: '0.875rem',
               cursor: 'pointer'
-            }}>
-              N
-            </div>
+            }}
+          >
+            <Bell size={16} color="#9ca3af" />
           </div>
-        </header>
 
-        {/* ── Dynamic Main View Canvas ─────────────────────────────────── */}
-        <div className="app-content-area" style={{ flex: 1, overflowY: 'auto' }}>
-          {/* VIEW 1: DASHBOARD (Live Paper Bot) */}
-          {activeTab === "dashboard" && (
-            <LiveBotDashboard
-              market={selectedMarket}
+          {/* User Profile Avatar with dropdown trigger (Matches Groww Screenshot 4) */}
+          <div
+            onClick={() => setIsProfileOpen(!isProfileOpen)}
+            title="Naitik Seth • Groww Account"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              backgroundColor: '#1c2230',
+              border: '2px solid #00d09c',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: '800',
+              color: '#00d09c',
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+          >
+            N
+          </div>
+
+          {/* Groww User Profile Dropdown */}
+          <GrowwUserProfileDropdown
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            userName="Naitik Seth"
+            userEmail="sethnaitikgg77@gmail.com"
+            balance={1000000.0}
+            onNavigateToOrders={() => {
+              setActiveTab("dashboard");
+              setIsProfileOpen(false);
+            }}
+            onOpenSettings={() => {
+              setActiveTab("risk");
+              setIsProfileOpen(false);
+            }}
+          />
+        </div>
+      </header>
+
+      {/* ── Main Canvas ── */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        {/* VIEW 1: DASHBOARD (LIVE PAPER BOT - GROWW THEME) */}
+        {activeTab === "dashboard" && (
+          <LiveBotDashboard
+            market={selectedMarket}
+            currency={currency}
+            onNavigateToBacktest={() => setActiveTab("backtester")}
+          />
+        )}
+
+        {/* VIEW 2: STRATEGY BACKTESTER */}
+        {activeTab === "backtester" && (
+          <BacktesterView
+            marketDefs={marketDefs}
+            strategiesList={strategiesList}
+            selectedMarket={selectedMarket}
+            setSelectedMarket={handleMarketChange}
+            symbol={symbol}
+            setSymbol={setSymbol}
+            customSymbol={customSymbol}
+            setCustomSymbol={setCustomSymbol}
+            interval={interval}
+            setInterval={setInterval}
+            lookbackDays={lookbackDays}
+            setLookbackDays={setLookbackDays}
+            capitalInput={capitalInput}
+            setCapitalInput={setCapitalInput}
+            initialCapital={initialCapital}
+            selectedStrategy={selectedStrategy}
+            setSelectedStrategy={setSelectedStrategy}
+            loading={loading}
+            backtestResult={backtestResult}
+            errorMsg={errorMsg}
+            onRunBacktest={runBacktest}
+          />
+        )}
+
+        {/* VIEW 3: MORNING SCANNER */}
+        {activeTab === "scanner" && (
+          <MorningScannerView
+            onSelectForBacktest={(sym, strat) => {
+              setSymbol(sym);
+              if (strat) setSelectedStrategy(strat);
+              setActiveTab("backtester");
+              setTimeout(runBacktest, 100);
+            }}
+            onSelectForBot={(sym) => {
+              setSymbol(sym);
+              setActiveTab("dashboard");
+            }}
+            currency={currency}
+          />
+        )}
+
+        {/* VIEW 4: FACTOR MATRIX */}
+        {activeTab === "matrix" && (
+          <FactorMatrixView
+            onSelectCombination={(combo) => {
+              setSymbol(combo.asset);
+              setSelectedStrategy(combo.strategy);
+              setInterval(combo.timeframe);
+              setActiveTab("backtester");
+              setTimeout(runBacktest, 100);
+            }}
+            currency={currency}
+          />
+        )}
+
+        {/* VIEW 5: TRADE JOURNAL */}
+        {activeTab === "journal" && (
+          <div style={{ padding: '28px 36px', maxWidth: '1440px', margin: '0 auto', width: '100%' }}>
+            <TradeJournal
+              trades={backtestResult?.trades || []}
               currency={currency}
-              onNavigateToBacktest={() => setActiveTab("backtester")}
             />
-          )}
+          </div>
+        )}
 
-          {/* VIEW 2: STRATEGY BACKTESTER */}
-          {activeTab === "backtester" && (
-            <BacktesterView
-              marketDefs={marketDefs}
-              strategiesList={strategiesList}
-              selectedMarket={selectedMarket}
-              setSelectedMarket={handleMarketChange}
-              symbol={symbol}
-              setSymbol={setSymbol}
-              customSymbol={customSymbol}
-              setCustomSymbol={setCustomSymbol}
-              interval={interval}
-              setInterval={setInterval}
-              lookbackDays={lookbackDays}
-              setLookbackDays={setLookbackDays}
-              capitalInput={capitalInput}
-              setCapitalInput={setCapitalInput}
-              initialCapital={initialCapital}
-              selectedStrategy={selectedStrategy}
-              setSelectedStrategy={setSelectedStrategy}
-              loading={loading}
-              backtestResult={backtestResult}
-              errorMsg={errorMsg}
-              onRunBacktest={runBacktest}
-            />
-          )}
-
-          {/* VIEW 3: FACTOR MATRIX */}
-          {activeTab === "matrix" && (
-            <FactorMatrixView
-              onSelectCombination={(combo) => {
-                setSymbol(combo.asset);
-                setSelectedStrategy(combo.strategy);
-                setInterval(combo.timeframe);
-                setActiveTab("backtester");
-                setTimeout(runBacktest, 100);
-              }}
-              currency={currency}
-            />
-          )}
-
-          {/* VIEW: MORNING SCANNER */}
-          {activeTab === "scanner" && (
-            <MorningScannerView
-              onSelectForBacktest={(sym, strat) => {
-                setSymbol(sym);
-                if (strat) setSelectedStrategy(strat);
-                setActiveTab("backtester");
-                setTimeout(runBacktest, 100);
-              }}
-              onSelectForBot={(sym) => {
-                setSymbol(sym);
-                setActiveTab("dashboard");
-              }}
-              currency={currency}
-            />
-          )}
-
-          {/* VIEW 4: TRADE JOURNAL */}
-          {activeTab === "journal" && (
-            <div style={{ padding: '24px 36px' }}>
-              <TradeJournal
-                trades={backtestResult?.trades || []}
-                currency={currency}
-              />
-            </div>
-          )}
-
-          {/* VIEW 5: RISK GUARDRAILS */}
-          {activeTab === "risk" && (
-            <div style={{ padding: '24px 36px', maxWidth: '750px' }}>
-              <div style={{ backgroundColor: '#ffffff', border: '1px solid #e5e7eb', borderRadius: '20px', padding: '28px', boxShadow: '0 4px 20px -2px rgba(0,0,0,0.04)' }}>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '18px', color: '#111827' }}>
+        {/* VIEW 6: RISK GUARDRAILS */}
+        {activeTab === "risk" && (
+          <div style={{ padding: '36px', maxWidth: '840px', margin: '0 auto', width: '100%' }}>
+            <div style={{
+              backgroundColor: '#161922',
+              border: '1px solid #242938',
+              borderRadius: '20px',
+              padding: '32px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.45)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+                <ShieldCheck size={24} color="#00d09c" />
+                <h2 style={{ fontSize: '1.3rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>
                   Institutional Risk Controls & SEBI Compliance
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
-                    <span style={{ color: '#6b7280' }}>3:15 PM Auto Square-Off</span>
-                    <span style={{ color: '#059669', fontWeight: '700' }}>ENABLED (NSE Intraday MIS)</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
-                    <span style={{ color: '#6b7280' }}>Max Daily Drawdown Stop</span>
-                    <span style={{ color: '#dc2626', fontWeight: '700' }}>₹20,000 (2.0% Hard Circuit)</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #f3f4f6' }}>
-                    <span style={{ color: '#6b7280' }}>Peak Margin Leverage</span>
-                    <span style={{ color: '#2563eb', fontWeight: '700' }}>5x MIS (SEBI Compliant)</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#6b7280' }}>Survivorship & Calendar Filters</span>
-                    <span style={{ color: '#059669', fontWeight: '700' }}>Active (F&O Ban / Earnings)</span>
-                  </div>
+                </h2>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: '#9ca3af', marginBottom: '24px' }}>
+                Automated circuit breakers, intraday MIS margin limits, and mandatory square-off rules enforcing strict capital preservation.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '0.875rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#0c0e14', borderRadius: '12px', border: '1px solid #1f2430' }}>
+                  <span style={{ color: '#9ca3af', fontWeight: '600' }}>3:15 PM Auto Square-Off</span>
+                  <span style={{ color: '#00d09c', fontWeight: '800' }}>ENABLED (NSE Intraday MIS)</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#0c0e14', borderRadius: '12px', border: '1px solid #1f2430' }}>
+                  <span style={{ color: '#9ca3af', fontWeight: '600' }}>Max Daily Drawdown Stop</span>
+                  <span style={{ color: '#eb5b3c', fontWeight: '800' }}>₹20,000 (2.0% Hard Circuit)</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#0c0e14', borderRadius: '12px', border: '1px solid #1f2430' }}>
+                  <span style={{ color: '#9ca3af', fontWeight: '600' }}>Peak Margin Leverage</span>
+                  <span style={{ color: '#00d09c', fontWeight: '800' }}>5x MIS (SEBI Compliant)</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#0c0e14', borderRadius: '12px', border: '1px solid #1f2430' }}>
+                  <span style={{ color: '#9ca3af', fontWeight: '600' }}>Survivorship & Calendar Filters</span>
+                  <span style={{ color: '#00d09c', fontWeight: '800' }}>Active (F&O Ban / Earnings Filter)</span>
                 </div>
               </div>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        )}
+      </main>
 
       {/* Telegram Push Notification Settings Modal */}
       <TelegramModal
