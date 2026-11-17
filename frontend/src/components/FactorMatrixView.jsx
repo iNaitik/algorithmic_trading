@@ -49,91 +49,81 @@ export default function FactorMatrixView({
   const [taskError, setTaskError] = useState(null);
   const pollIntervalRef = useRef(null);
 
-  // Load initial options & summary
+  // Initial Fetch of Matrix Configuration Options and Results
   const fetchSummary = async () => {
+    setLoading(true);
     try {
-      const res = await fetch('/api/matrix/summary');
-      if (res.ok) {
-        const json = await res.json();
-        setMatrixData(json);
+      const [optRes, sumRes] = await Promise.all([
+        fetch('/api/matrix/options'),
+        fetch('/api/matrix/summary')
+      ]);
+
+      if (optRes.ok) {
+        const optData = await optRes.json();
+        setMatrixOptions(optData);
       }
-    } catch (e) {
-      console.error("Failed to load matrix summary:", e);
+
+      if (sumRes.ok) {
+        const sumData = await sumRes.json();
+        setMatrixData(sumData);
+      }
+    } catch (err) {
+      console.error("Failed to load factor matrix telemetry:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    const fetchOptionsAndSummary = async () => {
-      setLoading(true);
-      try {
-        const [optRes, sumRes] = await Promise.all([
-          fetch('/api/matrix/options'),
-          fetch('/api/matrix/summary')
-        ]);
-        if (optRes.ok) {
-          const optJson = await optRes.json();
-          setMatrixOptions(optJson);
-        }
-        if (sumRes.ok) {
-          const sumJson = await sumRes.json();
-          setMatrixData(sumJson);
-        }
-      } catch (e) {
-        console.error("Failed to load matrix config:", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchOptionsAndSummary();
+    fetchSummary();
   }, []);
 
-  // Poll task progress if running
+  // Poll Task Status when a matrix job is executing
   useEffect(() => {
-    if (!isRunningTask || !currentTaskId) {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-      return;
-    }
+    if (!currentTaskId) return;
 
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/matrix/task/${currentTaskId}`);
+        const res = await fetch(`/api/matrix/tasks/${currentTaskId}`);
         if (!res.ok) return;
-        const task = await res.json();
-        
-        if (task.progress) {
-          setTaskProgress(task.progress);
-        }
 
-        if (task.status === "COMPLETED") {
+        const data = await res.json();
+        setTaskProgress({
+          current: data.progress?.current || 0,
+          total: data.progress?.total || 0,
+          pct: data.progress?.pct || 0,
+          current_item: data.progress?.current_item || ""
+        });
+
+        if (data.status === "COMPLETED") {
           setIsRunningTask(false);
+          setCurrentTaskId(null);
           clearInterval(pollIntervalRef.current);
           fetchSummary();
-        } else if (task.status === "FAILED") {
+        } else if (data.status === "FAILED") {
           setIsRunningTask(false);
-          setTaskError(task.error || "Matrix evaluation encountered an error.");
+          setTaskError(data.error || "Matrix task failed");
+          setCurrentTaskId(null);
           clearInterval(pollIntervalRef.current);
         }
       } catch (err) {
-        console.error("Task polling error:", err);
+        console.error("Error polling matrix task status:", err);
       }
-    }, 600);
+    }, 1200);
 
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
-  }, [isRunningTask, currentTaskId]);
+    return () => clearInterval(pollIntervalRef.current);
+  }, [currentTaskId]);
 
-  // Execute Matrix Grid Backtest
+  // Execute Combinatorial Matrix Task
   const handleExecuteMatrix = async () => {
     if (selectedStocks.length === 0 || selectedTimeframes.length === 0 || selectedStrategies.length === 0) {
-      alert("Please select at least 1 Stock, 1 Timeframe, and 1 Strategy to evaluate.");
+      alert("Please select at least one stock, one timeframe, and one strategy.");
       return;
     }
 
     setIsRunningTask(true);
     setTaskError(null);
-    const total = selectedStocks.length * selectedTimeframes.length * selectedStrategies.length;
-    setTaskProgress({ current: 0, total, pct: 0, current_item: "Initializing matrix runner..." });
+    setTaskProgress({ current: 0, total: 0, pct: 0, current_item: "Initializing..." });
 
     try {
       const res = await fetch('/api/matrix/run', {
@@ -143,13 +133,14 @@ export default function FactorMatrixView({
           symbols: selectedStocks,
           timeframes: selectedTimeframes,
           strategies: selectedStrategies,
-          initial_capital: 1000000.0
+          initial_capital: 1000000.0,
+          lookback_days: 60
         })
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to start matrix backtest");
+        const errJson = await res.json();
+        throw new Error(errJson.detail || "Failed to trigger factor matrix evaluation");
       }
 
       const data = await res.json();
@@ -160,7 +151,7 @@ export default function FactorMatrixView({
     }
   };
 
-  // Toggle multi-select items
+  // Toggle selection helpers
   const toggleStock = (sym) => {
     setSelectedStocks(prev =>
       prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
@@ -175,7 +166,7 @@ export default function FactorMatrixView({
 
   const toggleStrategy = (strat) => {
     setSelectedStrategies(prev =>
-      prev.includes(strat) ? prev.filter(st => st !== strat) : [...prev, strat]
+      prev.includes(strat) ? prev.filter(s => s !== strat) : [...prev, strat]
     );
   };
 
@@ -252,9 +243,20 @@ export default function FactorMatrixView({
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', padding: '28px 36px', maxWidth: '1440px', margin: '0 auto' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
+      padding: '28px 32px',
+      maxWidth: '1440px',
+      margin: '0 auto',
+      width: '100%',
+      backgroundColor: '#080A0B',
+      color: '#F1F3F4',
+      fontFamily: "'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
+    }}>
       
-      {/* ── Page Header Banner ─────────────────────────────────────────── */}
+      {/* ── Page Header Banner ── */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -263,23 +265,23 @@ export default function FactorMatrixView({
         gap: '16px'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: '700', color: '#111827', letterSpacing: '-0.02em' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1 style={{ fontSize: '1.45rem', fontWeight: '800', color: '#F1F3F4', letterSpacing: '-0.02em', margin: 0 }}>
               Multi-Factor Matrix Backtester
             </h1>
             <span style={{
               fontSize: '0.72rem',
               fontWeight: '700',
-              padding: '3px 9px',
+              padding: '3px 10px',
               borderRadius: '20px',
-              backgroundColor: '#e6f4ea',
-              color: '#059669',
-              letterSpacing: '0.04em'
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              color: '#00D09C',
+              border: '1px solid rgba(0, 208, 156, 0.28)'
             }}>
               NSE INDIA MIS
             </span>
           </div>
-          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '4px' }}>
+          <p style={{ fontSize: '0.82rem', color: '#92999C', marginTop: '4px', margin: 0 }}>
             Combinatorial Factor Grid Engine: Cross-evaluate Multiple Stocks × Multiple Timeframes × Multiple Strategies simultaneously
           </p>
         </div>
@@ -288,33 +290,20 @@ export default function FactorMatrixView({
         <button
           onClick={fetchSummary}
           disabled={loading || isRunningTask}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 14px',
-            borderRadius: '12px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #e5e7eb',
-            color: '#374151',
-            fontSize: '0.8rem',
-            fontWeight: '600',
-            cursor: 'pointer',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
-          }}
+          className="btn-groww-secondary"
+          style={{ padding: '8px 16px', fontSize: '0.8rem' }}
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-          Refresh Matrix Data
+          <span>Refresh Matrix Data</span>
         </button>
       </div>
 
-      {/* ── Combinatorial Matrix Selection & Execution Panel ───────────── */}
+      {/* ── Combinatorial Matrix Selection & Execution Panel ── */}
       <div style={{
-        backgroundColor: '#ffffff',
-        borderRadius: '20px',
+        backgroundColor: '#151819',
+        borderRadius: '16px',
         padding: '24px 28px',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+        border: '1px solid #252A2C',
         display: 'flex',
         flexDirection: 'column',
         gap: '20px'
@@ -326,38 +315,36 @@ export default function FactorMatrixView({
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
-          borderBottom: '1px solid #f3f4f6',
+          borderBottom: '1px solid #252A2C',
           paddingBottom: '16px'
         }}>
           <div>
-            <div style={{ fontSize: '1rem', fontWeight: '700', color: '#111827' }}>
+            <div style={{ fontSize: '1rem', fontWeight: '800', color: '#F1F3F4' }}>
               Configure Factor Combinations Grid
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+            <div style={{ fontSize: '0.75rem', color: '#92999C', marginTop: '2px' }}>
               Select stocks, candle intervals, and quantitative algorithms to run cross-sectional evaluations
             </div>
           </div>
 
           {/* Quick Presets */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#9ca3af' }}>Presets:</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#92999C' }}>Presets:</span>
             {matrixOptions?.presets?.map(p => (
               <button
                 key={p.id}
                 onClick={() => applyPreset(p)}
                 style={{
                   padding: '6px 12px',
-                  borderRadius: '10px',
-                  backgroundColor: '#f3f4f6',
-                  color: '#374151',
+                  borderRadius: '8px',
+                  backgroundColor: '#101314',
+                  color: '#F1F3F4',
                   fontSize: '0.75rem',
                   fontWeight: '600',
-                  border: 'none',
+                  border: '1px solid #252A2C',
                   cursor: 'pointer',
-                  transition: 'background-color 0.15s'
+                  transition: 'all 0.15s'
                 }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e5e7eb'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f3f4f6'}
               >
                 {p.name}
               </button>
@@ -369,7 +356,7 @@ export default function FactorMatrixView({
                     timeframes: ["5m", "15m"],
                     strategies: ["NSE Intraday ORB Breakout", "NSE Midday VWAP Pullback"]
                   })}
-                  style={{ padding: '6px 12px', borderRadius: '10px', backgroundColor: '#f3f4f6', color: '#374151', fontSize: '0.75rem', fontWeight: '600', border: 'none', cursor: 'pointer' }}
+                  style={{ padding: '6px 12px', borderRadius: '8px', backgroundColor: '#101314', color: '#F1F3F4', fontSize: '0.75rem', fontWeight: '600', border: '1px solid #252A2C', cursor: 'pointer' }}
                 >
                   ⚡ Quick Test (8 Runs)
                 </button>
@@ -379,7 +366,7 @@ export default function FactorMatrixView({
                     timeframes: ["1m", "2m", "5m"],
                     strategies: ["NSE Intraday ORB Breakout", "NSE Midday VWAP Pullback", "NSE Failed-Gap Fade"]
                   })}
-                  style={{ padding: '6px 12px', borderRadius: '10px', backgroundColor: '#f3f4f6', color: '#374151', fontSize: '0.75rem', fontWeight: '600', border: 'none', cursor: 'pointer' }}
+                  style={{ padding: '6px 12px', borderRadius: '8px', backgroundColor: '#101314', color: '#F1F3F4', fontSize: '0.75rem', fontWeight: '600', border: '1px solid #252A2C', cursor: 'pointer' }}
                 >
                   🔥 Fast Core (36 Runs)
                 </button>
@@ -390,12 +377,12 @@ export default function FactorMatrixView({
               onClick={selectAll}
               style={{
                 padding: '6px 12px',
-                borderRadius: '10px',
-                backgroundColor: '#e6f4ea',
-                color: '#059669',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(0, 208, 156, 0.12)',
+                color: '#00D09C',
+                border: '1px solid rgba(0, 208, 156, 0.28)',
                 fontSize: '0.75rem',
                 fontWeight: '700',
-                border: 'none',
                 cursor: 'pointer'
               }}
             >
@@ -405,12 +392,12 @@ export default function FactorMatrixView({
               onClick={clearAll}
               style={{
                 padding: '6px 12px',
-                borderRadius: '10px',
-                backgroundColor: '#fef2f2',
-                color: '#dc2626',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(235, 91, 60, 0.12)',
+                color: '#EB5B3C',
+                border: '1px solid rgba(235, 91, 60, 0.28)',
                 fontSize: '0.75rem',
                 fontWeight: '600',
-                border: 'none',
                 cursor: 'pointer'
               }}
             >
@@ -425,7 +412,7 @@ export default function FactorMatrixView({
           {/* Section 1: Stocks Universe */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 1. Asset Universe ({selectedStocks.length} of {stockOptions.length} Selected)
               </span>
             </div>
@@ -441,17 +428,17 @@ export default function FactorMatrixView({
                       alignItems: 'center',
                       gap: '6px',
                       padding: '7px 14px',
-                      borderRadius: '10px',
+                      borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: isSelected ? '700' : '500',
-                      border: isSelected ? '1.5px solid #059669' : '1px solid #e5e7eb',
-                      backgroundColor: isSelected ? '#e6f4ea' : '#ffffff',
-                      color: isSelected ? '#059669' : '#4b5563',
+                      border: isSelected ? '1px solid #00D09C' : '1px solid #252A2C',
+                      backgroundColor: isSelected ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                      color: isSelected ? '#00D09C' : '#92999C',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    {isSelected ? <CheckSquare size={13} color="#059669" /> : <Square size={13} color="#9ca3af" />}
+                    {isSelected ? <CheckSquare size={13} color="#00D09C" /> : <Square size={13} color="#626A6E" />}
                     <span>{st.symbol}</span>
                     <span style={{ fontSize: '0.68rem', opacity: 0.7, marginLeft: '2px' }}>({st.sector.split(' ')[0]})</span>
                   </button>
@@ -463,7 +450,7 @@ export default function FactorMatrixView({
           {/* Section 2: Timeframes */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 2. Candle Timeframes ({selectedTimeframes.length} of {timeframeOptions.length} Selected)
               </span>
             </div>
@@ -479,17 +466,17 @@ export default function FactorMatrixView({
                       alignItems: 'center',
                       gap: '6px',
                       padding: '7px 14px',
-                      borderRadius: '10px',
+                      borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: isSelected ? '700' : '500',
-                      border: isSelected ? '1.5px solid #059669' : '1px solid #e5e7eb',
-                      backgroundColor: isSelected ? '#e6f4ea' : '#ffffff',
-                      color: isSelected ? '#059669' : '#4b5563',
+                      border: isSelected ? '1px solid #00D09C' : '1px solid #252A2C',
+                      backgroundColor: isSelected ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                      color: isSelected ? '#00D09C' : '#92999C',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    {isSelected ? <CheckSquare size={13} color="#059669" /> : <Square size={13} color="#9ca3af" />}
+                    {isSelected ? <CheckSquare size={13} color="#00D09C" /> : <Square size={13} color="#626A6E" />}
                     <span>{tf.id}</span>
                     <span style={{ fontSize: '0.68rem', opacity: 0.7 }}>({tf.label || `${tf.id} Bars`})</span>
                   </button>
@@ -501,7 +488,7 @@ export default function FactorMatrixView({
           {/* Section 3: Strategies */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 3. Quantitative Strategies ({selectedStrategies.length} of {strategyOptions.length} Selected)
               </span>
             </div>
@@ -517,17 +504,17 @@ export default function FactorMatrixView({
                       alignItems: 'center',
                       gap: '6px',
                       padding: '7px 14px',
-                      borderRadius: '10px',
+                      borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: isSelected ? '700' : '500',
-                      border: isSelected ? '1.5px solid #059669' : '1px solid #e5e7eb',
-                      backgroundColor: isSelected ? '#e6f4ea' : '#ffffff',
-                      color: isSelected ? '#059669' : '#4b5563',
+                      border: isSelected ? '1px solid #00D09C' : '1px solid #252A2C',
+                      backgroundColor: isSelected ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                      color: isSelected ? '#00D09C' : '#92999C',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease'
                     }}
                   >
-                    {isSelected ? <CheckSquare size={13} color="#059669" /> : <Square size={13} color="#9ca3af" />}
+                    {isSelected ? <CheckSquare size={13} color="#00D09C" /> : <Square size={13} color="#626A6E" />}
                     <span>{st.id}</span>
                   </button>
                 );
@@ -543,10 +530,10 @@ export default function FactorMatrixView({
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '16px',
-          backgroundColor: '#f9fafb',
-          borderRadius: '14px',
+          backgroundColor: '#080A0B',
+          borderRadius: '12px',
           padding: '16px 20px',
-          border: '1px solid #f3f4f6',
+          border: '1px solid #252A2C',
           marginTop: '4px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -554,20 +541,20 @@ export default function FactorMatrixView({
               width: '40px',
               height: '40px',
               borderRadius: '10px',
-              backgroundColor: '#e6f4ea',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#059669'
+              color: '#00D09C'
             }}>
               <Zap size={20} />
             </div>
             <div>
-              <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#111827' }}>
+              <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#F1F3F4' }}>
                 Combinatorial Grid: {selectedStocks.length} Stocks × {selectedTimeframes.length} TF × {selectedStrategies.length} Strats
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                Total: <strong style={{ color: '#059669' }}>{totalSelectedRuns} Factor Iterations</strong> using In-Memory Fast Cache Engine
+              <div style={{ fontSize: '0.75rem', color: '#92999C' }}>
+                Total: <strong style={{ color: '#00D09C' }}>{totalSelectedRuns} Factor Iterations</strong> using In-Memory Fast Cache Engine
               </div>
             </div>
           </div>
@@ -575,21 +562,8 @@ export default function FactorMatrixView({
           <button
             onClick={handleExecuteMatrix}
             disabled={isRunningTask || totalSelectedRuns === 0}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '12px 24px',
-              borderRadius: '12px',
-              backgroundColor: isRunningTask ? '#9ca3af' : '#059669',
-              color: '#ffffff',
-              fontSize: '0.85rem',
-              fontWeight: '700',
-              border: 'none',
-              cursor: isRunningTask ? 'not-allowed' : 'pointer',
-              boxShadow: '0 4px 14px rgba(5, 150, 105, 0.3)',
-              transition: 'background-color 0.2s'
-            }}
+            className="btn-groww-primary"
+            style={{ padding: '10px 22px', fontSize: '0.85rem' }}
           >
             {isRunningTask ? (
               <>
@@ -598,7 +572,7 @@ export default function FactorMatrixView({
               </>
             ) : (
               <>
-                <Play size={16} fill="#ffffff" />
+                <Play size={16} fill="#080A0B" />
                 <span>Execute Matrix ({totalSelectedRuns} Runs)</span>
               </>
             )}
@@ -608,8 +582,8 @@ export default function FactorMatrixView({
         {/* Live Progress Bar when Running */}
         {isRunningTask && (
           <div style={{
-            backgroundColor: '#f0fdf4',
-            border: '1px solid #bbf7d0',
+            backgroundColor: '#101314',
+            border: '1px solid #252A2C',
             borderRadius: '12px',
             padding: '14px 18px',
             display: 'flex',
@@ -617,22 +591,22 @@ export default function FactorMatrixView({
             gap: '8px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#00D09C', display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Clock size={14} className="animate-spin" />
                 {taskProgress.current_item || "Running combinations..."}
               </span>
-              <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#166534' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: '800', color: '#00D09C' }}>
                 [{taskProgress.current} / {taskProgress.total}] ({taskProgress.pct || 0}%)
               </span>
             </div>
 
             {/* Progress track */}
-            <div style={{ width: '100%', height: '8px', backgroundColor: '#dcfce7', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '6px', backgroundColor: '#252A2C', borderRadius: '3px', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${taskProgress.pct || 0}%`,
-                backgroundColor: '#059669',
-                borderRadius: '4px',
+                backgroundColor: '#00D09C',
+                borderRadius: '3px',
                 transition: 'width 0.3s ease'
               }} />
             </div>
@@ -642,11 +616,11 @@ export default function FactorMatrixView({
         {/* Error notification */}
         {taskError && (
           <div style={{
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fecaca',
+            backgroundColor: 'rgba(235, 91, 60, 0.12)',
+            border: '1px solid #EB5B3C',
             borderRadius: '12px',
             padding: '12px 16px',
-            color: '#dc2626',
+            color: '#EB5B3C',
             fontSize: '0.8rem',
             display: 'flex',
             alignItems: 'center',
@@ -658,47 +632,45 @@ export default function FactorMatrixView({
         )}
       </div>
 
-      {/* ── Top 3 Quixotic Summary Highlight Cards ──────────────────────── */}
+      {/* ── Top 3 Summary Highlight Cards ── */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(300px, 360px) 1fr minmax(280px, 320px)',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
         gap: '20px'
       }}>
         {/* Card 1: Emerald Hero Card (Alpha Leader) */}
         <div style={{
-          background: 'linear-gradient(135deg, #059669 0%, #007a4d 100%)',
-          borderRadius: '20px',
+          background: 'linear-gradient(135deg, rgba(0, 208, 156, 0.2) 0%, #151819 100%)',
+          borderRadius: '16px',
           padding: '24px',
-          color: '#ffffff',
+          border: '1px solid rgba(0, 208, 156, 0.35)',
+          color: '#F1F3F4',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          minHeight: '220px',
-          boxShadow: '0 8px 24px -4px rgba(5, 150, 105, 0.35)',
-          position: 'relative',
-          overflow: 'hidden'
+          minHeight: '200px'
         }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.9 }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.06em', color: '#00D09C' }}>
                 Prime Factor Alpha
               </span>
-              <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '6px', backgroundColor: 'rgba(255, 255, 255, 0.2)', fontWeight: '700' }}>
+              <span style={{ fontSize: '0.75rem', padding: '3px 8px', borderRadius: '6px', backgroundColor: 'rgba(0, 208, 156, 0.15)', color: '#00D09C', fontWeight: '700' }}>
                 {best?.timeframe || "5m"} Intraday
               </span>
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: '800', marginTop: '12px' }}>
+            <div style={{ fontSize: '1.75rem', fontWeight: '800', marginTop: '12px', color: '#F1F3F4' }}>
               {best?.symbol || best?.asset || "SBIN.NS"}
             </div>
-            <div style={{ fontSize: '0.85rem', opacity: 0.9, marginTop: '2px' }}>
+            <div style={{ fontSize: '0.85rem', color: '#92999C', marginTop: '2px' }}>
               {best?.strategy || "NSE Intraday ORB Breakout"}
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #252A2C', paddingTop: '14px' }}>
             <div>
-              <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>Sharpe Ratio</div>
-              <div style={{ fontSize: '1.3rem', fontWeight: '800' }}>
+              <div style={{ fontSize: '0.7rem', color: '#92999C' }}>Sharpe Ratio</div>
+              <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
                 {best?.sharpe != null ? best.sharpe.toFixed(2) : "2.15"}
               </div>
             </div>
@@ -708,8 +680,8 @@ export default function FactorMatrixView({
               gap: '4px',
               padding: '4px 10px',
               borderRadius: '20px',
-              backgroundColor: '#ffffff',
-              color: '#059669',
+              backgroundColor: 'rgba(0, 208, 156, 0.15)',
+              color: '#00D09C',
               fontWeight: '700',
               fontSize: '0.78rem'
             }}>
@@ -719,38 +691,36 @@ export default function FactorMatrixView({
           </div>
         </div>
 
-        {/* Card 2: Striped Mint Bar Chart (Timeframe Alpha Yield) */}
+        {/* Card 2: Timeframe Performance Yield */}
         <div style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '20px',
+          backgroundColor: '#151819',
+          borderRadius: '16px',
           padding: '22px 26px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+          border: '1px solid #252A2C',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#111827' }}>
+              <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#F1F3F4' }}>
                 Timeframe Performance Yield
               </span>
-              <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>Average net return across candle horizons</div>
+              <div style={{ fontSize: '0.72rem', color: '#92999C' }}>Average net return across candle horizons</div>
             </div>
             <span style={{
               fontSize: '0.72rem',
               fontWeight: '700',
               padding: '3px 8px',
               borderRadius: '8px',
-              backgroundColor: '#e6f4ea',
-              color: '#059669'
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              color: '#00D09C'
             }}>
               Intraday Alpha
             </span>
           </div>
 
-          {/* Mint Bar chart matching Theme */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', height: '120px', paddingTop: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', height: '110px', paddingTop: '16px' }}>
             {[
               { tf: "1m", val: 40, pct: "+4.2%", peak: false },
               { tf: "2m", val: 65, pct: "+8.6%", peak: false },
@@ -758,28 +728,14 @@ export default function FactorMatrixView({
               { tf: "15m", val: 55, pct: "+7.1%", peak: false }
             ].map(b => (
               <div key={b.tf} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', gap: '8px' }}>
-                {b.peak && (
-                  <span style={{
-                    fontSize: '0.68rem',
-                    fontWeight: '700',
-                    padding: '2px 6px',
-                    borderRadius: '12px',
-                    backgroundColor: '#059669',
-                    color: '#ffffff',
-                    marginBottom: '-4px'
-                  }}>
-                    {b.pct}
-                  </span>
-                )}
                 <div style={{
                   width: '100%',
                   height: `${b.val}%`,
-                  borderRadius: '10px',
-                  backgroundColor: b.peak ? '#059669' : '#a7f3d0',
-                  backgroundImage: b.peak ? 'none' : 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(5, 150, 105, 0.15) 4px, rgba(5, 150, 105, 0.15) 8px)',
+                  borderRadius: '6px',
+                  backgroundColor: b.peak ? '#00D09C' : '#252A2C',
                   transition: 'height 0.3s ease'
                 }} />
-                <span style={{ fontSize: '0.72rem', fontWeight: '600', color: b.peak ? '#059669' : '#6b7280' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: '600', color: b.peak ? '#00D09C' : '#92999C' }}>
                   {b.tf}
                 </span>
               </div>
@@ -789,20 +745,19 @@ export default function FactorMatrixView({
 
         {/* Card 3: Factor Health & Summary Metrics */}
         <div style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '20px',
+          backgroundColor: '#151819',
+          borderRadius: '16px',
           padding: '22px 24px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+          border: '1px solid #252A2C',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
           <div>
-            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase' }}>
               Universe Alpha Ratio
             </span>
-            <div style={{ fontSize: '1.9rem', fontWeight: '800', color: '#111827', marginTop: '4px' }}>
+            <div style={{ fontSize: '1.9rem', fontWeight: '800', color: '#F1F3F4', marginTop: '4px' }} className="font-tabular">
               {profitableRatio}%
             </div>
             <div style={{
@@ -811,8 +766,8 @@ export default function FactorMatrixView({
               gap: '4px',
               padding: '2px 8px',
               borderRadius: '6px',
-              backgroundColor: '#e6f4ea',
-              color: '#059669',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              color: '#00D09C',
               fontSize: '0.72rem',
               fontWeight: '700',
               marginTop: '6px'
@@ -821,16 +776,16 @@ export default function FactorMatrixView({
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: '14px', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ borderTop: '1px solid #252A2C', paddingTop: '14px', display: 'flex', justifyContent: 'space-between' }}>
             <div>
-              <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>Median Sharpe</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#111827' }}>
+              <div style={{ fontSize: '0.7rem', color: '#92999C' }}>Median Sharpe</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">
                 {stats.median_sharpe != null ? stats.median_sharpe.toFixed(2) : "1.45"}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>Avg Win Rate</div>
-              <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#059669' }}>
+              <div style={{ fontSize: '0.7rem', color: '#92999C' }}>Avg Win Rate</div>
+              <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#00D09C' }} className="font-tabular">
                 {stats.avg_win_rate != null ? `${stats.avg_win_rate}%` : "54.2%"}
               </div>
             </div>
@@ -838,18 +793,17 @@ export default function FactorMatrixView({
         </div>
       </div>
 
-      {/* ── Results Container: Leaderboard vs Heatmap ───────────────────── */}
+      {/* ── Results Container: Leaderboard vs Heatmap ── */}
       <div style={{
-        backgroundColor: '#ffffff',
-        borderRadius: '20px',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+        backgroundColor: '#151819',
+        borderRadius: '16px',
+        border: '1px solid #252A2C',
         overflow: 'hidden'
       }}>
         {/* Table Top Controls Bar */}
         <div style={{
-          padding: '18px 24px',
-          borderBottom: '1px solid #f3f4f6',
+          padding: '16px 20px',
+          borderBottom: '1px solid #252A2C',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -865,10 +819,10 @@ export default function FactorMatrixView({
                 alignItems: 'center',
                 gap: '6px',
                 padding: '7px 14px',
-                borderRadius: '10px',
+                borderRadius: '8px',
                 border: 'none',
-                backgroundColor: activeViewTab === "leaderboard" ? '#059669' : '#f3f4f6',
-                color: activeViewTab === "leaderboard" ? '#ffffff' : '#6b7280',
+                backgroundColor: activeViewTab === "leaderboard" ? '#00D09C' : '#080A0B',
+                color: activeViewTab === "leaderboard" ? '#080A0B' : '#92999C',
                 fontSize: '0.8rem',
                 fontWeight: '700',
                 cursor: 'pointer'
@@ -884,10 +838,10 @@ export default function FactorMatrixView({
                 alignItems: 'center',
                 gap: '6px',
                 padding: '7px 14px',
-                borderRadius: '10px',
+                borderRadius: '8px',
                 border: 'none',
-                backgroundColor: activeViewTab === "heatmap" ? '#059669' : '#f3f4f6',
-                color: activeViewTab === "heatmap" ? '#ffffff' : '#6b7280',
+                backgroundColor: activeViewTab === "heatmap" ? '#00D09C' : '#080A0B',
+                color: activeViewTab === "heatmap" ? '#080A0B' : '#92999C',
                 fontSize: '0.8rem',
                 fontWeight: '700',
                 cursor: 'pointer'
@@ -906,9 +860,10 @@ export default function FactorMatrixView({
               onChange={(e) => setFilterStock(e.target.value)}
               style={{
                 padding: '7px 12px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '10px',
+                backgroundColor: '#080A0B',
+                border: '1px solid #252A2C',
+                borderRadius: '8px',
+                color: '#F1F3F4',
                 fontSize: '0.75rem',
                 fontWeight: '600',
                 outline: 'none'
@@ -926,9 +881,10 @@ export default function FactorMatrixView({
               onChange={(e) => setFilterStrategy(e.target.value)}
               style={{
                 padding: '7px 12px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '10px',
+                backgroundColor: '#080A0B',
+                border: '1px solid #252A2C',
+                borderRadius: '8px',
+                color: '#F1F3F4',
                 fontSize: '0.75rem',
                 fontWeight: '600',
                 outline: 'none'
@@ -943,9 +899,10 @@ export default function FactorMatrixView({
             {/* Timeframe Filter */}
             <div style={{
               display: 'flex',
-              backgroundColor: '#f3f4f6',
+              backgroundColor: '#080A0B',
               padding: '2px',
-              borderRadius: '9px'
+              borderRadius: '8px',
+              border: '1px solid #252A2C'
             }}>
               {["ALL", "1m", "2m", "5m", "15m"].map(tf => (
                 <button
@@ -955,12 +912,11 @@ export default function FactorMatrixView({
                     padding: '5px 10px',
                     fontSize: '0.72rem',
                     fontWeight: filterTimeframe === tf ? '700' : '500',
-                    borderRadius: '7px',
+                    borderRadius: '6px',
                     border: 'none',
-                    backgroundColor: filterTimeframe === tf ? '#ffffff' : 'transparent',
-                    color: filterTimeframe === tf ? '#111827' : '#6b7280',
-                    cursor: 'pointer',
-                    boxShadow: filterTimeframe === tf ? '0 1px 3px rgba(0,0,0,0.06)' : 'none'
+                    backgroundColor: filterTimeframe === tf ? '#00D09C' : 'transparent',
+                    color: filterTimeframe === tf ? '#080A0B' : '#92999C',
+                    cursor: 'pointer'
                   }}
                 >
                   {tf}
@@ -970,7 +926,7 @@ export default function FactorMatrixView({
 
             {/* Sort Buttons */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>Sort:</span>
+              <span style={{ fontSize: '0.72rem', color: '#92999C' }}>Sort:</span>
               {[
                 { id: "sharpe", label: "Sharpe" },
                 { id: "return_pct", label: "Return %" },
@@ -981,12 +937,13 @@ export default function FactorMatrixView({
                   onClick={() => setSortBy(s.id)}
                   style={{
                     padding: '5px 9px',
-                    borderRadius: '8px',
+                    borderRadius: '6px',
                     fontSize: '0.72rem',
                     fontWeight: sortBy === s.id ? '700' : '500',
-                    border: 'none',
-                    backgroundColor: sortBy === s.id ? '#e6f4ea' : '#f3f4f6',
-                    color: sortBy === s.id ? '#059669' : '#6b7280',
+                    border: '1px solid',
+                    borderColor: sortBy === s.id ? '#00D09C' : '#252A2C',
+                    backgroundColor: sortBy === s.id ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                    color: sortBy === s.id ? '#00D09C' : '#92999C',
                     cursor: 'pointer'
                   }}
                 >
@@ -997,12 +954,12 @@ export default function FactorMatrixView({
           </div>
         </div>
 
-        {/* ── View 1: Consolidated Leaderboard Table ─────────────────── */}
+        {/* ── View 1: Consolidated Leaderboard Table ── */}
         {activeViewTab === "leaderboard" && (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb', color: '#6b7280', borderBottom: '1px solid #e5e7eb', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+                <tr style={{ backgroundColor: '#101314', color: '#92999C', borderBottom: '1px solid #252A2C', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '12px 20px' }}>Rank</th>
                   <th style={{ padding: '12px 20px' }}>Stock</th>
                   <th style={{ padding: '12px 20px', textAlign: 'center' }}>Timeframe</th>
@@ -1020,7 +977,7 @@ export default function FactorMatrixView({
               <tbody>
                 {sortedRuns.length === 0 ? (
                   <tr>
-                    <td colSpan={12} style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+                    <td colSpan={12} style={{ padding: '40px', textAlign: 'center', color: '#92999C' }}>
                       No matrix backtest combinations matching current filters. Click "Execute Matrix" to run evaluation grid.
                     </td>
                   </tr>
@@ -1029,42 +986,42 @@ export default function FactorMatrixView({
                     <tr
                       key={idx}
                       style={{
-                        borderBottom: '1px solid #f3f4f6',
+                        borderBottom: '1px solid #252A2C',
                         transition: 'background-color 0.15s'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1c2022'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
-                      <td style={{ padding: '14px 20px', color: '#9ca3af', fontWeight: '700' }}>
+                      <td style={{ padding: '14px 20px', color: '#626A6E', fontWeight: '700' }}>
                         #{idx + 1}
                       </td>
-                      <td style={{ padding: '14px 20px', fontWeight: '700', color: '#111827' }}>
+                      <td style={{ padding: '14px 20px', fontWeight: '700', color: '#F1F3F4' }}>
                         {row.symbol || row.asset}
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                        <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#f3f4f6', color: '#374151', fontSize: '0.72rem', fontWeight: '600' }}>
+                        <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#080A0B', color: '#F1F3F4', fontSize: '0.72rem', fontWeight: '600', border: '1px solid #252A2C' }}>
                           {row.timeframe}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 20px', color: '#4b5563', fontWeight: '500' }}>
+                      <td style={{ padding: '14px 20px', color: '#92999C', fontWeight: '500' }}>
                         {row.strategy}
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right', color: '#6b7280' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'right', color: '#92999C' }} className="font-tabular">
                         {row.trades}
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '600', color: row.win_rate >= 50 ? '#059669' : '#dc2626' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '600', color: row.win_rate >= 50 ? '#00D09C' : '#EB5B3C' }} className="font-tabular">
                         {row.win_rate}%
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '700', color: row.return_pct >= 0 ? '#059669' : '#dc2626' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '700', color: row.return_pct >= 0 ? '#00D09C' : '#EB5B3C' }} className="font-tabular">
                         {row.return_pct >= 0 ? '+' : ''}{row.return_pct}%
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '700', color: row.net_pnl >= 0 ? '#059669' : '#dc2626' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '700', color: row.net_pnl >= 0 ? '#00D09C' : '#EB5B3C' }} className="font-tabular">
                         {currency}{Math.abs(row.net_pnl).toLocaleString('en-IN')}
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right', color: '#374151', fontWeight: '600' }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'right', color: '#F1F3F4', fontWeight: '600' }} className="font-tabular">
                         {row.profit_factor >= 999 ? '∞' : row.profit_factor.toFixed(2)}
                       </td>
-                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '700', color: row.sharpe >= 1.5 ? '#059669' : (row.sharpe > 0 ? '#111827' : '#dc2626') }}>
+                      <td style={{ padding: '14px 20px', textAlign: 'right', fontWeight: '700', color: row.sharpe >= 1.5 ? '#00D09C' : (row.sharpe > 0 ? '#F1F3F4' : '#EB5B3C') }} className="font-tabular">
                         {row.sharpe.toFixed(2)}
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center' }}>
@@ -1073,8 +1030,9 @@ export default function FactorMatrixView({
                           borderRadius: '6px',
                           fontSize: '0.68rem',
                           fontWeight: '700',
-                          backgroundColor: row.status === 'PRIME' ? '#e6f4ea' : (row.status === 'GOOD' ? '#eff6ff' : '#fef2f2'),
-                          color: row.status === 'PRIME' ? '#059669' : (row.status === 'GOOD' ? '#2563eb' : '#dc2626')
+                          backgroundColor: row.status === 'PRIME' ? 'rgba(0, 208, 156, 0.12)' : (row.status === 'GOOD' ? 'rgba(83, 103, 255, 0.12)' : 'rgba(235, 91, 60, 0.12)'),
+                          color: row.status === 'PRIME' ? '#00D09C' : (row.status === 'GOOD' ? '#5367FF' : '#EB5B3C'),
+                          border: `1px solid ${row.status === 'PRIME' ? 'rgba(0, 208, 156, 0.28)' : '#252A2C'}`
                         }}>
                           {row.status}
                         </span>
@@ -1087,19 +1045,10 @@ export default function FactorMatrixView({
                             strategy: row.strategy,
                             timeframe: row.timeframe
                           })}
+                          className="btn-groww-secondary"
                           style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
                             padding: '6px 12px',
-                            borderRadius: '8px',
-                            backgroundColor: '#059669',
-                            color: '#ffffff',
-                            fontSize: '0.72rem',
-                            fontWeight: '700',
-                            border: 'none',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 6px rgba(5, 150, 105, 0.2)'
+                            fontSize: '0.72rem'
                           }}
                         >
                           Launch in Studio <ArrowRight size={12} />
@@ -1113,43 +1062,43 @@ export default function FactorMatrixView({
           </div>
         )}
 
-        {/* ── View 2: 2D Cross-Sectional Factor Heatmap ──────────────── */}
+        {/* ── View 2: 2D Cross-Sectional Factor Heatmap ── */}
         {activeViewTab === "heatmap" && (
           <div style={{ padding: '24px', overflowX: 'auto' }}>
             <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#111827' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#F1F3F4' }}>
                   2D Cross-Sectional Alpha Map (Sharpe Ratio & In-Hand Return)
                 </span>
-                <p style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                <p style={{ fontSize: '0.75rem', color: '#92999C', marginTop: '2px' }}>
                   Green cells denote Prime institutional alpha (Sharpe &gt; 1.5). Click any cell to launch in Backtesting Studio.
                 </p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem' }}>
-                <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: '#059669', borderRadius: '3px' }}></span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: '#92999C' }}>
+                <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: '#00D09C', borderRadius: '3px' }}></span>
                 <span>Sharpe &ge; 1.5</span>
-                <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: '#a7f3d0', borderRadius: '3px', marginLeft: '6px' }}></span>
+                <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: 'rgba(0, 208, 156, 0.3)', borderRadius: '3px', marginLeft: '6px' }}></span>
                 <span>Sharpe 0.5 - 1.5</span>
-                <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: '#fee2e2', borderRadius: '3px', marginLeft: '6px' }}></span>
+                <span style={{ display: 'inline-block', width: '12px', height: '12px', backgroundColor: 'rgba(235, 91, 60, 0.3)', borderRadius: '3px', marginLeft: '6px' }}></span>
                 <span>Sub-optimal (&lt; 0.5)</span>
               </div>
             </div>
 
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.78rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', color: '#374151' }}>Asset Universe</th>
+                <tr style={{ backgroundColor: '#101314', borderBottom: '1px solid #252A2C' }}>
+                  <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', color: '#92999C' }}>Asset Universe</th>
                   {["1m", "2m", "5m", "15m"].map(tf => (
-                    <th key={tf} colSpan={strategyOptions.length} style={{ padding: '10px 14px', borderLeft: '1px solid #e5e7eb', color: '#111827', fontWeight: '800' }}>
+                    <th key={tf} colSpan={strategyOptions.length} style={{ padding: '10px 14px', borderLeft: '1px solid #252A2C', color: '#F1F3F4', fontWeight: '800' }}>
                       {tf} Horizon
                     </th>
                   ))}
                 </tr>
-                <tr style={{ backgroundColor: '#f9fafb', fontSize: '0.7rem', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>
+                <tr style={{ backgroundColor: '#101314', fontSize: '0.7rem', color: '#92999C', borderBottom: '1px solid #252A2C' }}>
                   <th style={{ padding: '8px 16px', textAlign: 'left' }}>Ticker</th>
                   {["1m", "2m", "5m", "15m"].map(tf => (
                     strategyOptions.map(st => (
-                      <th key={`${tf}-${st.id}`} style={{ padding: '8px 6px', borderLeft: '1px solid #f3f4f6', minWidth: '75px' }}>
+                      <th key={`${tf}-${st.id}`} style={{ padding: '8px 6px', borderLeft: '1px solid #252A2C', minWidth: '75px' }}>
                         {st.id.includes("ORB") ? "ORB" : (st.id.includes("VWAP") ? "VWAP" : "Fade")}
                       </th>
                     ))
@@ -1158,8 +1107,8 @@ export default function FactorMatrixView({
               </thead>
               <tbody>
                 {stockOptions.map(stk => (
-                  <tr key={stk.symbol} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', color: '#111827', backgroundColor: '#fafafa' }}>
+                  <tr key={stk.symbol} style={{ borderBottom: '1px solid #252A2C' }}>
+                    <td style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', color: '#F1F3F4', backgroundColor: '#101314' }}>
                       {stk.symbol}
                     </td>
                     {["1m", "2m", "5m", "15m"].map(tf => (
@@ -1168,18 +1117,18 @@ export default function FactorMatrixView({
                         const sharpe = match?.sharpe ?? 0;
                         const ret = match?.return_pct ?? 0;
                         
-                        let cellBg = '#f9fafb';
-                        let textColor = '#9ca3af';
+                        let cellBg = '#080A0B';
+                        let textColor = '#626A6E';
                         if (match) {
                           if (sharpe >= 1.5 && ret > 0) {
-                            cellBg = '#059669';
-                            textColor = '#ffffff';
+                            cellBg = 'rgba(0, 208, 156, 0.35)';
+                            textColor = '#00D09C';
                           } else if (ret > 0) {
-                            cellBg = '#a7f3d0';
-                            textColor = '#065f46';
+                            cellBg = 'rgba(0, 208, 156, 0.15)';
+                            textColor = '#00D09C';
                           } else {
-                            cellBg = '#fee2e2';
-                            textColor = '#991b1b';
+                            cellBg = 'rgba(235, 91, 60, 0.15)';
+                            textColor = '#EB5B3C';
                           }
                         }
 
@@ -1197,7 +1146,7 @@ export default function FactorMatrixView({
                               backgroundColor: cellBg,
                               color: textColor,
                               fontWeight: '700',
-                              borderLeft: '1px solid #f3f4f6',
+                              borderLeft: '1px solid #252A2C',
                               cursor: match ? 'pointer' : 'default',
                               transition: 'transform 0.1s'
                             }}
@@ -1209,7 +1158,7 @@ export default function FactorMatrixView({
                                 <div style={{ fontSize: '0.65rem', opacity: 0.85 }}>S: {sharpe.toFixed(1)}</div>
                               </div>
                             ) : (
-                              <span style={{ color: '#d1d5db' }}>-</span>
+                              <span style={{ color: '#252A2C' }}>-</span>
                             )}
                           </td>
                         );

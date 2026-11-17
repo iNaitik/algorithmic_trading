@@ -38,7 +38,7 @@ export default function MorningScannerView({
   const [snapshotMode, setSnapshotMode] = useState("916_OPEN"); // "916_OPEN", "LIVE"
   const [scanData, setScanData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [filterType, setFilterType] = useState("ALL"); // ALL, LONGS, SHORTS, HIGHRVOL, GAPS
+  const [filterType, setFilterType] = useState("ALL"); // ALL, LONGS, SHORTS, HIGHRVOL, GAPS, HIGHEDGE
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("ALPHA"); // ALPHA, RVOL, CHANGE, GAP
   const [viewMode, setViewMode] = useState("TABLE"); // "TABLE", "GRID"
@@ -147,83 +147,90 @@ export default function MorningScannerView({
   const advancePct = Math.round((advancers / totalBreath) * 100);
 
   return (
-    <div className="quant-dashboard-container" style={{
+    <div style={{
       display: 'flex',
       flexDirection: 'column',
       gap: '24px',
-      padding: '24px 32px',
+      padding: '28px 32px',
       maxWidth: '1440px',
       margin: '0 auto',
-      fontFamily: "'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif"
+      width: '100%',
+      backgroundColor: '#080A0B',
+      color: '#F1F3F4',
+      fontFamily: "'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif"
     }}>
 
-      {/* ── 1. Top SaaS Header & Command Toolbar ───────────────────────── */}
+      {/* ── 1. Top Header & Command Toolbar ── */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '16px',
-        borderBottom: '1px solid #e5e7eb',
+        borderBottom: '1px solid #252A2C',
         paddingBottom: '20px'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              backgroundColor: '#e6f4ea',
+              width: '42px',
+              height: '42px',
+              borderRadius: '12px',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              border: '1px solid rgba(0, 208, 156, 0.28)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#059669',
-              boxShadow: '0 2px 8px rgba(5, 150, 105, 0.15)'
+              color: '#00D09C',
+              boxShadow: '0 4px 14px rgba(0, 208, 156, 0.2)'
             }}>
-              <Zap size={20} />
+              <Zap size={22} />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#111827', letterSpacing: '-0.02em', margin: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h1 style={{ fontSize: '1.45rem', fontWeight: '800', color: '#F1F3F4', letterSpacing: '-0.02em', margin: 0 }}>
                   Morning Breakout & Flow Screener
                 </h1>
                 <span style={{
-                  fontSize: '0.7rem',
+                  fontSize: '0.72rem',
                   fontWeight: '700',
-                  padding: '3px 9px',
+                  padding: '3px 10px',
                   borderRadius: '20px',
-                  backgroundColor: scanData?.is_market_open ? '#e6f4ea' : '#fef3c7',
-                  color: scanData?.is_market_open ? '#059669' : '#b45309',
+                  backgroundColor: scanData?.is_market_open ? 'rgba(0, 208, 156, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                  color: scanData?.is_market_open ? '#00D09C' : '#F59E0B',
+                  border: `1px solid ${scanData?.is_market_open ? 'rgba(0, 208, 156, 0.28)' : 'rgba(245, 158, 11, 0.28)'}`,
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '5px'
+                  gap: '6px'
                 }}>
-                  <span style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: scanData?.is_market_open ? '#059669' : '#d97706',
-                    boxShadow: scanData?.is_market_open ? '0 0 6px #059669' : 'none'
-                  }} />
+                  <span
+                    className={scanData?.is_market_open ? "pulse-mint-dot" : ""}
+                    style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: scanData?.is_market_open ? '#00D09C' : '#F59E0B'
+                    }}
+                  />
                   {scanData?.market_status || "Session Active"}
                 </span>
               </div>
-              <p style={{ fontSize: '0.82rem', color: '#6b7280', marginTop: '2px', margin: 0 }}>
+              <p style={{ fontSize: '0.82rem', color: '#92999C', marginTop: '4px', margin: 0 }}>
                 Autonomous 09:16 AM Opening Surge, Relative Volume (RVOL), and 15m ORB Channel Breakouts
               </p>
             </div>
           </div>
         </div>
 
-        {/* Global Controls: Market Tabs & Manual Trigger */}
+        {/* Global Controls: Market Tabs, Snapshot & Rescan Button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {/* Market Selector Tabs */}
           <div style={{
             display: 'flex',
-            backgroundColor: '#f3f4f6',
+            backgroundColor: '#151819',
             padding: '3px',
             borderRadius: '12px',
-            border: '1px solid #e5e7eb'
+            border: '1px solid #252A2C'
           }}>
             {[
               { id: "INDIA", label: "🇮🇳 NSE India" },
@@ -239,9 +246,8 @@ export default function MorningScannerView({
                   fontSize: '0.78rem',
                   fontWeight: selectedMarket === m.id ? '700' : '600',
                   border: 'none',
-                  backgroundColor: selectedMarket === m.id ? '#ffffff' : 'transparent',
-                  color: selectedMarket === m.id ? '#059669' : '#6b7280',
-                  boxShadow: selectedMarket === m.id ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                  backgroundColor: selectedMarket === m.id ? 'rgba(0, 208, 156, 0.14)' : 'transparent',
+                  color: selectedMarket === m.id ? '#00D09C' : '#92999C',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
                 }}
@@ -255,10 +261,10 @@ export default function MorningScannerView({
           {selectedMarket !== "FOREX" && (
             <div style={{
               display: 'flex',
-              backgroundColor: '#f3f4f6',
+              backgroundColor: '#151819',
               padding: '3px',
               borderRadius: '12px',
-              border: '1px solid #e5e7eb'
+              border: '1px solid #252A2C'
             }}>
               <button
                 onClick={() => setSnapshotMode("916_OPEN")}
@@ -268,8 +274,8 @@ export default function MorningScannerView({
                   fontSize: '0.74rem',
                   fontWeight: snapshotMode === "916_OPEN" ? '700' : '500',
                   border: 'none',
-                  backgroundColor: snapshotMode === "916_OPEN" ? '#059669' : 'transparent',
-                  color: snapshotMode === "916_OPEN" ? '#ffffff' : '#6b7280',
+                  backgroundColor: snapshotMode === "916_OPEN" ? '#00D09C' : 'transparent',
+                  color: snapshotMode === "916_OPEN" ? '#080A0B' : '#92999C',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -287,8 +293,8 @@ export default function MorningScannerView({
                   fontSize: '0.74rem',
                   fontWeight: snapshotMode === "LIVE" ? '700' : '500',
                   border: 'none',
-                  backgroundColor: snapshotMode === "LIVE" ? '#059669' : 'transparent',
-                  color: snapshotMode === "LIVE" ? '#ffffff' : '#6b7280',
+                  backgroundColor: snapshotMode === "LIVE" ? '#00D09C' : 'transparent',
+                  color: snapshotMode === "LIVE" ? '#080A0B' : '#92999C',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -305,20 +311,10 @@ export default function MorningScannerView({
           <button
             onClick={() => fetchScan(true, selectedMarket, snapshotMode)}
             disabled={loading}
+            className="btn-groww-primary"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '12px',
-              backgroundColor: '#059669',
-              color: '#ffffff',
-              fontSize: '0.8rem',
-              fontWeight: '700',
-              border: 'none',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: '0 2px 10px rgba(5, 150, 105, 0.3)',
-              transition: 'all 0.15s ease'
+              padding: '8px 18px',
+              fontSize: '0.82rem'
             }}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
@@ -327,7 +323,7 @@ export default function MorningScannerView({
         </div>
       </div>
 
-      {/* ── 2. Top 4 SaaS Breadth & Market Flow Metrics Ribbon ─────────── */}
+      {/* ── 2. Top 4 Market Breadth Metrics Ribbon ── */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
@@ -335,17 +331,17 @@ export default function MorningScannerView({
       }}>
         {/* Metric 1: Advance / Decline Breadth */}
         <div style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: '#151819',
           borderRadius: '16px',
           padding: '18px 20px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          border: '1px solid #252A2C',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          transition: 'transform 0.15s ease'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Market Sentiment Breadth
             </span>
             <span style={{
@@ -353,33 +349,33 @@ export default function MorningScannerView({
               fontWeight: '700',
               padding: '2px 7px',
               borderRadius: '6px',
-              backgroundColor: advancePct >= 50 ? '#e6f4ea' : '#fee2e2',
-              color: advancePct >= 50 ? '#059669' : '#dc2626'
+              backgroundColor: advancePct >= 50 ? 'rgba(0, 208, 156, 0.12)' : 'rgba(235, 91, 60, 0.12)',
+              color: advancePct >= 50 ? '#00D09C' : '#EB5B3C'
             }}>
               A/D {breadth.advance_decline_ratio || (advancers / (decliners || 1)).toFixed(1)}x
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '8px 0 6px 0' }}>
-            <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#059669' }}>
+            <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#00D09C' }} className="font-tabular">
               ▲ {advancers}
             </span>
-            <span style={{ fontSize: '0.85rem', color: '#9ca3af', fontWeight: '600' }}>vs</span>
-            <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#dc2626' }}>
+            <span style={{ fontSize: '0.85rem', color: '#626A6E', fontWeight: '600' }}>vs</span>
+            <span style={{ fontSize: '1.4rem', fontWeight: '800', color: '#EB5B3C' }} className="font-tabular">
               ▼ {decliners}
             </span>
-            <span style={{ fontSize: '0.74rem', color: '#6b7280', marginLeft: 'auto' }}>
+            <span style={{ fontSize: '0.74rem', color: '#92999C', marginLeft: 'auto' }}>
               {advancePct}% Bullish
             </span>
           </div>
 
-          {/* Multi-color Flow Progress Bar */}
-          <div style={{ width: '100%', height: '8px', backgroundColor: '#fee2e2', borderRadius: '4px', overflow: 'hidden' }}>
+          {/* Two-Tone Flow Progress Bar */}
+          <div style={{ width: '100%', height: '6px', backgroundColor: 'rgba(235, 91, 60, 0.25)', borderRadius: '3px', overflow: 'hidden' }}>
             <div style={{
               width: `${advancePct}%`,
               height: '100%',
-              backgroundColor: '#059669',
-              borderRadius: '4px',
+              backgroundColor: '#00D09C',
+              borderRadius: '3px',
               transition: 'width 0.3s ease'
             }} />
           </div>
@@ -387,17 +383,16 @@ export default function MorningScannerView({
 
         {/* Metric 2: Relative Volume Accumulation */}
         <div style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: '#151819',
           borderRadius: '16px',
           padding: '18px 20px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          border: '1px solid #252A2C',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Volume Surge Velocity
             </span>
             <span style={{
@@ -405,40 +400,39 @@ export default function MorningScannerView({
               fontWeight: '700',
               padding: '2px 7px',
               borderRadius: '6px',
-              backgroundColor: '#e6f4ea',
-              color: '#059669'
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              color: '#00D09C'
             }}>
-              SURGE DETECTED
+              SURGE ACTIVE
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', margin: '8px 0 4px 0' }}>
-            <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#111827' }}>
+            <span style={{ fontSize: '1.5rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
               {breadth.avg_rvol || 1.1}x
             </span>
-            <span style={{ fontSize: '0.78rem', color: '#6b7280', fontWeight: '600' }}>
+            <span style={{ fontSize: '0.78rem', color: '#92999C', fontWeight: '600' }}>
               Average RVOL
             </span>
           </div>
 
-          <div style={{ fontSize: '0.74rem', color: '#6b7280' }}>
-            Relative to 20-day historical opening volume
+          <div style={{ fontSize: '0.74rem', color: '#626A6E' }}>
+            Relative to 20-day opening surge window
           </div>
         </div>
 
         {/* Metric 3: Dominant Sector Momentum */}
         <div style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: '#151819',
           borderRadius: '16px',
           padding: '18px 20px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          border: '1px solid #252A2C',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Leading Sector Velocity
             </span>
             <span style={{
@@ -446,35 +440,34 @@ export default function MorningScannerView({
               fontWeight: '700',
               padding: '2px 7px',
               borderRadius: '6px',
-              backgroundColor: '#f3f4f6',
-              color: '#374151'
+              backgroundColor: '#101314',
+              color: '#92999C'
             }}>
               ROTATION
             </span>
           </div>
 
-          <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#059669', margin: '8px 0 4px 0' }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#00D09C', margin: '8px 0 4px 0' }}>
             {breadth.dominant_sector || "Banking & Financials"}
           </div>
 
-          <div style={{ fontSize: '0.74rem', color: '#6b7280' }}>
+          <div style={{ fontSize: '0.74rem', color: '#626A6E' }}>
             Highest concentration of morning breakouts
           </div>
         </div>
 
-        {/* Metric 4: Scheduler & Cron Daemon Status */}
+        {/* Metric 4: Scheduler & Daemon Status */}
         <div style={{
-          backgroundColor: '#ffffff',
+          backgroundColor: '#151819',
           borderRadius: '16px',
           padding: '18px 20px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+          border: '1px solid #252A2C',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.74rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Next Scheduled Scan
             </span>
             <span style={{
@@ -482,66 +475,56 @@ export default function MorningScannerView({
               fontWeight: '700',
               padding: '2px 7px',
               borderRadius: '6px',
-              backgroundColor: '#e6f4ea',
-              color: '#059669'
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              color: '#00D09C'
             }}>
               DAEMON ARMED
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '8px 0 4px 0' }}>
-            <Clock size={18} color="#059669" />
-            <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#111827' }}>
+            <Clock size={18} color="#00D09C" />
+            <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#F1F3F4' }}>
               {scanData?.next_scheduled_scan || "09:16 AM IST"}
             </span>
           </div>
 
-          <div style={{ fontSize: '0.74rem', color: '#6b7280' }}>
-            Candle As-Of: <b style={{ color: '#111827' }}>{scanData?.latest_bar_time || "09:15 AM"}</b>
+          <div style={{ fontSize: '0.74rem', color: '#626A6E' }}>
+            Candle As-Of: <b style={{ color: '#F1F3F4' }}>{scanData?.latest_bar_time || "09:15 AM"}</b>
           </div>
         </div>
       </div>
 
-      {/* ── 3. Dual Spotlight Hero Breakouts (Long vs Short) ───────────── */}
-      <div className="quant-grid-split" style={{
+      {/* ── 3. Dual Spotlight Hero Breakouts (Prime Long vs Prime Short) ── */}
+      <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
         gap: '20px'
       }}>
         {/* Card A: Top Long Breakout Spotlight */}
         <div style={{
-          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+          background: 'linear-gradient(135deg, rgba(0, 208, 156, 0.18) 0%, #151819 100%)',
           borderRadius: '20px',
           padding: '24px',
-          color: '#ffffff',
-          boxShadow: '0 8px 24px -4px rgba(5, 150, 105, 0.35)',
+          border: '1px solid rgba(0, 208, 156, 0.35)',
+          color: '#F1F3F4',
+          boxShadow: '0 8px 32px rgba(0, 208, 156, 0.15)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
           position: 'relative',
           overflow: 'hidden'
         }}>
-          {/* Background Ambient Glow */}
-          <div style={{
-            position: 'absolute',
-            top: '-50px',
-            right: '-50px',
-            width: '160px',
-            height: '160px',
-            borderRadius: '50%',
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            pointerEvents: 'none'
-          }} />
-
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{
                   fontSize: '0.7rem',
                   fontWeight: '800',
-                  letterSpacing: '0.08em',
+                  letterSpacing: '0.06em',
                   textTransform: 'uppercase',
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  backgroundColor: 'rgba(0, 208, 156, 0.25)',
+                  color: '#00D09C',
                   padding: '3px 8px',
                   borderRadius: '6px'
                 }}>
@@ -550,8 +533,8 @@ export default function MorningScannerView({
                 <span style={{
                   fontSize: '0.7rem',
                   fontWeight: '700',
-                  backgroundColor: '#ffffff',
-                  color: '#059669',
+                  backgroundColor: '#00D09C',
+                  color: '#080A0B',
                   padding: '3px 8px',
                   borderRadius: '6px'
                 }}>
@@ -562,7 +545,9 @@ export default function MorningScannerView({
               <span style={{
                 fontSize: '0.74rem',
                 fontWeight: '800',
-                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                backgroundColor: '#101314',
+                color: '#00D09C',
+                border: '1px solid rgba(0, 208, 156, 0.28)',
                 padding: '3px 9px',
                 borderRadius: '8px'
               }}>
@@ -572,10 +557,10 @@ export default function MorningScannerView({
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '16px' }}>
               <div>
-                <div style={{ fontSize: '1.75rem', fontWeight: '800', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#F1F3F4' }}>
                   {topLong ? topLong.symbol : "Scanning Breakouts..."}
                 </div>
-                <div style={{ fontSize: '0.82rem', opacity: 0.9, marginTop: '2px' }}>
+                <div style={{ fontSize: '0.82rem', color: '#92999C', marginTop: '2px' }}>
                   {topLong ? `${topLong.name} • ${topLong.sector}` : "Awaiting morning volume surge"}
                 </div>
                 {topLong && topLong.hist_wr && (
@@ -585,14 +570,16 @@ export default function MorningScannerView({
                     gap: '5px',
                     fontSize: '0.7rem',
                     fontWeight: '800',
-                    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+                    backgroundColor: 'rgba(0, 208, 156, 0.12)',
+                    color: '#00D09C',
+                    border: '1px solid rgba(0, 208, 156, 0.28)',
                     padding: '2px 8px',
                     borderRadius: '6px',
-                    marginTop: '6px'
+                    marginTop: '8px'
                   }}>
                     <span>🏆 Factor Edge: Tier {topLong.edge_tier}</span>
                     <span>•</span>
-                    <span>{topLong.hist_wr}% Hist. Win Rate</span>
+                    <span>{topLong.hist_wr}% WR</span>
                     <span>•</span>
                     <span>PF {topLong.hist_pf}</span>
                   </div>
@@ -601,21 +588,22 @@ export default function MorningScannerView({
 
               {topLong && (
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '800' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
                     {currentCurrency}{topLong.price.toFixed(2)}
                   </div>
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '3px',
-                    fontSize: '0.8rem',
+                    fontSize: '0.82rem',
                     fontWeight: '800',
-                    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                    backgroundColor: 'rgba(0, 208, 156, 0.15)',
+                    color: '#00D09C',
                     padding: '2px 8px',
                     borderRadius: '6px',
                     marginTop: '2px'
-                  }}>
-                    <ArrowUpRight size={13} />
+                  }} className="font-tabular">
+                    <ArrowUpRight size={14} />
                     <span>{topLong.change_pct >= 0 ? '+' : ''}{topLong.change_pct}%</span>
                   </div>
                 </div>
@@ -631,21 +619,22 @@ export default function MorningScannerView({
                 marginTop: '18px',
                 padding: '12px 14px',
                 borderRadius: '12px',
-                backgroundColor: 'rgba(0, 0, 0, 0.12)'
+                backgroundColor: '#080A0B',
+                border: '1px solid #252A2C'
               }}>
                 <div>
-                  <div style={{ fontSize: '0.65rem', opacity: 0.8, textTransform: 'uppercase', fontWeight: '700' }}>Setup Signal</div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: '800', marginTop: '2px' }}>{topLong.setup_signal}</div>
+                  <div style={{ fontSize: '0.65rem', color: '#92999C', textTransform: 'uppercase', fontWeight: '700' }}>Setup Signal</div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#00D09C', marginTop: '2px' }}>{topLong.setup_signal}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.65rem', opacity: 0.8, textTransform: 'uppercase', fontWeight: '700' }}>Target 2R</div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: '800', marginTop: '2px', color: '#a7f3d0' }}>
+                  <div style={{ fontSize: '0.65rem', color: '#92999C', textTransform: 'uppercase', fontWeight: '700' }}>Target 2R</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: '800', marginTop: '2px', color: '#00D09C' }} className="font-tabular">
                     {currentCurrency}{topLong.target_2r}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.65rem', opacity: 0.8, textTransform: 'uppercase', fontWeight: '700' }}>Stop Loss</div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: '800', marginTop: '2px', color: '#fecaca' }}>
+                  <div style={{ fontSize: '0.65rem', color: '#92999C', textTransform: 'uppercase', fontWeight: '700' }}>Stop Loss</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: '800', marginTop: '2px', color: '#EB5B3C' }} className="font-tabular">
                     {currentCurrency}{topLong.stop_loss}
                   </div>
                 </div>
@@ -659,54 +648,32 @@ export default function MorningScannerView({
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              borderTop: '1px solid rgba(255,255,255,0.2)',
+              borderTop: '1px solid #252A2C',
               paddingTop: '14px',
               marginTop: '16px'
             }}>
-              <span style={{ fontSize: '0.74rem', opacity: 0.9 }}>
-                Strategy: <b>{topLong.suggested_strategy.replace('NSE ', '')}</b>
+              <span style={{ fontSize: '0.74rem', color: '#92999C' }}>
+                Strategy: <b style={{ color: '#F1F3F4' }}>{topLong.suggested_strategy.replace('NSE ', '')}</b>
               </span>
 
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   onClick={() => onSelectForBacktest(topLong.symbol, topLong.suggested_strategy)}
-                  style={{
-                    padding: '7px 14px',
-                    borderRadius: '10px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                    color: '#ffffff',
-                    fontSize: '0.75rem',
-                    fontWeight: '700',
-                    border: '1px solid rgba(255,255,255,0.3)',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
+                  className="btn-groww-secondary"
+                  style={{ padding: '6px 12px', fontSize: '0.75rem' }}
                 >
-                  Backtest Studio ↗
+                  Backtest ↗
                 </button>
                 <button
                   onClick={() => handleArmBot(topLong.symbol, topLong.suggested_strategy)}
                   disabled={armingSymbol === topLong.symbol}
-                  style={{
-                    padding: '7px 16px',
-                    borderRadius: '10px',
-                    backgroundColor: '#ffffff',
-                    color: '#059669',
-                    fontSize: '0.75rem',
-                    fontWeight: '800',
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease'
-                  }}
+                  className="btn-groww-primary"
+                  style={{ padding: '6px 14px', fontSize: '0.75rem' }}
                 >
                   {armingSymbol === topLong.symbol ? (
-                    <RefreshCw size={13} className="animate-spin" />
+                    <RefreshCw size={12} className="animate-spin" />
                   ) : (
-                    <Bot size={13} />
+                    <Bot size={12} />
                   )}
                   <span>Arm Live Bot</span>
                 </button>
@@ -717,25 +684,28 @@ export default function MorningScannerView({
 
         {/* Card B: Top Short Breakdown Spotlight */}
         <div style={{
-          backgroundColor: '#ffffff',
+          background: 'linear-gradient(135deg, rgba(235, 91, 60, 0.18) 0%, #151819 100%)',
           borderRadius: '20px',
           padding: '24px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+          border: '1px solid rgba(235, 91, 60, 0.35)',
+          color: '#F1F3F4',
+          boxShadow: '0 8px 32px rgba(235, 91, 60, 0.12)',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between'
+          justifyContent: 'space-between',
+          position: 'relative',
+          overflow: 'hidden'
         }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{
                   fontSize: '0.7rem',
                   fontWeight: '800',
-                  letterSpacing: '0.08em',
+                  letterSpacing: '0.06em',
                   textTransform: 'uppercase',
-                  backgroundColor: '#fee2e2',
-                  color: '#dc2626',
+                  backgroundColor: 'rgba(235, 91, 60, 0.25)',
+                  color: '#EB5B3C',
                   padding: '3px 8px',
                   borderRadius: '6px'
                 }}>
@@ -744,8 +714,8 @@ export default function MorningScannerView({
                 <span style={{
                   fontSize: '0.7rem',
                   fontWeight: '700',
-                  backgroundColor: '#f3f4f6',
-                  color: '#6b7280',
+                  backgroundColor: '#EB5B3C',
+                  color: '#ffffff',
                   padding: '3px 8px',
                   borderRadius: '6px'
                 }}>
@@ -756,8 +726,9 @@ export default function MorningScannerView({
               <span style={{
                 fontSize: '0.74rem',
                 fontWeight: '800',
-                backgroundColor: '#fee2e2',
-                color: '#dc2626',
+                backgroundColor: '#101314',
+                color: '#EB5B3C',
+                border: '1px solid rgba(235, 91, 60, 0.28)',
                 padding: '3px 9px',
                 borderRadius: '8px'
               }}>
@@ -767,32 +738,32 @@ export default function MorningScannerView({
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '16px' }}>
               <div>
-                <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#111827', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#F1F3F4' }}>
                   {topShort ? topShort.symbol : "No Active Short Breakdown"}
                 </div>
-                <div style={{ fontSize: '0.82rem', color: '#6b7280', marginTop: '2px' }}>
-                  {topShort ? `${topShort.name} • ${topShort.sector}` : "Market displaying positive or neutral opening flow"}
+                <div style={{ fontSize: '0.82rem', color: '#92999C', marginTop: '2px' }}>
+                  {topShort ? `${topShort.name} • ${topShort.sector}` : "Market displaying positive opening momentum"}
                 </div>
               </div>
 
               {topShort && (
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#111827' }}>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
                     {currentCurrency}{topShort.price.toFixed(2)}
                   </div>
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '3px',
-                    fontSize: '0.8rem',
+                    fontSize: '0.82rem',
                     fontWeight: '800',
-                    backgroundColor: '#fee2e2',
-                    color: '#dc2626',
+                    backgroundColor: 'rgba(235, 91, 60, 0.15)',
+                    color: '#EB5B3C',
                     padding: '2px 8px',
                     borderRadius: '6px',
                     marginTop: '2px'
-                  }}>
-                    <ArrowDownRight size={13} />
+                  }} className="font-tabular">
+                    <ArrowDownRight size={14} />
                     <span>{topShort.change_pct}%</span>
                   </div>
                 </div>
@@ -808,22 +779,22 @@ export default function MorningScannerView({
                 marginTop: '18px',
                 padding: '12px 14px',
                 borderRadius: '12px',
-                backgroundColor: '#f9fafb',
-                border: '1px solid #f3f4f6'
+                backgroundColor: '#080A0B',
+                border: '1px solid #252A2C'
               }}>
                 <div>
-                  <div style={{ fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', fontWeight: '700' }}>Setup Signal</div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#dc2626', marginTop: '2px' }}>{topShort.setup_signal}</div>
+                  <div style={{ fontSize: '0.65rem', color: '#92999C', textTransform: 'uppercase', fontWeight: '700' }}>Setup Signal</div>
+                  <div style={{ fontSize: '0.78rem', fontWeight: '800', color: '#EB5B3C', marginTop: '2px' }}>{topShort.setup_signal}</div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', fontWeight: '700' }}>Target 2R</div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#059669', marginTop: '2px' }}>
+                  <div style={{ fontSize: '0.65rem', color: '#92999C', textTransform: 'uppercase', fontWeight: '700' }}>Target 2R</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#00D09C', marginTop: '2px' }} className="font-tabular">
                     {currentCurrency}{topShort.target_2r}
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.65rem', color: '#6b7280', textTransform: 'uppercase', fontWeight: '700' }}>Stop Loss</div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#dc2626', marginTop: '2px' }}>
+                  <div style={{ fontSize: '0.65rem', color: '#92999C', textTransform: 'uppercase', fontWeight: '700' }}>Stop Loss</div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: '800', color: '#EB5B3C', marginTop: '2px' }} className="font-tabular">
                     {currentCurrency}{topShort.stop_loss}
                   </div>
                 </div>
@@ -837,54 +808,32 @@ export default function MorningScannerView({
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              borderTop: '1px solid #f3f4f6',
+              borderTop: '1px solid #252A2C',
               paddingTop: '14px',
               marginTop: '16px'
             }}>
-              <span style={{ fontSize: '0.74rem', color: '#6b7280' }}>
-                Strategy: <b style={{ color: '#111827' }}>{topShort.suggested_strategy.replace('NSE ', '')}</b>
+              <span style={{ fontSize: '0.74rem', color: '#92999C' }}>
+                Strategy: <b style={{ color: '#F1F3F4' }}>{topShort.suggested_strategy.replace('NSE ', '')}</b>
               </span>
 
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   onClick={() => onSelectForBacktest(topShort.symbol, topShort.suggested_strategy)}
-                  style={{
-                    padding: '7px 14px',
-                    borderRadius: '10px',
-                    backgroundColor: '#ffffff',
-                    color: '#374151',
-                    fontSize: '0.75rem',
-                    fontWeight: '700',
-                    border: '1px solid #d1d5db',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
+                  className="btn-groww-secondary"
+                  style={{ padding: '6px 12px', fontSize: '0.75rem' }}
                 >
                   Backtest ↗
                 </button>
                 <button
                   onClick={() => handleArmBot(topShort.symbol, topShort.suggested_strategy)}
                   disabled={armingSymbol === topShort.symbol}
-                  style={{
-                    padding: '7px 16px',
-                    borderRadius: '10px',
-                    backgroundColor: '#dc2626',
-                    color: '#ffffff',
-                    fontSize: '0.75rem',
-                    fontWeight: '800',
-                    border: 'none',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 8px rgba(220, 38, 38, 0.25)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease'
-                  }}
+                  className="btn-groww-danger"
+                  style={{ padding: '6px 14px', fontSize: '0.75rem' }}
                 >
                   {armingSymbol === topShort.symbol ? (
-                    <RefreshCw size={13} className="animate-spin" />
+                    <RefreshCw size={12} className="animate-spin" />
                   ) : (
-                    <Bot size={13} />
+                    <Bot size={12} />
                   )}
                   <span>Arm Short Bot</span>
                 </button>
@@ -901,11 +850,10 @@ export default function MorningScannerView({
         alignItems: 'center',
         flexWrap: 'wrap',
         gap: '12px',
-        backgroundColor: '#ffffff',
+        backgroundColor: '#151819',
         borderRadius: '16px',
-        padding: '12px 18px',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+        padding: '14px 20px',
+        border: '1px solid #252A2C'
       }}>
         {/* Filter Pills */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -925,12 +873,13 @@ export default function MorningScannerView({
                 alignItems: 'center',
                 gap: '6px',
                 padding: '6px 12px',
-                borderRadius: '9px',
+                borderRadius: '8px',
                 fontSize: '0.76rem',
                 fontWeight: filterType === f.id ? '700' : '600',
-                border: 'none',
-                backgroundColor: filterType === f.id ? '#059669' : '#f3f4f6',
-                color: filterType === f.id ? '#ffffff' : '#4b5563',
+                border: '1px solid',
+                borderColor: filterType === f.id ? '#00D09C' : '#252A2C',
+                backgroundColor: filterType === f.id ? 'rgba(0, 208, 156, 0.14)' : '#080A0B',
+                color: filterType === f.id ? '#00D09C' : '#92999C',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease'
               }}
@@ -940,8 +889,8 @@ export default function MorningScannerView({
                 fontSize: '0.68rem',
                 padding: '1px 5px',
                 borderRadius: '6px',
-                backgroundColor: filterType === f.id ? 'rgba(255,255,255,0.25)' : '#e5e7eb',
-                color: filterType === f.id ? '#ffffff' : '#374151'
+                backgroundColor: filterType === f.id ? 'rgba(0, 208, 156, 0.25)' : '#151819',
+                color: filterType === f.id ? '#00D09C' : '#626A6E'
               }}>
                 {f.count}
               </span>
@@ -949,19 +898,19 @@ export default function MorningScannerView({
           ))}
         </div>
 
-        {/* Right Search & Controls */}
+        {/* Right Search, Sort & View Mode */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           {/* Search Box */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            backgroundColor: '#f9fafb',
-            border: '1px solid #e5e7eb',
+            backgroundColor: '#080A0B',
+            border: '1px solid #252A2C',
             borderRadius: '10px',
             padding: '6px 12px'
           }}>
-            <Search size={14} color="#9ca3af" />
+            <Search size={14} color="#92999C" />
             <input
               type="text"
               placeholder="Search ticker, company, sector..."
@@ -972,14 +921,14 @@ export default function MorningScannerView({
                 outline: 'none',
                 backgroundColor: 'transparent',
                 fontSize: '0.78rem',
-                width: '200px',
-                color: '#111827'
+                width: '180px',
+                color: '#F1F3F4'
               }}
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
-                style={{ border: 'none', background: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: '0.75rem' }}
+                style={{ border: 'none', background: 'none', color: '#92999C', cursor: 'pointer', fontSize: '0.75rem' }}
               >
                 ✕
               </button>
@@ -988,16 +937,16 @@ export default function MorningScannerView({
 
           {/* Sort Select */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '0.72rem', color: '#6b7280', fontWeight: '600' }}>Sort:</span>
+            <span style={{ fontSize: '0.72rem', color: '#92999C', fontWeight: '600' }}>Sort:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               style={{
                 padding: '6px 10px',
                 borderRadius: '8px',
-                border: '1px solid #e5e7eb',
-                backgroundColor: '#f9fafb',
-                color: '#111827',
+                border: '1px solid #252A2C',
+                backgroundColor: '#080A0B',
+                color: '#F1F3F4',
                 fontSize: '0.76rem',
                 fontWeight: '600',
                 outline: 'none',
@@ -1014,20 +963,20 @@ export default function MorningScannerView({
           {/* Table vs Grid Toggle */}
           <div style={{
             display: 'flex',
-            backgroundColor: '#f3f4f6',
+            backgroundColor: '#080A0B',
             padding: '3px',
-            borderRadius: '9px',
-            border: '1px solid #e5e7eb'
+            borderRadius: '8px',
+            border: '1px solid #252A2C'
           }}>
             <button
               onClick={() => setViewMode("TABLE")}
               title="Table View"
               style={{
                 padding: '5px 8px',
-                borderRadius: '7px',
+                borderRadius: '6px',
                 border: 'none',
-                backgroundColor: viewMode === "TABLE" ? '#ffffff' : 'transparent',
-                color: viewMode === "TABLE" ? '#059669' : '#6b7280',
+                backgroundColor: viewMode === "TABLE" ? 'rgba(0, 208, 156, 0.15)' : 'transparent',
+                color: viewMode === "TABLE" ? '#00D09C' : '#92999C',
                 cursor: 'pointer'
               }}
             >
@@ -1038,10 +987,10 @@ export default function MorningScannerView({
               title="Cards Grid View"
               style={{
                 padding: '5px 8px',
-                borderRadius: '7px',
+                borderRadius: '6px',
                 border: 'none',
-                backgroundColor: viewMode === "GRID" ? '#ffffff' : 'transparent',
-                color: viewMode === "GRID" ? '#059669' : '#6b7280',
+                backgroundColor: viewMode === "GRID" ? 'rgba(0, 208, 156, 0.15)' : 'transparent',
+                color: viewMode === "GRID" ? '#00D09C' : '#92999C',
                 cursor: 'pointer'
               }}
             >
@@ -1051,38 +1000,37 @@ export default function MorningScannerView({
         </div>
       </div>
 
-      {/* ── 5. Main Content: Table View vs Cards Grid View ─────────────── */}
+      {/* ── 5. Main Content: Table View vs Cards Grid View ── */}
       {viewMode === "TABLE" ? (
         <div style={{
-          backgroundColor: '#ffffff',
-          borderRadius: '20px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+          backgroundColor: '#151819',
+          borderRadius: '16px',
+          border: '1px solid #252A2C',
           overflow: 'hidden'
         }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#f9fafb', color: '#6b7280', borderBottom: '1px solid #e5e7eb', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '12px 18px' }}>Instrument & Sector</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'right' }}>Price</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'right' }}>Change %</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'right' }}>Open Gap %</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'center' }}>RVOL</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'right' }}>VWAP</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'center' }}>15m ORB Channel</th>
-                  <th style={{ padding: '12px 18px' }}>Setup Signal</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'right' }}>Target (2R) / SL</th>
-                  <th style={{ padding: '12px 18px', textAlign: 'center' }}>Quick Deploy</th>
+                <tr style={{ backgroundColor: '#101314', color: '#92999C', borderBottom: '1px solid #252A2C', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '14px 18px' }}>Instrument & Sector</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'right' }}>Price</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'right' }}>Change %</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'right' }}>Open Gap %</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'center' }}>RVOL</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'right' }}>VWAP</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'center' }}>15m ORB Channel</th>
+                  <th style={{ padding: '14px 18px' }}>Setup Signal</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'right' }}>Target (2R) / SL</th>
+                  <th style={{ padding: '14px 18px', textAlign: 'center' }}>Quick Action</th>
                 </tr>
               </thead>
               <tbody>
                 {processedStocks.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ padding: '48px', textAlign: 'center', color: '#9ca3af' }}>
-                      <AlertCircle size={28} color="#9ca3af" style={{ margin: '0 auto 8px' }} />
-                      <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#374151' }}>No instruments match the selected criteria</div>
-                      <div style={{ fontSize: '0.78rem', color: '#9ca3af', marginTop: '2px' }}>Try switching filters or clearing your search term</div>
+                    <td colSpan={10} style={{ padding: '48px', textAlign: 'center', color: '#92999C' }}>
+                      <AlertCircle size={28} color="#92999C" style={{ margin: '0 auto 8px' }} />
+                      <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#F1F3F4' }}>No instruments match the selected criteria</div>
+                      <div style={{ fontSize: '0.78rem', color: '#626A6E', marginTop: '2px' }}>Try switching filters or clearing your search term</div>
                     </td>
                   </tr>
                 ) : (
@@ -1095,16 +1043,16 @@ export default function MorningScannerView({
                       <tr
                         key={stock.symbol}
                         style={{
-                          borderBottom: '1px solid #f3f4f6',
+                          borderBottom: '1px solid #252A2C',
                           transition: 'background-color 0.15s ease'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1c2022'}
                         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                       >
                         {/* Ticker & Sector */}
                         <td style={{ padding: '14px 18px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                            <div style={{ fontWeight: '800', color: '#111827', fontSize: '0.88rem' }}>
+                            <div style={{ fontWeight: '800', color: '#F1F3F4', fontSize: '0.88rem' }}>
                               {stock.symbol}
                             </div>
                             <span style={{
@@ -1112,8 +1060,8 @@ export default function MorningScannerView({
                               fontWeight: '700',
                               padding: '2px 6px',
                               borderRadius: '5px',
-                              backgroundColor: '#e6f4ea',
-                              color: '#059669'
+                              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+                              color: '#00D09C'
                             }}>
                               Score: {stock.alpha_score || 85}
                             </span>
@@ -1123,21 +1071,21 @@ export default function MorningScannerView({
                                 fontWeight: '800',
                                 padding: '2px 6px',
                                 borderRadius: '5px',
-                                backgroundColor: stock.whipsaw_risk === 'LOW' ? '#e6f4ea' : (stock.whipsaw_risk === 'CRITICAL' ? '#fee2e2' : '#fef3c7'),
-                                color: stock.whipsaw_risk === 'LOW' ? '#059669' : (stock.whipsaw_risk === 'CRITICAL' ? '#dc2626' : '#b45309'),
-                                border: `1px solid ${stock.whipsaw_risk === 'LOW' ? '#a7f3d0' : (stock.whipsaw_risk === 'CRITICAL' ? '#fecaca' : '#fde68a')}`
+                                backgroundColor: stock.whipsaw_risk === 'LOW' ? 'rgba(0, 208, 156, 0.12)' : (stock.whipsaw_risk === 'CRITICAL' ? 'rgba(235, 91, 60, 0.12)' : 'rgba(245, 158, 11, 0.12)'),
+                                color: stock.whipsaw_risk === 'LOW' ? '#00D09C' : (stock.whipsaw_risk === 'CRITICAL' ? '#EB5B3C' : '#F59E0B'),
+                                border: `1px solid ${stock.whipsaw_risk === 'LOW' ? 'rgba(0, 208, 156, 0.28)' : (stock.whipsaw_risk === 'CRITICAL' ? 'rgba(235, 91, 60, 0.28)' : 'rgba(245, 158, 11, 0.28)')}`
                               }}>
-                                {stock.whipsaw_risk === 'CRITICAL' ? '⚠️ Whipsaw Trap Risk' : `Tier ${stock.edge_tier} (${stock.hist_wr}% WR • PF ${stock.hist_pf})`}
+                                {stock.whipsaw_risk === 'CRITICAL' ? '⚠️ Whipsaw Risk' : `Tier ${stock.edge_tier} (${stock.hist_wr}% WR)`}
                               </span>
                             )}
                           </div>
-                          <div style={{ fontSize: '0.72rem', color: '#6b7280', marginTop: '2px' }}>
-                            {stock.name} • <span style={{ color: '#4b5563', fontWeight: '600' }}>{stock.sector}</span>
+                          <div style={{ fontSize: '0.72rem', color: '#92999C', marginTop: '2px' }}>
+                            {stock.name} • <span style={{ color: '#F1F3F4', fontWeight: '500' }}>{stock.sector}</span>
                           </div>
                         </td>
 
                         {/* Price */}
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: '800', color: '#111827', fontSize: '0.88rem' }}>
+                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: '800', color: '#F1F3F4', fontSize: '0.88rem' }} className="font-tabular">
                           {currentCurrency}{stock.price.toFixed(2)}
                         </td>
 
@@ -1147,14 +1095,19 @@ export default function MorningScannerView({
                             display: 'inline-flex',
                             alignItems: 'center',
                             gap: '2px',
-                            color: stock.change_pct >= 0 ? '#059669' : '#dc2626'
-                          }}>
+                            color: stock.change_pct >= 0 ? '#00D09C' : '#EB5B3C'
+                          }} className="font-tabular">
                             {stock.change_pct >= 0 ? '+' : ''}{stock.change_pct}%
                           </span>
                         </td>
 
                         {/* Open Gap % */}
-                        <td style={{ padding: '14px 18px', textAlign: 'right', fontWeight: '700', color: stock.gap_pct >= 0 ? '#059669' : '#dc2626' }}>
+                        <td style={{
+                          padding: '14px 18px',
+                          textAlign: 'right',
+                          fontWeight: '700',
+                          color: stock.gap_pct >= 0 ? '#00D09C' : '#EB5B3C'
+                        }} className="font-tabular">
                           {stock.gap_pct >= 0 ? '+' : ''}{stock.gap_pct}%
                         </td>
 
@@ -1165,30 +1118,31 @@ export default function MorningScannerView({
                             borderRadius: '7px',
                             fontSize: '0.74rem',
                             fontWeight: '800',
-                            backgroundColor: stock.rvol >= 1.2 ? '#e6f4ea' : (stock.rvol >= 0.9 ? '#f3f4f6' : '#fff1f2'),
-                            color: stock.rvol >= 1.2 ? '#059669' : (stock.rvol >= 0.9 ? '#374151' : '#be123c')
-                          }}>
+                            backgroundColor: stock.rvol >= 1.2 ? 'rgba(0, 208, 156, 0.12)' : (stock.rvol >= 0.9 ? '#101314' : 'rgba(235, 91, 60, 0.12)'),
+                            color: stock.rvol >= 1.2 ? '#00D09C' : (stock.rvol >= 0.9 ? '#F1F3F4' : '#EB5B3C'),
+                            border: `1px solid ${stock.rvol >= 1.2 ? 'rgba(0, 208, 156, 0.28)' : '#252A2C'}`
+                          }} className="font-tabular">
                             {stock.rvol}x
                           </span>
                         </td>
 
                         {/* VWAP */}
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          <div style={{ fontWeight: '700', color: '#111827' }}>{currentCurrency}{stock.vwap}</div>
-                          <span style={{ fontSize: '0.66rem', fontWeight: '700', color: stock.is_above_vwap ? '#059669' : '#dc2626' }}>
+                          <div style={{ fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">{currentCurrency}{stock.vwap}</div>
+                          <span style={{ fontSize: '0.66rem', fontWeight: '700', color: stock.is_above_vwap ? '#00D09C' : '#EB5B3C' }}>
                             {stock.is_above_vwap ? '▲ Above VWAP' : '▼ Below VWAP'}
                           </span>
                         </td>
 
                         {/* 15m ORB Channel */}
                         <td style={{ padding: '14px 18px', textAlign: 'center' }}>
-                          <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+                          <div style={{ fontSize: '0.72rem', color: '#92999C' }} className="font-tabular">
                             H: {stock.orb_high} | L: {stock.orb_low}
                           </div>
                           <span style={{
                             fontSize: '0.68rem',
                             fontWeight: '700',
-                            color: stock.orb_status === 'BREAKOUT_HIGH' ? '#059669' : (stock.orb_status === 'BREAKDOWN_LOW' ? '#dc2626' : '#9ca3af')
+                            color: stock.orb_status === 'BREAKOUT_HIGH' ? '#00D09C' : (stock.orb_status === 'BREAKDOWN_LOW' ? '#EB5B3C' : '#626A6E')
                           }}>
                             {stock.orb_status === 'BREAKOUT_HIGH' ? '⚡ High Breakout' : (stock.orb_status === 'BREAKDOWN_LOW' ? '🔻 Low Breakdown' : 'Inside Range')}
                           </span>
@@ -1201,22 +1155,23 @@ export default function MorningScannerView({
                             borderRadius: '6px',
                             fontSize: '0.7rem',
                             fontWeight: '700',
-                            backgroundColor: isLong ? '#e6f4ea' : (isShort ? '#fee2e2' : '#f3f4f6'),
-                            color: isLong ? '#059669' : (isShort ? '#dc2626' : '#4b5563')
+                            backgroundColor: isLong ? 'rgba(0, 208, 156, 0.12)' : (isShort ? 'rgba(235, 91, 60, 0.12)' : '#101314'),
+                            color: isLong ? '#00D09C' : (isShort ? '#EB5B3C' : '#92999C'),
+                            border: `1px solid ${isLong ? 'rgba(0, 208, 156, 0.28)' : (isShort ? 'rgba(235, 91, 60, 0.28)' : '#252A2C')}`
                           }}>
                             {stock.setup_signal}
                           </span>
-                          <div style={{ fontSize: '0.68rem', color: '#6b7280', marginTop: '3px' }}>
-                            Strategy: {stock.suggested_strategy.replace('NSE ', '')}
+                          <div style={{ fontSize: '0.68rem', color: '#92999C', marginTop: '3px' }}>
+                            {stock.suggested_strategy.replace('NSE ', '')}
                           </div>
                         </td>
 
                         {/* Target & SL */}
                         <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          <div style={{ color: '#059669', fontWeight: '800', fontSize: '0.76rem' }}>
+                          <div style={{ color: '#00D09C', fontWeight: '800', fontSize: '0.76rem' }} className="font-tabular">
                             TP: {currentCurrency}{stock.target_2r}
                           </div>
-                          <div style={{ color: '#dc2626', fontSize: '0.72rem', fontWeight: '700' }}>
+                          <div style={{ color: '#EB5B3C', fontSize: '0.72rem', fontWeight: '700' }} className="font-tabular">
                             SL: {currentCurrency}{stock.stop_loss}
                           </div>
                         </td>
@@ -1227,21 +1182,13 @@ export default function MorningScannerView({
                             <button
                               onClick={() => handleArmBot(stock.symbol, stock.suggested_strategy)}
                               disabled={isArming}
+                              className={isLong ? "btn-groww-primary" : "btn-groww-danger"}
                               style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                padding: '6px 11px',
-                                borderRadius: '8px',
-                                backgroundColor: isLong ? '#059669' : (isShort ? '#dc2626' : '#111827'),
-                                color: '#ffffff',
-                                fontSize: '0.72rem',
-                                fontWeight: '700',
-                                border: 'none',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
+                                padding: '6px 12px',
+                                fontSize: '0.75rem',
+                                borderRadius: '8px'
                               }}
-                              title="Arm live bot on this instrument immediately"
+                              title="Arm live paper bot on this stock"
                             >
                               {isArming ? (
                                 <RefreshCw size={12} className="animate-spin" />
@@ -1253,21 +1200,13 @@ export default function MorningScannerView({
 
                             <button
                               onClick={() => onSelectForBacktest(stock.symbol, stock.suggested_strategy)}
+                              className="btn-groww-secondary"
                               style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '3px',
                                 padding: '6px 10px',
-                                borderRadius: '8px',
-                                backgroundColor: '#f3f4f6',
-                                color: '#374151',
-                                fontSize: '0.72rem',
-                                fontWeight: '700',
-                                border: '1px solid #e5e7eb',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease'
+                                fontSize: '0.75rem',
+                                borderRadius: '8px'
                               }}
-                              title="Open in Strategy Backtester Studio"
+                              title="Open in Strategy Studio"
                             >
                               <span>Studio</span>
                               <ChevronRight size={12} />
@@ -1297,34 +1236,19 @@ export default function MorningScannerView({
             return (
               <div
                 key={stock.symbol}
+                className="groww-stock-card"
                 style={{
-                  backgroundColor: '#ffffff',
-                  borderRadius: '16px',
-                  padding: '18px',
-                  border: '1px solid #e5e7eb',
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  gap: '14px',
-                  transition: 'transform 0.15s ease, box-shadow 0.15s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.06)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.03)';
+                  minHeight: '230px',
+                  gap: '14px'
                 }}
               >
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#111827' }}>
+                      <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#F1F3F4' }}>
                         {stock.symbol}
                       </div>
-                      <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
+                      <div style={{ fontSize: '0.72rem', color: '#92999C' }}>
                         {stock.name} • {stock.sector}
                       </div>
                       {stock.hist_wr && (
@@ -1334,11 +1258,11 @@ export default function MorningScannerView({
                             fontWeight: '800',
                             padding: '2px 6px',
                             borderRadius: '5px',
-                            backgroundColor: stock.whipsaw_risk === 'LOW' ? '#e6f4ea' : (stock.whipsaw_risk === 'CRITICAL' ? '#fee2e2' : '#fef3c7'),
-                            color: stock.whipsaw_risk === 'LOW' ? '#059669' : (stock.whipsaw_risk === 'CRITICAL' ? '#dc2626' : '#b45309'),
-                            border: `1px solid ${stock.whipsaw_risk === 'LOW' ? '#a7f3d0' : (stock.whipsaw_risk === 'CRITICAL' ? '#fecaca' : '#fde68a')}`
+                            backgroundColor: stock.whipsaw_risk === 'LOW' ? 'rgba(0, 208, 156, 0.12)' : (stock.whipsaw_risk === 'CRITICAL' ? 'rgba(235, 91, 60, 0.12)' : 'rgba(245, 158, 11, 0.12)'),
+                            color: stock.whipsaw_risk === 'LOW' ? '#00D09C' : (stock.whipsaw_risk === 'CRITICAL' ? '#EB5B3C' : '#F59E0B'),
+                            border: `1px solid ${stock.whipsaw_risk === 'LOW' ? 'rgba(0, 208, 156, 0.28)' : (stock.whipsaw_risk === 'CRITICAL' ? 'rgba(235, 91, 60, 0.28)' : 'rgba(245, 158, 11, 0.28)')}`
                           }}>
-                            {stock.whipsaw_risk === 'CRITICAL' ? '⚠️ Whipsaw Trap Risk' : `Tier ${stock.edge_tier} (${stock.hist_wr}% WR • PF ${stock.hist_pf})`}
+                            {stock.whipsaw_risk === 'CRITICAL' ? '⚠️ Whipsaw Risk' : `Tier ${stock.edge_tier} (${stock.hist_wr}% WR)`}
                           </span>
                         </div>
                       )}
@@ -1349,15 +1273,16 @@ export default function MorningScannerView({
                       borderRadius: '6px',
                       fontSize: '0.72rem',
                       fontWeight: '800',
-                      backgroundColor: stock.rvol >= 1.2 ? '#e6f4ea' : '#f3f4f6',
-                      color: stock.rvol >= 1.2 ? '#059669' : '#374151'
-                    }}>
+                      backgroundColor: stock.rvol >= 1.2 ? 'rgba(0, 208, 156, 0.12)' : '#101314',
+                      color: stock.rvol >= 1.2 ? '#00D09C' : '#92999C',
+                      border: `1px solid ${stock.rvol >= 1.2 ? 'rgba(0, 208, 156, 0.28)' : '#252A2C'}`
+                    }} className="font-tabular">
                       RVOL {stock.rvol}x
                     </span>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '12px' }}>
-                    <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#111827' }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
                       {currentCurrency}{stock.price.toFixed(2)}
                     </div>
                     <div style={{
@@ -1366,8 +1291,8 @@ export default function MorningScannerView({
                       gap: '2px',
                       fontSize: '0.78rem',
                       fontWeight: '800',
-                      color: stock.change_pct >= 0 ? '#059669' : '#dc2626'
-                    }}>
+                      color: stock.change_pct >= 0 ? '#00D09C' : '#EB5B3C'
+                    }} className="font-tabular">
                       {stock.change_pct >= 0 ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
                       <span>{stock.change_pct >= 0 ? '+' : ''}{stock.change_pct}%</span>
                     </div>
@@ -1381,24 +1306,25 @@ export default function MorningScannerView({
                     marginTop: '12px',
                     padding: '10px',
                     borderRadius: '10px',
-                    backgroundColor: '#f9fafb',
+                    backgroundColor: '#080A0B',
+                    border: '1px solid #252A2C',
                     fontSize: '0.72rem'
                   }}>
                     <div>
-                      <span style={{ color: '#6b7280' }}>VWAP: </span>
-                      <b style={{ color: '#111827' }}>{stock.vwap}</b>
+                      <span style={{ color: '#92999C' }}>VWAP: </span>
+                      <b style={{ color: '#F1F3F4' }} className="font-tabular">{stock.vwap}</b>
                     </div>
                     <div>
-                      <span style={{ color: '#6b7280' }}>Gap: </span>
-                      <b style={{ color: stock.gap_pct >= 0 ? '#059669' : '#dc2626' }}>{stock.gap_pct}%</b>
+                      <span style={{ color: '#92999C' }}>Gap: </span>
+                      <b style={{ color: stock.gap_pct >= 0 ? '#00D09C' : '#EB5B3C' }} className="font-tabular">{stock.gap_pct}%</b>
                     </div>
                     <div>
-                      <span style={{ color: '#6b7280' }}>Target: </span>
-                      <b style={{ color: '#059669' }}>{stock.target_2r}</b>
+                      <span style={{ color: '#92999C' }}>Target: </span>
+                      <b style={{ color: '#00D09C' }} className="font-tabular">{stock.target_2r}</b>
                     </div>
                     <div>
-                      <span style={{ color: '#6b7280' }}>Stop: </span>
-                      <b style={{ color: '#dc2626' }}>{stock.stop_loss}</b>
+                      <span style={{ color: '#92999C' }}>Stop: </span>
+                      <b style={{ color: '#EB5B3C' }} className="font-tabular">{stock.stop_loss}</b>
                     </div>
                   </div>
 
@@ -1409,8 +1335,9 @@ export default function MorningScannerView({
                       borderRadius: '6px',
                       fontSize: '0.68rem',
                       fontWeight: '700',
-                      backgroundColor: isLong ? '#e6f4ea' : (isShort ? '#fee2e2' : '#f3f4f6'),
-                      color: isLong ? '#059669' : (isShort ? '#dc2626' : '#4b5563')
+                      backgroundColor: isLong ? 'rgba(0, 208, 156, 0.12)' : (isShort ? 'rgba(235, 91, 60, 0.12)' : '#101314'),
+                      color: isLong ? '#00D09C' : (isShort ? '#EB5B3C' : '#92999C'),
+                      border: `1px solid ${isLong ? 'rgba(0, 208, 156, 0.28)' : (isShort ? 'rgba(235, 91, 60, 0.28)' : '#252A2C')}`
                     }}>
                       {stock.setup_signal}
                     </span>
@@ -1418,24 +1345,16 @@ export default function MorningScannerView({
                 </div>
 
                 {/* Bottom Actions */}
-                <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid #f3f4f6', paddingTop: '10px' }}>
+                <div style={{ display: 'flex', gap: '8px', borderTop: '1px solid #252A2C', paddingTop: '10px' }}>
                   <button
                     onClick={() => handleArmBot(stock.symbol, stock.suggested_strategy)}
                     disabled={isArming}
+                    className={isLong ? "btn-groww-primary" : "btn-groww-danger"}
                     style={{
                       flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '5px',
                       padding: '8px',
-                      borderRadius: '8px',
-                      backgroundColor: isLong ? '#059669' : (isShort ? '#dc2626' : '#111827'),
-                      color: '#ffffff',
                       fontSize: '0.75rem',
-                      fontWeight: '700',
-                      border: 'none',
-                      cursor: 'pointer'
+                      justifyContent: 'center'
                     }}
                   >
                     {isArming ? <RefreshCw size={12} className="animate-spin" /> : <Bot size={12} />}
@@ -1444,15 +1363,10 @@ export default function MorningScannerView({
 
                   <button
                     onClick={() => onSelectForBacktest(stock.symbol, stock.suggested_strategy)}
+                    className="btn-groww-secondary"
                     style={{
                       padding: '8px 12px',
-                      borderRadius: '8px',
-                      backgroundColor: '#f3f4f6',
-                      color: '#374151',
-                      fontSize: '0.75rem',
-                      fontWeight: '700',
-                      border: '1px solid #e5e7eb',
-                      cursor: 'pointer'
+                      fontSize: '0.75rem'
                     }}
                   >
                     Studio
