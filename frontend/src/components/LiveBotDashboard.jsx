@@ -567,67 +567,32 @@ export default function LiveBotDashboard({
           {/* Daily Quota / Max Trades Per Stock */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
             <span style={{ fontSize: '0.68rem', color: '#6b7280', fontWeight: '700', textTransform: 'uppercase' }}>Daily Trade Limit</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <select
-                value={maxTradesPerSymbol}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  userSelectedQuotaRef.current = true;
-                  setMaxTradesPerSymbol(val);
-                  handleControl("UPDATE_QUOTA", symbol, strategy, val);
-                }}
-                style={{
-                  padding: '8px 10px',
-                  backgroundColor: '#f9fafb',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '10px',
-                  color: maxTradesPerSymbol === 1 ? '#059669' : (maxTradesPerSymbol === 0 ? '#b45309' : '#2563eb'),
-                  fontSize: '0.82rem',
-                  fontWeight: '700',
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                <option value={1}>1 Trade (Strict • Recommended)</option>
-                <option value={2}>2 Trades / Stock</option>
-                <option value={3}>3 Trades / Stock</option>
-                <option value={5}>5 Trades / Stock</option>
-                <option value={0}>Unlimited (0 - No Lock)</option>
-              </select>
-
-              <input
-                type="number"
-                min="0"
-                max="20"
-                value={maxTradesPerSymbol}
-                onChange={(e) => {
-                  const val = Math.max(0, parseInt(e.target.value || "0", 10));
-                  userSelectedQuotaRef.current = true;
-                  setMaxTradesPerSymbol(val);
-                }}
-                onBlur={() => {
-                  handleControl("UPDATE_QUOTA", symbol, strategy, maxTradesPerSymbol);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleControl("UPDATE_QUOTA", symbol, strategy, maxTradesPerSymbol);
-                  }
-                }}
-                title="Type custom maximum trades per stock per day (0 = Unlimited)"
-                style={{
-                  width: '46px',
-                  padding: '7px 4px',
-                  textAlign: 'center',
-                  backgroundColor: '#ffffff',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '8px',
-                  fontSize: '0.82rem',
-                  fontWeight: '700',
-                  color: '#111827',
-                  outline: 'none'
-                }}
-              />
-            </div>
+            <select
+              value={maxTradesPerSymbol}
+              onChange={(e) => {
+                const val = parseInt(e.target.value, 10);
+                userSelectedQuotaRef.current = true;
+                setMaxTradesPerSymbol(val);
+                handleControl("UPDATE_QUOTA", symbol, strategy, val);
+              }}
+              style={{
+                padding: '8px 10px',
+                backgroundColor: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: '10px',
+                color: maxTradesPerSymbol === 1 ? '#059669' : (maxTradesPerSymbol === 0 ? '#b45309' : '#2563eb'),
+                fontSize: '0.82rem',
+                fontWeight: '700',
+                outline: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <option value={1}>1 Trade (Strict • Recommended)</option>
+              <option value={2}>2 Trades / Stock</option>
+              <option value={3}>3 Trades / Stock</option>
+              <option value={5}>5 Trades / Stock</option>
+              <option value={0}>Unlimited (0 - No Lock)</option>
+            </select>
           </div>
 
           {/* DYNAMIC PLAY / PAUSE TOGGLE BUTTON */}
