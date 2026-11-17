@@ -33,7 +33,7 @@ export default function LiveBotDashboard({
   onNavigateToBacktest = () => {}
 }) {
   const [symbol, setSymbol] = useState("SBIN.NS");
-  const [strategy, setStrategy] = useState("NSE Midday VWAP Pullback");
+  const [strategy, setStrategy] = useState("NSE Intraday ORB Breakout");
   const [botData, setBotData] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
@@ -525,8 +525,8 @@ export default function LiveBotDashboard({
                 cursor: 'pointer'
               }}
             >
+              <option value="NSE Intraday ORB Breakout">NSE Intraday ORB Breakout (High Edge)</option>
               <option value="NSE Midday VWAP Pullback">NSE Midday VWAP Pullback</option>
-              <option value="NSE Intraday ORB Breakout">NSE Intraday ORB Breakout</option>
               <option value="Intraday VWAP + RSI Mean Reversion">Intraday VWAP + RSI Mean Reversion</option>
               <option value="9/21 EMA Dynamic Momentum">9/21 EMA Dynamic Momentum</option>
               <option value="NSE Failed-Gap Fade">NSE Failed-Gap Fade</option>

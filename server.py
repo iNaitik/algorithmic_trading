@@ -480,7 +480,7 @@ from engine.live_trader import get_live_state, command_bot_control, start_live_e
 class BotControlRequest(BaseModel):
     action: str = Field(..., description="START, STOP, PAUSE, SQUARE_OFF, RESET")
     symbol: Optional[str] = Field(default=None)
-    strategy_name: Optional[str] = "NSE Midday VWAP Pullback"
+    strategy_name: Optional[str] = "NSE Intraday ORB Breakout"
     capital: Optional[float] = 1_000_000.0
 
 
@@ -525,7 +525,7 @@ def get_bot_state(symbol: Optional[str] = None):
         state_data = {
             "symbol": target_sym,
             "status": live_state.get("status", "ACTIVE (MONITORING)"),
-            "strategy": live_state.get("strategy", "NSE Midday VWAP Pullback"),
+            "strategy": live_state.get("strategy", "NSE Intraday ORB Breakout"),
             "timeframe": live_state.get("timeframe", "2m"),
             "cash": live_state.get("cash", 1_000_000.0),
             "in_position": False,
@@ -610,7 +610,7 @@ def get_bot_state(symbol: Optional[str] = None):
     return {
         "bot_state": state_data,
         "active_symbol": active_sym,
-        "active_strategy": live_state.get("strategy", "NSE Midday VWAP Pullback"),
+        "active_strategy": live_state.get("strategy", "NSE Intraday ORB Breakout"),
         "active_status": live_state.get("status", "ACTIVE (MONITORING)"),
         "is_market_open": is_market_open,
         "ist_time": now_ist.strftime("%H:%M:%S"),

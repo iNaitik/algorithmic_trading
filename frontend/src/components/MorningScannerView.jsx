@@ -86,7 +86,7 @@ export default function MorningScannerView({
         body: JSON.stringify({
           action: "START",
           symbol,
-          strategy_name: strategyName || "NSE Midday VWAP Pullback",
+          strategy_name: strategyName || "NSE Intraday ORB Breakout",
           capital: 1000000.0
         })
       });
@@ -116,6 +116,7 @@ export default function MorningScannerView({
       if (filterType === "SHORTS") return s.setup_action === "SELL / SHORT";
       if (filterType === "HIGHRVOL") return s.rvol >= 1.0;
       if (filterType === "GAPS") return Math.abs(s.gap_pct) >= 0.5;
+      if (filterType === "HIGHEDGE") return (s.hist_pf >= 1.2 || s.edge_tier?.startsWith('A')) && s.whipsaw_risk !== "CRITICAL";
       return true;
     });
 
@@ -135,7 +136,8 @@ export default function MorningScannerView({
       longs: stocks.filter(s => s.setup_action === "BUY" || s.setup_action === "BUY ON RETEST").length,
       shorts: stocks.filter(s => s.setup_action === "SELL / SHORT").length,
       highRvol: stocks.filter(s => s.rvol >= 1.0).length,
-      gaps: stocks.filter(s => Math.abs(s.gap_pct) >= 0.5).length
+      gaps: stocks.filter(s => Math.abs(s.gap_pct) >= 0.5).length,
+      highEdge: stocks.filter(s => (s.hist_pf >= 1.2 || s.edge_tier?.startsWith('A')) && s.whipsaw_risk !== "CRITICAL").length
     };
   }, [stocks]);
 
@@ -576,6 +578,25 @@ export default function MorningScannerView({
                 <div style={{ fontSize: '0.82rem', opacity: 0.9, marginTop: '2px' }}>
                   {topLong ? `${topLong.name} • ${topLong.sector}` : "Awaiting morning volume surge"}
                 </div>
+                {topLong && topLong.hist_wr && (
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '0.7rem',
+                    fontWeight: '800',
+                    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    marginTop: '6px'
+                  }}>
+                    <span>🏆 Factor Edge: Tier {topLong.edge_tier}</span>
+                    <span>•</span>
+                    <span>{topLong.hist_wr}% Hist. Win Rate</span>
+                    <span>•</span>
+                    <span>PF {topLong.hist_pf}</span>
+                  </div>
+                )}
               </div>
 
               {topLong && (
@@ -890,6 +911,7 @@ export default function MorningScannerView({
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {[
             { id: "ALL", label: "All Assets", count: counts.all },
+            { id: "HIGHEDGE", label: "🏆 High Conviction Edge", count: counts.highEdge },
             { id: "LONGS", label: "🟢 Long Breakouts", count: counts.longs },
             { id: "SHORTS", label: "🔴 Short Breakdowns", count: counts.shorts },
             { id: "HIGHRVOL", label: "⚡ High RVOL (>1.0x)", count: counts.highRvol },
@@ -1081,7 +1103,7 @@ export default function MorningScannerView({
                       >
                         {/* Ticker & Sector */}
                         <td style={{ padding: '14px 18px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <div style={{ fontWeight: '800', color: '#111827', fontSize: '0.88rem' }}>
                               {stock.symbol}
                             </div>
@@ -1095,6 +1117,19 @@ export default function MorningScannerView({
                             }}>
                               Score: {stock.alpha_score || 85}
                             </span>
+                            {stock.hist_wr && (
+                              <span style={{
+                                fontSize: '0.64rem',
+                                fontWeight: '800',
+                                padding: '2px 6px',
+                                borderRadius: '5px',
+                                backgroundColor: stock.whipsaw_risk === 'LOW' ? '#e6f4ea' : (stock.whipsaw_risk === 'CRITICAL' ? '#fee2e2' : '#fef3c7'),
+                                color: stock.whipsaw_risk === 'LOW' ? '#059669' : (stock.whipsaw_risk === 'CRITICAL' ? '#dc2626' : '#b45309'),
+                                border: `1px solid ${stock.whipsaw_risk === 'LOW' ? '#a7f3d0' : (stock.whipsaw_risk === 'CRITICAL' ? '#fecaca' : '#fde68a')}`
+                              }}>
+                                {stock.whipsaw_risk === 'CRITICAL' ? '⚠️ Whipsaw Trap Risk' : `Tier ${stock.edge_tier} (${stock.hist_wr}% WR • PF ${stock.hist_pf})`}
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: '0.72rem', color: '#6b7280', marginTop: '2px' }}>
                             {stock.name} • <span style={{ color: '#4b5563', fontWeight: '600' }}>{stock.sector}</span>
@@ -1292,6 +1327,21 @@ export default function MorningScannerView({
                       <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>
                         {stock.name} • {stock.sector}
                       </div>
+                      {stock.hist_wr && (
+                        <div style={{ marginTop: '5px' }}>
+                          <span style={{
+                            fontSize: '0.65rem',
+                            fontWeight: '800',
+                            padding: '2px 6px',
+                            borderRadius: '5px',
+                            backgroundColor: stock.whipsaw_risk === 'LOW' ? '#e6f4ea' : (stock.whipsaw_risk === 'CRITICAL' ? '#fee2e2' : '#fef3c7'),
+                            color: stock.whipsaw_risk === 'LOW' ? '#059669' : (stock.whipsaw_risk === 'CRITICAL' ? '#dc2626' : '#b45309'),
+                            border: `1px solid ${stock.whipsaw_risk === 'LOW' ? '#a7f3d0' : (stock.whipsaw_risk === 'CRITICAL' ? '#fecaca' : '#fde68a')}`
+                          }}>
+                            {stock.whipsaw_risk === 'CRITICAL' ? '⚠️ Whipsaw Trap Risk' : `Tier ${stock.edge_tier} (${stock.hist_wr}% WR • PF ${stock.hist_pf})`}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     <span style={{

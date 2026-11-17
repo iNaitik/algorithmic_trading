@@ -86,7 +86,7 @@ def get_live_state() -> Dict[str, Any]:
     default_status = "ACTIVE (MONITORING)" if is_nse_market_open(now_ist) else "ARMED (STANDBY • MARKET CLOSED)"
     state = {
         "symbol": "SBIN.NS",
-        "strategy": "NSE Midday VWAP Pullback",
+        "strategy": "NSE Intraday ORB Breakout",
         "timeframe": "2m",
         "status": default_status,
         "cash": DEFAULT_CASH,
@@ -308,7 +308,7 @@ def _execution_worker():
 
             status = state.get("status", "STOPPED")
             symbol = state.get("symbol", "SBIN.NS")
-            strategy_name = state.get("strategy", "NSE Midday VWAP Pullback")
+            strategy_name = state.get("strategy", "NSE Intraday ORB Breakout")
             timeframe = state.get("timeframe", "2m")
             in_pos = state.get("in_position", False)
             cash = state.get("cash", DEFAULT_CASH)
