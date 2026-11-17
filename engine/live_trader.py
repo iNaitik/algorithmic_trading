@@ -80,6 +80,26 @@ def is_nse_market_open(now_ist: Optional[datetime] = None) -> bool:
     ))
 
 
+def get_today_completed_trades(symbol: str) -> int:
+    """Counts completed round-trip trades (SELL, COVER, or MANUAL_SQUARE_OFF) for symbol today."""
+    if not os.path.exists(HISTORY_FILE):
+        return 0
+    today_str = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d")
+    count = 0
+    try:
+        with open(HISTORY_FILE, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                ts = str(row.get("Timestamp", "")).strip()
+                sym = str(row.get("Symbol", "")).strip()
+                act = str(row.get("Action", "")).strip().upper()
+                if ts.startswith(today_str) and sym == symbol and act in ("SELL", "COVER", "MANUAL_SQUARE_OFF", "SQUAREOFF", "SQUARE_OFF"):
+                    count += 1
+    except Exception as e:
+        print(f"[HISTORY READ ERROR] {e}")
+    return count
+
+
 def get_live_state() -> Dict[str, Any]:
     """Loads the active live bot state from config."""
     now_ist = datetime.now(ZoneInfo("Asia/Kolkata"))
@@ -101,7 +121,10 @@ def get_live_state() -> Dict[str, Any]:
         "last_eval_time": None,
         "last_ltp": None,
         "vwap": None,
-        "rsi": None
+        "rsi": None,
+        "max_trades_per_symbol": 1,
+        "daily_completed_trades": 0,
+        "symbol_locked_for_day": False
     }
     if os.path.exists(CONFIG_FILE):
         try:
@@ -113,6 +136,14 @@ def get_live_state() -> Dict[str, Any]:
                     state["symbol"] = saved["active_symbol"]
         except Exception:
             pass
+
+    # Synchronize daily completed trade quota & lock status for current symbol
+    sym = state.get("symbol", "SBIN.NS")
+    completed = get_today_completed_trades(sym)
+    max_t = state.get("max_trades_per_symbol", 1)
+    state["daily_completed_trades"] = completed
+    state["symbol_locked_for_day"] = bool(max_t > 0 and completed >= max_t)
+    state.setdefault("max_trades_per_symbol", 1)
 
     # If market is closed and state was marked ACTIVE (and not in an active position), normalize to ARMED STANDBY
     if not is_nse_market_open(now_ist) and not state.get("in_position"):
@@ -265,17 +296,58 @@ def evaluate_strategy_signal(df: pd.DataFrame, strategy_name: str) -> Tuple[int,
 
     if strat_fn is not None:
         try:
-            # Strategies expect DataFrame with ['open', 'high', 'low', 'close', 'volume']
+            # 1. Provide standardized DataFrame with lowercase columns ('open', 'high', 'low', 'close', 'volume')
             clean_df = df.copy()
-            clean_df.columns = [c.capitalize() for c in clean_df.columns]
+            clean_df.columns = [c.lower() for c in clean_df.columns]
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                if col not in clean_df.columns:
+                    for alt in [col.capitalize(), col.upper()]:
+                        if alt in clean_df.columns:
+                            clean_df[col] = clean_df[alt]
+
+            # 2. Ensure IST timezone on DatetimeIndex
+            if clean_df.index.tz is None:
+                clean_df.index = clean_df.index.tz_localize("Asia/Kolkata")
+            elif str(clean_df.index.tz) != "Asia/Kolkata":
+                clean_df.index = clean_df.index.tz_convert("Asia/Kolkata")
+
             res_df = strat_fn(clean_df)
-            if 'Signal' in res_df.columns and not res_df['Signal'].empty:
-                last_sig = int(res_df['Signal'].iloc[-1])
-                sl = float(res_df.get('StopLoss', pd.Series([curr_close * 0.99])).iloc[-1])
-                tp = float(res_df.get('Target', pd.Series([curr_close * 1.02])).iloc[-1])
-                return last_sig, sl, tp, f"Strategy '{strategy_name}' generated Signal {last_sig}"
+
+            # 3. Extract signal (check execution_signal, signal, Signal)
+            last_sig = 0
+            for sig_col in ['execution_signal', 'signal', 'Signal', 'Execution_Signal']:
+                if sig_col in res_df.columns and not res_df[sig_col].empty:
+                    val = int(res_df[sig_col].iloc[-1])
+                    if val != 0:
+                        last_sig = val
+                        break
+
+            # 4. Extract Stop Loss
+            sl = None
+            for sl_col in ['stop_loss', 'StopLoss', 'stop', 'Stop']:
+                if sl_col in res_df.columns and not res_df[sl_col].empty:
+                    val = float(res_df[sl_col].iloc[-1])
+                    if val > 0 and not np.isnan(val):
+                        sl = round(val, 2)
+                        break
+            if sl is None:
+                sl = round(curr_close * 0.992 if last_sig == 1 else curr_close * 1.008, 2)
+
+            # 5. Extract Target Price
+            tp = None
+            for tp_col in ['target_price', 'TargetPrice', 'target', 'Target', 'take_profit']:
+                if tp_col in res_df.columns and not res_df[tp_col].empty:
+                    val = float(res_df[tp_col].iloc[-1])
+                    if val > 0 and not np.isnan(val):
+                        tp = round(val, 2)
+                        break
+            if tp is None:
+                tp = round(curr_close * 1.016 if last_sig == 1 else curr_close * 0.984, 2)
+
+            return last_sig, sl, tp, f"Strategy '{strategy_name}' Signal {last_sig} (SL: ₹{sl:.2f}, TP: ₹{tp:.2f})"
         except Exception as e:
-            pass
+            from server import add_bot_log
+            add_bot_log("WARNING", f"Strategy '{strategy_name}' evaluation error: {e}. Falling back to VWAP rule.", "")
 
     # Built-in robust VWAP Pullback Rule if module not found:
     # BUY when close > VWAP and 9 EMA > 21 EMA and RSI > 50
@@ -475,18 +547,32 @@ def _execution_worker():
             # B. IF FLAT: Evaluate Candle Strategy for New Entry Signal
             # ─────────────────────────────────────────────────────────
             else:
+                completed_today = get_today_completed_trades(symbol)
+                max_trades = state.get("max_trades_per_symbol", 1)
+                daily_quota_reached = (max_trades > 0 and completed_today >= max_trades)
+
                 sig, stop_loss, target_price, reason = evaluate_strategy_signal(df, strategy_name)
 
                 from server import add_bot_log
-                # Log actual calculation
-                add_bot_log(
-                    "TICK",
-                    f"Evaluating {symbol} ({strategy_name} [{timeframe}]): LTP ₹{current_ltp:.2f} │ VWAP ₹{vwap_val:.2f} │ RSI {rsi_val} │ EMA Spread {ema_spread:+.2f} │ Signal: {sig}",
-                    symbol
-                )
+                # Log actual calculation or quota message
+                if daily_quota_reached:
+                    now_ts = time.time()
+                    if now_ts - last_standby_pulse > 600:
+                        last_standby_pulse = now_ts
+                        add_bot_log(
+                            "STANDBY",
+                            f"🔒 Daily Lock Active for {symbol}: Quota reached ({completed_today}/{max_trades} completed today). Profit secured; re-entries blocked to prevent chasing runner. Arm another symbol or wait for tomorrow.",
+                            symbol
+                        )
+                else:
+                    add_bot_log(
+                        "TICK",
+                        f"Evaluating {symbol} ({strategy_name} [{timeframe}]): LTP ₹{current_ltp:.2f} │ VWAP ₹{vwap_val:.2f} │ RSI {rsi_val} │ EMA Spread {ema_spread:+.2f} │ Signal: {sig}",
+                        symbol
+                    )
 
-                # Check if Entry Signal triggered (only within market hours before 02:45 PM)
-                can_enter = is_market_hours and (now_ist.hour < 14 or (now_ist.hour == 14 and now_ist.minute <= 45))
+                # Check if Entry Signal triggered (only within market hours before 02:45 PM and quota not reached)
+                can_enter = is_market_hours and (now_ist.hour < 14 or (now_ist.hour == 14 and now_ist.minute <= 45)) and not daily_quota_reached
 
                 if sig != 0 and can_enter:
                     # Allocate max 50% cash to a single trade for prudent risk sizing
@@ -561,7 +647,7 @@ def start_live_execution_engine():
         print("✅ Live Execution Engine daemon armed and running.")
 
 
-def command_bot_control(action: str, symbol: Optional[str] = None, strategy_name: Optional[str] = None, capital: Optional[float] = None, timeframe: Optional[str] = None) -> Dict[str, Any]:
+def command_bot_control(action: str, symbol: Optional[str] = None, strategy_name: Optional[str] = None, capital: Optional[float] = None, timeframe: Optional[str] = None, max_trades_per_symbol: Optional[int] = None) -> Dict[str, Any]:
     """Handles START, PAUSE, STOP, SQUARE_OFF, RESET directly on the live engine."""
     with _ENGINE_LOCK:
         state = get_live_state()
@@ -573,6 +659,8 @@ def command_bot_control(action: str, symbol: Optional[str] = None, strategy_name
             state["strategy"] = strategy_name
         if timeframe:
             state["timeframe"] = timeframe
+        if max_trades_per_symbol is not None:
+            state["max_trades_per_symbol"] = max_trades_per_symbol
         if capital and capital > 0:
             if not state.get("in_position"):
                 state["cash"] = capital

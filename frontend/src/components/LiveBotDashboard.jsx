@@ -450,9 +450,25 @@ export default function LiveBotDashboard({
                 }} />
                 {bot.status || (isMarketOpen ? "ACTIVE (MONITORING)" : "ARMED (STANDBY • MARKET CLOSED)")}
               </span>
+              {bot.symbol_locked_for_day && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '0.70rem',
+                  fontWeight: '700',
+                  padding: '3px 8px',
+                  borderRadius: '8px',
+                  backgroundColor: '#eff6ff',
+                  color: '#2563eb',
+                  border: '1px solid #bfdbfe'
+                }}>
+                  🔒 Daily Quota Locked ({bot.daily_completed_trades || 1}/{bot.max_trades_per_symbol || 1} trades)
+                </span>
+              )}
             </div>
             <div style={{ fontSize: '0.78rem', color: '#6b7280', marginTop: '2px' }}>
-              Instrument: <b style={{ color: '#111827' }}>{symbol}</b> • Strategy: <b style={{ color: '#059669' }}>{strategy}</b> • Timeframe: <b style={{ color: '#111827' }}>{bot.timeframe || "2m"}</b>
+              Instrument: <b style={{ color: '#111827' }}>{symbol}</b> • Strategy: <b style={{ color: '#059669' }}>{strategy}</b> • Timeframe: <b style={{ color: '#111827' }}>{bot.timeframe || "2m"}</b> • Quota: <b style={{ color: '#2563eb' }}>{bot.max_trades_per_symbol || 1} trade/day</b>
             </div>
           </div>
         </div>

@@ -482,6 +482,8 @@ class BotControlRequest(BaseModel):
     symbol: Optional[str] = Field(default=None)
     strategy_name: Optional[str] = "NSE Intraday ORB Breakout"
     capital: Optional[float] = 1_000_000.0
+    timeframe: Optional[str] = None
+    max_trades_per_symbol: Optional[int] = None
 
 
 @app.on_event("startup")
@@ -643,7 +645,9 @@ def control_paper_bot(req: BotControlRequest):
         action=req.action,
         symbol=req.symbol,
         strategy_name=req.strategy_name,
-        capital=req.capital
+        capital=req.capital,
+        timeframe=req.timeframe,
+        max_trades_per_symbol=req.max_trades_per_symbol
     )
     return {"success": True, "action": req.action, "bot_state": updated_state}
 
