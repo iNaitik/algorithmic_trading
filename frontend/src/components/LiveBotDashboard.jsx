@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   TrendingUp,
+  TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
   Play,
@@ -24,35 +25,41 @@ import {
   FileText,
   ChevronRight,
   RefreshCw,
-  Sliders,
   SlidersHorizontal,
   ChevronDown,
   Info,
   DollarSign,
-  TrendingDown,
-  X
+  X,
+  ExternalLink,
+  Plus,
+  Briefcase,
+  Zap,
+  BarChart2
 } from 'lucide-react';
 
 import GrowwRocketEmptyState from './GrowwRocketEmptyState';
 import TradeDetailsModal from './TradeDetailsModal';
+import InstrumentModal from './InstrumentModal';
 
 export default function LiveBotDashboard({
   market = "INDIA",
   currency = "₹",
-  onNavigateToBacktest = () => {}
+  onNavigateToBacktest = () => {},
+  onNavigateToScanner = () => {},
+  onNavigateToMatrix = () => {}
 }) {
-  // Navigation sub-tabs: "positions", "orders", "config", "explore"
-  const [activeSubTab, setActiveSubTab] = useState("positions");
+  // Navigation sub-tabs: "explore", "holdings", "positions", "orders", "watchlist", "config"
+  const [activeSubTab, setActiveSubTab] = useState("explore");
 
   // Terminal slide-out drawer state
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
 
-  // Selected trade for statutory charges modal
+  // Modals state
   const [selectedTrade, setSelectedTrade] = useState(null);
+  const [selectedInstrument, setSelectedInstrument] = useState(null);
 
   // Bot configuration state
   const [symbol, setSymbol] = useState("SBIN.NS");
-  const [customSymbolInput, setCustomSymbolInput] = useState("");
   const [strategy, setStrategy] = useState("NSE Intraday ORB Breakout");
   const [maxTradesPerSymbol, setMaxTradesPerSymbol] = useState(1);
   const [capitalAllocation, setCapitalAllocation] = useState(1000000.0);
@@ -81,13 +88,33 @@ export default function LiveBotDashboard({
   const userSelectedQuotaRef = useRef(false);
   const terminalBodyRef = useRef(null);
 
-  // Live Indices Ribbon mock/live telemetry
+  // Live Market Indices Ticker Tape (Matches Groww Desktop Header)
   const indices = [
     { name: "NIFTY 50", price: "25,387.40", change: "+96.30", pct: "+0.38%", isUp: true },
     { name: "SENSEX", price: "82,532.19", change: "+427.40", pct: "+0.52%", isUp: true },
     { name: "BANK NIFTY", price: "62,273.25", change: "+697.35", pct: "+1.13%", isUp: true },
     { name: "MIDCPNIFTY", price: "14,277.45", change: "-3.80", pct: "-0.03%", isUp: false },
     { name: "FINNIFTY", price: "28,124.80", change: "+112.50", pct: "+0.40%", isUp: true }
+  ];
+
+  // Popular Stocks Data (4 cards per row)
+  const popularStocks = [
+    { sym: "SBIN.NS", name: "State Bank of India", price: "818.50", chg: "+1.25%", isUp: true, logo: "SB" },
+    { sym: "RELIANCE.NS", name: "Reliance Industries", price: "2,985.40", chg: "+0.85%", isUp: true, logo: "RL" },
+    { sym: "HDFCBANK.NS", name: "HDFC Bank Ltd", price: "1,682.10", chg: "-0.40%", isUp: false, logo: "HD" },
+    { sym: "TATAMOTORS.NS", name: "Tata Motors Ltd", price: "982.35", chg: "+2.15%", isUp: true, logo: "TM" },
+    { sym: "TCS.NS", name: "Tata Consultancy Services", price: "4,120.00", chg: "+0.30%", isUp: true, logo: "TC" },
+    { sym: "INFY.NS", name: "Infosys Ltd", price: "1,875.25", chg: "-0.65%", isUp: false, logo: "IN" },
+    { sym: "BHARTIARTL.NS", name: "Bharti Airtel Ltd", price: "1,610.80", chg: "+1.40%", isUp: true, logo: "BA" },
+    { sym: "ICICIBANK.NS", name: "ICICI Bank Ltd", price: "1,245.50", chg: "+0.95%", isUp: true, logo: "IC" }
+  ];
+
+  // Popular Bonds Data (4 cards per row)
+  const popularBonds = [
+    { sym: "GS2033", name: "Govt of India 7.18% 2033", yieldRate: "7.18% YTM", price: "100.25", chg: "+0.05%", isUp: true, logo: "GOI" },
+    { sym: "REC2029", name: "REC Ltd AAA 7.65%", yieldRate: "7.65% YTM", price: "101.50", chg: "+0.12%", isUp: true, logo: "REC" },
+    { sym: "NHAI2031", name: "NHAI Tax Free 7.39%", yieldRate: "5.45% (TF)", price: "118.40", chg: "+0.08%", isUp: true, logo: "NHAI" },
+    { sym: "PFC2030", name: "PFC Ltd AAA 7.72%", yieldRate: "7.72% YTM", price: "102.10", chg: "-0.04%", isUp: false, logo: "PFC" }
   ];
 
   // Live Market Countdown Timer (09:15 AM IST Open / 03:15 PM MIS / 03:30 PM Close)
@@ -158,7 +185,6 @@ export default function LiveBotDashboard({
         const sData = await statusRes.json();
         setBotData(sData);
 
-        // Sync initial controls if user hasn't explicitly overridden
         if (sData.bot_state) {
           if (!userSelectedSymbolRef.current && sData.bot_state.symbol) {
             setSymbol(sData.bot_state.symbol);
@@ -241,7 +267,10 @@ export default function LiveBotDashboard({
           }
         }
         if (action === "START" || action === "ARM") {
-          setConfigSuccessMsg("Bot Armed & Configured Successfully!");
+          setConfigSuccessMsg(`Bot Armed & Running on ${targetSymbol}`);
+          setTimeout(() => setConfigSuccessMsg(""), 3500);
+        } else if (action === "PAUSE") {
+          setConfigSuccessMsg("Bot Paused Execution");
           setTimeout(() => setConfigSuccessMsg(""), 3500);
         }
       }
@@ -291,7 +320,7 @@ export default function LiveBotDashboard({
     target_price: null
   };
 
-  const isRunning = Boolean(bot.status?.includes("ACTIVE"));
+  const isRunning = Boolean(bot.status?.includes("ACTIVE") || bot.status?.includes("IN POSITION"));
   const isPaused = Boolean(bot.status?.includes("PAUSED"));
   const isArmed = Boolean(bot.status?.includes("ARMED") || bot.status?.includes("STANDBY"));
   const isInPosition = Boolean(bot.in_position && bot.shares > 0);
@@ -330,149 +359,120 @@ export default function LiveBotDashboard({
   const allLogs = botData?.logs || [];
   const filteredLogs = logFilter === "ALL" ? allLogs : allLogs.filter(l => l.level === logFilter);
 
+  // Handle single Play / Pause toggle
+  const handleTogglePlayPause = () => {
+    if (isRunning) {
+      handleControl("PAUSE");
+    } else {
+      handleControl("START");
+    }
+  };
+
   return (
     <div style={{
       display: 'flex',
       flexDirection: 'column',
       minHeight: '100%',
-      backgroundColor: '#0c0e14',
-      color: '#ffffff',
-      fontFamily: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+      backgroundColor: '#080A0B',
+      color: '#F1F3F4'
     }}>
 
-      {/* ── Groww Secondary Indices Ribbon (Matches Groww Desktop Header) ── */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '10px 32px',
-        borderBottom: '1px solid #1f2430',
-        backgroundColor: '#0c0e14',
-        overflowX: 'auto',
-        gap: '32px',
-        whiteSpace: 'nowrap'
-      }}>
-        {indices.map((idx, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem' }}>
-            <span style={{ fontWeight: '700', color: '#9ca3af', letterSpacing: '0.02em' }}>{idx.name}</span>
-            <span style={{ fontWeight: '700', color: '#ffffff' }}>{idx.price}</span>
-            <span style={{
-              fontWeight: '600',
-              color: idx.isUp ? '#00d09c' : '#eb5b3c',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '2px'
-            }}>
-              {idx.change} ({idx.pct})
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Groww Underline Sub-Navigation Bar ── */}
+      {/* ── ROW 2: Groww Underline Sub-Navigation Bar (Matches Screenshot 1 & 4) ── */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 32px',
-        borderBottom: '1px solid #1f2430',
-        backgroundColor: '#0c0e14'
+        borderBottom: '1px solid #252A2C',
+        backgroundColor: '#080A0B'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           {[
+            { id: "explore", label: "Explore" },
+            { id: "holdings", label: "Holdings" },
             { id: "positions", label: "Positions", badge: isInPosition ? "1" : null },
             { id: "orders", label: "Orders", badge: todayFills.length > 0 ? todayFills.length : null },
-            { id: "config", label: "Bot Config & Rules", badge: null },
-            { id: "explore", label: "Explore Watchlist", badge: null }
+            { id: "watchlist", label: "Watchlist" },
+            { id: "config", label: "Bot Config", badge: isRunning ? "RUNNING" : null }
           ].map(tab => {
             const isActive = activeSubTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id)}
+                className={`groww-subtab ${isActive ? 'groww-subtab-active' : 'groww-subtab-inactive'}`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  padding: '16px 4px',
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  borderBottom: isActive ? '2px solid #00d09c' : '2px solid transparent',
-                  color: isActive ? '#ffffff' : '#9ca3af',
-                  fontSize: '0.92rem',
-                  fontWeight: isActive ? '700' : '500',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease'
+                  gap: '8px'
                 }}
               >
                 <span>{tab.label}</span>
                 {tab.badge && (
                   <span style={{
-                    padding: '2px 7px',
-                    borderRadius: '10px',
-                    fontSize: '0.72rem',
+                    padding: '1px 6px',
+                    borderRadius: '8px',
+                    fontSize: '0.68rem',
                     fontWeight: '700',
-                    backgroundColor: isActive ? '#00d09c' : '#242938',
-                    color: isActive ? '#0c0e14' : '#9ca3af'
+                    backgroundColor: tab.badge === "RUNNING" ? 'rgba(0, 208, 156, 0.15)' : '#252A2C',
+                    color: tab.badge === "RUNNING" ? '#00D09C' : '#92999C'
                   }}>
                     {tab.badge}
                   </span>
                 )}
+                {/* Clean Underline Indicator (as seen in Groww screenshot) */}
+                {isActive && <div className="groww-subtab-indicator" />}
               </button>
             );
           })}
         </div>
 
-        {/* Right side of Tab Bar: Market Status Badge + Terminal Button (Matches Groww Screenshot) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          {/* Status pill */}
+        {/* Right side of Sub-Nav: Status Badge & Terminal Console Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          {/* Market Timing Badge */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '6px',
             padding: '5px 12px',
             borderRadius: '20px',
-            backgroundColor: '#161922',
-            border: '1px solid #242938',
+            backgroundColor: '#151819',
+            border: '1px solid #252A2C',
             fontSize: '0.75rem',
             fontWeight: '600',
-            color: '#9ca3af'
+            color: '#92999C'
           }}>
-            <span style={{
-              width: '7px',
-              height: '7px',
-              borderRadius: '50%',
-              backgroundColor: isRunning ? '#00d09c' : (isPaused ? '#fbbf24' : '#6b7280'),
-              boxShadow: isRunning ? '0 0 8px #00d09c' : 'none'
-            }} />
+            <span
+              className={isRunning ? "pulse-mint-dot" : ""}
+              style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: isRunning ? '#00D09C' : (isPaused ? '#F59E0B' : '#626A6E')
+              }}
+            />
             <span>{countdownText}</span>
           </div>
 
-          {/* Groww-styled "Terminal" toggle button (Matches Screenshot 1, 2, 3) */}
+          {/* Groww "Terminal" Button (Matches Screenshot 1, 2, 3) */}
           <button
             onClick={() => setIsTerminalOpen(!isTerminalOpen)}
-            title="Toggle Live Bot Execution Terminal Console"
+            title="Toggle Live Algo Terminal Console"
+            className="btn-groww-secondary"
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '7px',
-              padding: '7px 14px',
-              borderRadius: '8px',
-              backgroundColor: isTerminalOpen ? '#242938' : '#161922',
-              border: '1px solid #242938',
-              color: isTerminalOpen ? '#00d09c' : '#ffffff',
-              fontSize: '0.82rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.15s ease'
+              padding: '6px 14px',
+              fontSize: '0.8rem',
+              backgroundColor: isTerminalOpen ? '#252A2C' : '#151819',
+              color: isTerminalOpen ? '#00D09C' : '#F1F3F4'
             }}
           >
-            <SlidersHorizontal size={14} color={isTerminalOpen ? "#00d09c" : "#9ca3af"} />
+            <SlidersHorizontal size={14} color={isTerminalOpen ? "#00D09C" : "#92999C"} />
             <span>Terminal</span>
             {botData?.logs?.length > 0 && (
               <span style={{
-                fontSize: '0.7rem',
-                color: '#9ca3af',
-                backgroundColor: '#202534',
+                fontSize: '0.68rem',
+                color: '#92999C',
+                backgroundColor: '#101314',
                 padding: '1px 5px',
                 borderRadius: '6px'
               }}>
@@ -483,20 +483,513 @@ export default function LiveBotDashboard({
         </div>
       </div>
 
-      {/* ── Main Tab Content ── */}
+      {/* ── ROW 3: Groww Market Indices Ticker Tape (Placed Directly Below Sub-Nav) ── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        padding: '10px 32px',
+        borderBottom: '1px solid #252A2C',
+        backgroundColor: '#080A0B',
+        overflowX: 'auto',
+        gap: '36px',
+        whiteSpace: 'nowrap'
+      }}>
+        {indices.map((idx, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem' }}>
+            <span style={{ fontWeight: '700', color: '#92999C' }}>{idx.name}</span>
+            <span style={{ fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">{idx.price}</span>
+            <span style={{
+              fontWeight: '600',
+              color: idx.isUp ? '#00D09C' : '#EB5B3C',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '2px'
+            }} className="font-tabular">
+              {idx.change} ({idx.pct})
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Main Canvas ── */}
       <div style={{ flex: 1, padding: '28px 32px', maxWidth: '1440px', width: '100%', margin: '0 auto' }}>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB 1: POSITIONS (LIVE PRICE FLUCTUATION OF STOCKS BOUGHT)
+            VIEW 1: EXPLORE (TWO-COLUMN LAYOUT MATCHING SCREENSHOT 1 & 4)
+            ═══════════════════════════════════════════════════════════════════ */}
+        {activeSubTab === "explore" && (
+          <div className="groww-explore-grid" style={{ display: 'grid', gridTemplateColumns: '72% 28%', gap: '32px' }}>
+            
+            {/* ── Left Column (72% width) ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              
+              {/* SECTION A: Popular Stocks & ETFs */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#00D09C' }} />
+                    <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#00D09C', letterSpacing: '0.04em' }}>LIVE</span>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', margin: 0, marginLeft: '4px' }}>
+                      Popular Indian Stocks & ETFs
+                    </h2>
+                  </div>
+                  <span
+                    onClick={() => setActiveSubTab("watchlist")}
+                    style={{ fontSize: '0.825rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <span>See more</span>
+                    <ChevronRight size={14} />
+                  </span>
+                </div>
+
+                {/* 4 Cards Per Row Grid */}
+                <div className="groww-cards-grid" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '16px'
+                }}>
+                  {popularStocks.slice(0, 4).map((stk, i) => (
+                    <div
+                      key={i}
+                      className="groww-stock-card"
+                      onClick={() => setSelectedInstrument(stk)}
+                    >
+                      {/* Company Logo Badge */}
+                      <div style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '10px',
+                        backgroundColor: '#101314',
+                        border: '1px solid #252A2C',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: '800',
+                        fontSize: '0.9rem',
+                        color: '#00D09C'
+                      }}>
+                        {stk.logo}
+                      </div>
+
+                      {/* Stock Name */}
+                      <div style={{ margin: '14px 0 6px 0' }}>
+                        <div style={{ fontWeight: '700', color: '#F1F3F4', fontSize: '0.92rem' }}>{stk.sym}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#92999C', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {stk.name}
+                        </div>
+                      </div>
+
+                      {/* Price & Change Underneath */}
+                      <div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                          {currency}{stk.price}
+                        </div>
+                        <div style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '600',
+                          color: stk.isUp ? '#00D09C' : '#EB5B3C',
+                          marginTop: '2px'
+                        }} className="font-tabular">
+                          {stk.chg}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION B: Popular Bonds */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Briefcase size={18} color="#92999C" />
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
+                      Popular Bonds & Fixed Income
+                    </h2>
+                  </div>
+                  <span style={{ fontSize: '0.825rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <span>See more</span>
+                    <ChevronRight size={14} />
+                  </span>
+                </div>
+
+                {/* 4 Cards Per Row Grid */}
+                <div className="groww-cards-grid" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '16px'
+                }}>
+                  {popularBonds.map((bnd, i) => (
+                    <div
+                      key={i}
+                      className="groww-stock-card"
+                      onClick={() => setSelectedInstrument({ sym: bnd.sym, name: bnd.name, price: bnd.price, chg: bnd.chg, isUp: bnd.isUp, logo: bnd.logo })}
+                    >
+                      <div style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '10px',
+                        backgroundColor: '#101314',
+                        border: '1px solid #252A2C',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: '800',
+                        fontSize: '0.8rem',
+                        color: '#5367FF'
+                      }}>
+                        {bnd.logo}
+                      </div>
+
+                      <div style={{ margin: '14px 0 6px 0' }}>
+                        <div style={{ fontWeight: '700', color: '#F1F3F4', fontSize: '0.92rem' }}>{bnd.sym}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#92999C' }}>
+                          {bnd.yieldRate}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                          {currency}{bnd.price}
+                        </div>
+                        <div style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '600',
+                          color: bnd.isUp ? '#00D09C' : '#EB5B3C',
+                          marginTop: '2px'
+                        }} className="font-tabular">
+                          {bnd.chg}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION C: Trending Automated Trading Instruments */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Zap size={18} color="#00D09C" />
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
+                      Active Scanner Momentum Equities
+                    </h2>
+                  </div>
+                  <span
+                    onClick={onNavigateToScanner}
+                    style={{ fontSize: '0.825rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <span>Morning Scanner</span>
+                    <ChevronRight size={14} />
+                  </span>
+                </div>
+
+                <div className="groww-cards-grid" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '16px'
+                }}>
+                  {popularStocks.slice(4, 8).map((stk, i) => (
+                    <div
+                      key={i}
+                      className="groww-stock-card"
+                      onClick={() => setSelectedInstrument(stk)}
+                    >
+                      <div style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '10px',
+                        backgroundColor: '#101314',
+                        border: '1px solid #252A2C',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: '800',
+                        fontSize: '0.9rem',
+                        color: '#00D09C'
+                      }}>
+                        {stk.logo}
+                      </div>
+
+                      <div style={{ margin: '14px 0 6px 0' }}>
+                        <div style={{ fontWeight: '700', color: '#F1F3F4', fontSize: '0.92rem' }}>{stk.sym}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#92999C', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {stk.name}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                          {currency}{stk.price}
+                        </div>
+                        <div style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '600',
+                          color: stk.isUp ? '#00D09C' : '#EB5B3C',
+                          marginTop: '2px'
+                        }} className="font-tabular">
+                          {stk.chg}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Right Column (28% width) ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              
+              {/* SUBSECTION A: Your Investments (Matches Screenshot 1) */}
+              <div style={{
+                backgroundColor: '#151819',
+                border: '1px solid #252A2C',
+                borderRadius: '16px',
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
+                    Your investments
+                  </h3>
+                  <span
+                    onClick={() => setActiveSubTab("holdings")}
+                    style={{ fontSize: '0.78rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer' }}
+                  >
+                    View details
+                  </span>
+                </div>
+
+                {!isInPosition && todayFills.length === 0 ? (
+                  /* Clean Empty State Illustration */
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '36px 12px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ width: '120px', height: '90px', marginBottom: '14px', opacity: 0.85 }}>
+                      <svg viewBox="0 0 140 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+                        <rect x="20" y="20" width="100" height="60" rx="8" fill="#101314" stroke="#252A2C" strokeWidth="1.5" />
+                        <circle cx="50" cy="45" r="8" fill="#00D09C" opacity="0.3" />
+                        <line x1="70" y1="40" x2="105" y2="40" stroke="#252A2C" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="70" y1="48" x2="95" y2="48" stroke="#252A2C" strokeWidth="2" strokeLinecap="round" />
+                        <path d="M35 70L55 55L75 62L105 45" stroke="#00D09C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: '700', color: '#F1F3F4' }}>
+                      You haven't invested yet
+                    </div>
+                    <p style={{ fontSize: '0.78rem', color: '#92999C', marginTop: '4px' }}>
+                      Arm the algorithmic bot to begin autonomous intraday trading.
+                    </p>
+                    <button
+                      onClick={() => setActiveSubTab("config")}
+                      className="btn-groww-primary"
+                      style={{ marginTop: '16px', fontSize: '0.8rem', padding: '8px 18px' }}
+                    >
+                      Configure & Arm Bot
+                    </button>
+                  </div>
+                ) : (
+                  /* Active Portfolio Summary */
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #252A2C' }}>
+                      <span style={{ fontSize: '0.82rem', color: '#92999C' }}>Stocks & F&O Balance</span>
+                      <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                        {currency}{(bot.cash || 1000000.0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #252A2C' }}>
+                      <span style={{ fontSize: '0.82rem', color: '#92999C' }}>Current Position Value</span>
+                      <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                        {currency}{positionValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '0.82rem', color: '#92999C' }}>Today's Total P&L</span>
+                      <span style={{
+                        fontSize: '0.92rem',
+                        fontWeight: '800',
+                        color: (dailyRealizedPnl + unrealizedPnl) >= 0 ? '#00D09C' : '#EB5B3C'
+                      }} className="font-tabular">
+                        {(dailyRealizedPnl + unrealizedPnl) >= 0 ? `+${currency}${(dailyRealizedPnl + unrealizedPnl).toFixed(2)}` : `-${currency}${Math.abs(dailyRealizedPnl + unrealizedPnl).toFixed(2)}`}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SUBSECTION B: Products & Tools */}
+              <div style={{
+                backgroundColor: '#151819',
+                border: '1px solid #252A2C',
+                borderRadius: '16px',
+                padding: '24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
+              }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
+                  Products & Tools
+                </h3>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[
+                    { label: "⚡ Morning Breakout Screener", desc: "09:16 AM Volume & Gap Scanner", action: onNavigateToScanner },
+                    { label: "📊 Strategy Studio Backtester", desc: "Multi-year simulation & slippage", action: onNavigateToBacktest },
+                    { label: "🔬 Factor Matrix Optimizer", desc: "Cross-asset multi-timeframe grid", action: onNavigateToMatrix },
+                    { label: "📱 Telegram Mobile Alerts", desc: "Instant trade execution pushes", action: () => {} }
+                  ].map((tool, i) => (
+                    <div
+                      key={i}
+                      onClick={tool.action}
+                      style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        backgroundColor: '#101314',
+                        border: '1px solid #252A2C',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#1c2022';
+                        e.currentTarget.style.borderColor = '#00D09C';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#101314';
+                        e.currentTarget.style.borderColor = '#252A2C';
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F1F3F4' }}>{tool.label}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#92999C' }}>{tool.desc}</div>
+                      </div>
+                      <ChevronRight size={14} color="#92999C" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            VIEW 2: HOLDINGS
+            ═══════════════════════════════════════════════════════════════════ */}
+        {activeSubTab === "holdings" && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{
+              backgroundColor: '#151819',
+              border: '1px solid #252A2C',
+              borderRadius: '16px',
+              padding: '24px 28px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '16px'
+            }}>
+              <div>
+                <span style={{ fontSize: '0.8rem', color: '#92999C' }}>Total Portfolio Value</span>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#F1F3F4', marginTop: '2px' }} className="font-tabular">
+                  {currency}{(bot.cash + positionValue).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: '32px' }}>
+                <div>
+                  <span style={{ fontSize: '0.75rem', color: '#92999C' }}>Invested Amount</span>
+                  <div style={{ fontSize: '1.15rem', fontWeight: '700', color: '#F1F3F4', marginTop: '2px' }} className="font-tabular">
+                    {currency}{(bot.shares * (bot.entry_price || 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ fontSize: '0.75rem', color: '#92999C' }}>Available Cash</span>
+                  <div style={{ fontSize: '1.15rem', fontWeight: '700', color: '#00D09C', marginTop: '2px' }} className="font-tabular">
+                    {currency}{bot.cash?.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {!isInPosition ? (
+              <div style={{
+                backgroundColor: '#151819',
+                borderRadius: '16px',
+                border: '1px solid #252A2C',
+                padding: '40px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center'
+              }}>
+                <GrowwRocketEmptyState
+                  title="No holdings available"
+                  subtitle="You do not have any open delivery or intraday holdings at this moment."
+                />
+              </div>
+            ) : (
+              <div style={{
+                backgroundColor: '#151819',
+                border: '1px solid #252A2C',
+                borderRadius: '16px',
+                overflow: 'hidden'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#101314', color: '#92999C', borderBottom: '1px solid #252A2C' }}>
+                      <th style={{ padding: '14px 20px', fontWeight: '600' }}>Instrument</th>
+                      <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'right' }}>Qty</th>
+                      <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'right' }}>Avg Price</th>
+                      <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'right' }}>LTP</th>
+                      <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'right' }}>Current Value</th>
+                      <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'right' }}>P&L</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style={{ borderBottom: '1px solid #252A2C' }}>
+                      <td style={{ padding: '16px 20px', fontWeight: '700', color: '#F1F3F4' }}>
+                        {bot.symbol} <span style={{ fontSize: '0.72rem', color: '#00D09C', marginLeft: '6px' }}>MIS</span>
+                      </td>
+                      <td style={{ padding: '16px 20px', textAlign: 'right', color: '#F1F3F4' }} className="font-tabular">{bot.shares}</td>
+                      <td style={{ padding: '16px 20px', textAlign: 'right', color: '#F1F3F4' }} className="font-tabular">{currency}{Number(bot.entry_price || 0).toFixed(2)}</td>
+                      <td style={{ padding: '16px 20px', textAlign: 'right', color: '#F1F3F4' }} className="font-tabular">{currency}{Number(currentLtp).toFixed(2)}</td>
+                      <td style={{ padding: '16px 20px', textAlign: 'right', color: '#F1F3F4' }} className="font-tabular">{currency}{positionValue.toFixed(2)}</td>
+                      <td style={{
+                        padding: '16px 20px',
+                        textAlign: 'right',
+                        fontWeight: '700',
+                        color: unrealizedPnl >= 0 ? '#00D09C' : '#EB5B3C'
+                      }} className="font-tabular">
+                        {unrealizedPnl >= 0 ? `+${currency}${unrealizedPnl.toFixed(2)}` : `-${currency}${Math.abs(unrealizedPnl).toFixed(2)}`}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            VIEW 3: POSITIONS (LIVE PRICE FLUCTUATION OF STOCKS BOUGHT)
             ═══════════════════════════════════════════════════════════════════ */}
         {activeSubTab === "positions" && (
           <div>
             {!isInPosition ? (
               /* Groww Rocket Empty State (Matches Screenshot 2) */
               <div style={{
-                backgroundColor: '#161922',
+                backgroundColor: '#151819',
                 borderRadius: '16px',
-                border: '1px solid #242938',
+                border: '1px solid #252A2C',
                 padding: '40px 20px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -504,43 +997,15 @@ export default function LiveBotDashboard({
               }}>
                 <GrowwRocketEmptyState
                   title="No open positions"
-                  subtitle="Equity, Intraday and MTF positions will appear here when the bot executes an order."
+                  subtitle="Equity, Intraday and MTF positions will appear here."
                   actionButton={
-                    <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
-                      <button
-                        onClick={() => setActiveSubTab("config")}
-                        style={{
-                          padding: '10px 22px',
-                          borderRadius: '10px',
-                          backgroundColor: '#00d09c',
-                          color: '#0c0e14',
-                          fontWeight: '700',
-                          fontSize: '0.875rem',
-                          border: 'none',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        ⚙️ Configure Bot Settings
-                      </button>
-                      {!isRunning && (
-                        <button
-                          onClick={() => handleControl("START")}
-                          disabled={actionLoading}
-                          style={{
-                            padding: '10px 22px',
-                            borderRadius: '10px',
-                            backgroundColor: '#1f2430',
-                            color: '#ffffff',
-                            fontWeight: '700',
-                            fontSize: '0.875rem',
-                            border: '1px solid #2f374a',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          ▶️ Arm {symbol}
-                        </button>
-                      )}
-                    </div>
+                    <button
+                      onClick={() => setActiveSubTab("config")}
+                      className="btn-groww-primary"
+                      style={{ marginTop: '16px' }}
+                    >
+                      ⚙️ Configure & Arm Bot
+                    </button>
                   }
                 />
               </div>
@@ -548,11 +1013,11 @@ export default function LiveBotDashboard({
               /* LIVE POSITION CARD WITH REAL-TIME FLUCTUATION */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div style={{
-                  backgroundColor: '#161922',
-                  border: '1px solid #242938',
+                  backgroundColor: '#151819',
+                  border: '1px solid #252A2C',
                   borderRadius: '18px',
                   padding: '28px',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.45)'
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
                 }}>
                   {/* Position Header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
@@ -561,43 +1026,43 @@ export default function LiveBotDashboard({
                         width: '46px',
                         height: '46px',
                         borderRadius: '12px',
-                        backgroundColor: '#1c2230',
+                        backgroundColor: '#101314',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        border: '1px solid #2a3348',
+                        border: '1px solid #252A2C',
                         fontSize: '1rem',
                         fontWeight: '800',
-                        color: '#00d09c'
+                        color: '#00D09C'
                       }}>
                         {bot.symbol ? bot.symbol.substring(0, 2) : "EQ"}
                       </div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>{bot.symbol}</span>
+                          <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4' }}>{bot.symbol}</span>
                           <span style={{
                             padding: '3px 8px',
                             borderRadius: '6px',
-                            backgroundColor: 'rgba(0, 208, 156, 0.15)',
-                            color: '#00d09c',
+                            backgroundColor: 'rgba(0, 208, 156, 0.12)',
+                            color: '#00D09C',
                             fontSize: '0.72rem',
                             fontWeight: '700',
-                            border: '1px solid rgba(0, 208, 156, 0.3)'
+                            border: '1px solid rgba(0, 208, 156, 0.28)'
                           }}>
                             {bot.position_side || "LONG"} • INTRADAY MIS
                           </span>
                           <span style={{
                             padding: '3px 8px',
                             borderRadius: '6px',
-                            backgroundColor: '#1f2430',
-                            color: '#9ca3af',
+                            backgroundColor: '#101314',
+                            color: '#92999C',
                             fontSize: '0.72rem',
                             fontWeight: '600'
                           }}>
                             {bot.strategy}
                           </span>
                         </div>
-                        <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                        <span style={{ fontSize: '0.8rem', color: '#626A6E' }}>
                           National Stock Exchange • Standard MIS 5x Leverage
                         </span>
                       </div>
@@ -607,22 +1072,9 @@ export default function LiveBotDashboard({
                     <button
                       onClick={() => handleControl("SQUARE_OFF")}
                       disabled={actionLoading}
-                      style={{
-                        padding: '10px 20px',
-                        borderRadius: '10px',
-                        backgroundColor: 'rgba(235, 91, 60, 0.12)',
-                        border: '1px solid rgba(235, 91, 60, 0.4)',
-                        color: '#eb5b3c',
-                        fontWeight: '700',
-                        fontSize: '0.85rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.15s ease'
-                      }}
+                      className="btn-groww-danger"
                     >
-                      <Square size={14} fill="#eb5b3c" />
+                      <Square size={14} fill="#EB5B3C" />
                       <span>Square Off Position</span>
                     </button>
                   </div>
@@ -634,24 +1086,24 @@ export default function LiveBotDashboard({
                     gap: '20px',
                     padding: '24px',
                     borderRadius: '14px',
-                    backgroundColor: '#0c0e14',
-                    border: '1px solid #1f2430',
+                    backgroundColor: '#080A0B',
+                    border: '1px solid #252A2C',
                     marginBottom: '24px'
                   }}>
                     {/* Live P&L Hero */}
                     <div>
-                      <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
                         Live Unrealized P&L
                       </span>
                       <div style={{
                         fontSize: '2rem',
                         fontWeight: '800',
-                        color: unrealizedPnl >= 0 ? '#00d09c' : '#eb5b3c',
+                        color: unrealizedPnl >= 0 ? '#00D09C' : '#EB5B3C',
                         display: 'flex',
                         alignItems: 'baseline',
                         gap: '8px',
                         marginTop: '4px'
-                      }}>
+                      }} className="font-tabular">
                         <span>{unrealizedPnl >= 0 ? `+${currency}${unrealizedPnl.toFixed(2)}` : `-${currency}${Math.abs(unrealizedPnl).toFixed(2)}`}</span>
                         <span style={{ fontSize: '1rem', fontWeight: '700' }}>
                           ({unrealizedPct >= 0 ? `+${unrealizedPct.toFixed(2)}%` : `${unrealizedPct.toFixed(2)}%`})
@@ -661,13 +1113,13 @@ export default function LiveBotDashboard({
 
                     {/* Live LTP with Flash */}
                     <div>
-                      <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
                         Live Market Price (LTP)
                       </span>
                       <div style={{
                         fontSize: '1.75rem',
                         fontWeight: '800',
-                        color: '#ffffff',
+                        color: '#F1F3F4',
                         marginTop: '4px',
                         display: 'flex',
                         alignItems: 'center',
@@ -676,35 +1128,35 @@ export default function LiveBotDashboard({
                         borderRadius: '8px',
                         backgroundColor: lastTickColor === "up" ? 'rgba(0, 208, 156, 0.2)' : (lastTickColor === "down" ? 'rgba(235, 91, 60, 0.2)' : 'transparent'),
                         transition: 'background-color 0.4s ease'
-                      }}>
+                      }} className="font-tabular">
                         <span>{currency}{Number(currentLtp).toFixed(2)}</span>
-                        {lastTickColor === "up" && <ArrowUpRight size={18} color="#00d09c" />}
-                        {lastTickColor === "down" && <ArrowDownRight size={18} color="#eb5b3c" />}
+                        {lastTickColor === "up" && <ArrowUpRight size={18} color="#00D09C" />}
+                        {lastTickColor === "down" && <ArrowDownRight size={18} color="#EB5B3C" />}
                       </div>
                     </div>
 
                     {/* Avg Entry Price */}
                     <div>
-                      <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
                         Avg Entry Price
                       </span>
-                      <div style={{ fontSize: '1.35rem', fontWeight: '700', color: '#ffffff', marginTop: '6px' }}>
+                      <div style={{ fontSize: '1.35rem', fontWeight: '700', color: '#F1F3F4', marginTop: '6px' }} className="font-tabular">
                         {currency}{Number(bot.entry_price || 0).toFixed(2)}
                       </div>
-                      <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#626A6E' }}>
                         Quantity: {bot.shares} shares
                       </span>
                     </div>
 
                     {/* Total Invested */}
                     <div>
-                      <span style={{ fontSize: '0.78rem', color: '#9ca3af', fontWeight: '600', textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: '0.78rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
                         Current Value
                       </span>
-                      <div style={{ fontSize: '1.35rem', fontWeight: '700', color: '#ffffff', marginTop: '6px' }}>
+                      <div style={{ fontSize: '1.35rem', fontWeight: '700', color: '#F1F3F4', marginTop: '6px' }} className="font-tabular">
                         {currency}{positionValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                       </div>
-                      <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#626A6E' }}>
                         Invested: {currency}{(bot.shares * (bot.entry_price || 0)).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                       </span>
                     </div>
@@ -724,15 +1176,15 @@ export default function LiveBotDashboard({
                       border: '1px solid rgba(0, 208, 156, 0.2)'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#00d09c' }}>🎯 PROFIT TARGET (2R)</span>
-                        <span style={{ fontSize: '0.75rem', color: '#00d09c' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#00D09C' }}>🎯 PROFIT TARGET (2R)</span>
+                        <span style={{ fontSize: '0.75rem', color: '#00D09C' }}>
                           +{bot.target_price && bot.entry_price ? (((bot.target_price - bot.entry_price) / bot.entry_price) * 100).toFixed(2) : "1.50"}%
                         </span>
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', marginTop: '6px' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', marginTop: '6px' }} className="font-tabular">
                         {bot.target_price ? `${currency}${Number(bot.target_price).toFixed(2)}` : `${currency}${(currentLtp * 1.015).toFixed(2)}`}
                       </div>
-                      <span style={{ fontSize: '0.72rem', color: '#6b7280' }}>Auto take-profit bracket order</span>
+                      <span style={{ fontSize: '0.72rem', color: '#626A6E' }}>Auto take-profit bracket order</span>
                     </div>
 
                     {/* Stop Loss Card */}
@@ -743,33 +1195,33 @@ export default function LiveBotDashboard({
                       border: '1px solid rgba(235, 91, 60, 0.2)'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#eb5b3c' }}>🛑 HARD STOP LOSS</span>
-                        <span style={{ fontSize: '0.75rem', color: '#eb5b3c' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#EB5B3C' }}>🛑 HARD STOP LOSS</span>
+                        <span style={{ fontSize: '0.75rem', color: '#EB5B3C' }}>
                           {bot.stop_loss && bot.entry_price ? (((bot.stop_loss - bot.entry_price) / bot.entry_price) * 100).toFixed(2) : "-0.75"}%
                         </span>
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', marginTop: '6px' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', marginTop: '6px' }} className="font-tabular">
                         {bot.stop_loss ? `${currency}${Number(bot.stop_loss).toFixed(2)}` : `${currency}${(currentLtp * 0.9925).toFixed(2)}`}
                       </div>
-                      <span style={{ fontSize: '0.72rem', color: '#6b7280' }}>Hard circuit risk stop</span>
+                      <span style={{ fontSize: '0.72rem', color: '#626A6E' }}>Hard circuit risk stop</span>
                     </div>
 
                     {/* VWAP */}
-                    <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: '#0c0e14', border: '1px solid #1f2430' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#9ca3af' }}>📊 SESSION VWAP</span>
-                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', marginTop: '6px' }}>
+                    <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: '#080A0B', border: '1px solid #252A2C' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#92999C' }}>📊 SESSION VWAP</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', marginTop: '6px' }} className="font-tabular">
                         {currency}{bot.indicators?.vwap ? Number(bot.indicators.vwap).toFixed(2) : (currentQuote.vwap ? currentQuote.vwap.toFixed(2) : "814.20")}
                       </div>
-                      <span style={{ fontSize: '0.72rem', color: '#00d09c' }}>Trading above VWAP</span>
+                      <span style={{ fontSize: '0.72rem', color: '#00D09C' }}>Trading above VWAP</span>
                     </div>
 
                     {/* RSI Indicator */}
-                    <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: '#0c0e14', border: '1px solid #1f2430' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#9ca3af' }}>⚡ INTRADAY RSI (14)</span>
-                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', marginTop: '6px' }}>
+                    <div style={{ padding: '16px', borderRadius: '12px', backgroundColor: '#080A0B', border: '1px solid #252A2C' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#92999C' }}>⚡ INTRADAY RSI (14)</span>
+                      <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', marginTop: '6px' }} className="font-tabular">
                         {bot.indicators?.rsi ? Number(bot.indicators.rsi).toFixed(1) : "58.4"}
                       </div>
-                      <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>Bullish momentum zone</span>
+                      <span style={{ fontSize: '0.72rem', color: '#92999C' }}>Bullish momentum zone</span>
                     </div>
                   </div>
                 </div>
@@ -779,14 +1231,14 @@ export default function LiveBotDashboard({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB 2: ORDERS (TRADE HISTORY & NET P&L WITH CHARGES BREAKDOWN)
+            VIEW 4: ORDERS (TRADE HISTORY & NET P&L WITH CHARGES BREAKDOWN)
             ═══════════════════════════════════════════════════════════════════ */}
         {activeSubTab === "orders" && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Top Net P&L Summary Hero Card */}
             <div style={{
-              backgroundColor: '#161922',
-              border: '1px solid #242938',
+              backgroundColor: '#151819',
+              border: '1px solid #252A2C',
               borderRadius: '16px',
               padding: '24px 28px',
               display: 'flex',
@@ -796,43 +1248,43 @@ export default function LiveBotDashboard({
               gap: '20px'
             }}>
               <div>
-                <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
+                <span style={{ fontSize: '0.8rem', color: '#92999C', fontWeight: '600' }}>
                   Today's Net Realized P&L
                 </span>
                 <div style={{
                   fontSize: '2rem',
                   fontWeight: '800',
-                  color: dailyRealizedPnl >= 0 ? '#00d09c' : '#eb5b3c',
+                  color: dailyRealizedPnl >= 0 ? '#00D09C' : '#EB5B3C',
                   marginTop: '4px'
-                }}>
+                }} className="font-tabular">
                   {dailyRealizedPnl >= 0 ? `+${currency}${dailyRealizedPnl.toFixed(2)}` : `-${currency}${Math.abs(dailyRealizedPnl).toFixed(2)}`}
                 </div>
-                <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
-                  After slippage & executions
+                <span style={{ fontSize: '0.75rem', color: '#626A6E' }}>
+                  After slippage & execution
                 </span>
               </div>
 
               <div style={{ display: 'flex', gap: '28px', flexWrap: 'wrap' }}>
                 <div>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '600' }}>Trades Executed</span>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#626A6E', fontWeight: '600' }}>Trades Executed</span>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#F1F3F4', marginTop: '2px' }} className="font-tabular">
                     {todayFills.length}
                   </div>
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '600' }}>Total Est. Taxes & Charges</span>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#eb5b3c', marginTop: '2px' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#626A6E', fontWeight: '600' }}>Total Est. Taxes & Charges</span>
+                  <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#EB5B3C', marginTop: '2px' }} className="font-tabular">
                     -{currency}{totalChargesToday.toFixed(2)}
                   </div>
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: '600' }}>In-Pocket Net Impact</span>
+                  <span style={{ fontSize: '0.75rem', color: '#626A6E', fontWeight: '600' }}>In-Pocket Net Impact</span>
                   <div style={{
                     fontSize: '1.25rem',
                     fontWeight: '700',
-                    color: (dailyRealizedPnl - totalChargesToday) >= 0 ? '#00d09c' : '#eb5b3c',
+                    color: (dailyRealizedPnl - totalChargesToday) >= 0 ? '#00D09C' : '#EB5B3C',
                     marginTop: '2px'
-                  }}>
+                  }} className="font-tabular">
                     {(dailyRealizedPnl - totalChargesToday) >= 0 ? `+${currency}${(dailyRealizedPnl - totalChargesToday).toFixed(2)}` : `-${currency}${Math.abs(dailyRealizedPnl - totalChargesToday).toFixed(2)}`}
                   </div>
                 </div>
@@ -844,7 +1296,7 @@ export default function LiveBotDashboard({
               <div style={{ display: 'flex', gap: '8px' }}>
                 {[
                   { id: "TODAY", label: `Today (${todayFills.length})` },
-                  { id: "ALL", label: `All History (${allBotFills.length})` }
+                  { id: "ALL", label: `All Orders (${allBotFills.length})` }
                 ].map(f => (
                   <button
                     key={f.id}
@@ -852,10 +1304,10 @@ export default function LiveBotDashboard({
                     style={{
                       padding: '6px 14px',
                       borderRadius: '8px',
-                      backgroundColor: orderSessionFilter === f.id ? '#00d09c' : '#161922',
-                      color: orderSessionFilter === f.id ? '#0c0e14' : '#9ca3af',
+                      backgroundColor: orderSessionFilter === f.id ? '#00D09C' : '#151819',
+                      color: orderSessionFilter === f.id ? '#080A0B' : '#92999C',
                       border: '1px solid',
-                      borderColor: orderSessionFilter === f.id ? '#00d09c' : '#242938',
+                      borderColor: orderSessionFilter === f.id ? '#00D09C' : '#252A2C',
                       fontSize: '0.8rem',
                       fontWeight: '700',
                       cursor: 'pointer'
@@ -866,17 +1318,17 @@ export default function LiveBotDashboard({
                 ))}
               </div>
 
-              <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>
+              <div style={{ fontSize: '0.78rem', color: '#626A6E' }}>
                 💡 Click any trade row to view full statutory taxes & brokerage charges breakdown
               </div>
             </div>
 
-            {/* Orders List or Rocket Empty State */}
+            {/* Orders List or Rocket Empty State (Matches Screenshot 3) */}
             {filteredTrades.length === 0 ? (
               <div style={{
-                backgroundColor: '#161922',
+                backgroundColor: '#151819',
                 borderRadius: '16px',
-                border: '1px solid #242938',
+                border: '1px solid #252A2C',
                 padding: '40px 20px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -889,15 +1341,15 @@ export default function LiveBotDashboard({
               </div>
             ) : (
               <div style={{
-                backgroundColor: '#161922',
-                border: '1px solid #242938',
+                backgroundColor: '#151819',
+                border: '1px solid #252A2C',
                 borderRadius: '16px',
                 overflow: 'hidden'
               }}>
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                     <thead>
-                      <tr style={{ borderBottom: '1px solid #242938', backgroundColor: '#13161e', color: '#9ca3af' }}>
+                      <tr style={{ borderBottom: '1px solid #252A2C', backgroundColor: '#101314', color: '#92999C' }}>
                         <th style={{ padding: '14px 20px', fontWeight: '600' }}>Time</th>
                         <th style={{ padding: '14px 20px', fontWeight: '600' }}>Type</th>
                         <th style={{ padding: '14px 20px', fontWeight: '600' }}>Instrument</th>
@@ -910,23 +1362,21 @@ export default function LiveBotDashboard({
                     <tbody>
                       {filteredTrades.map((t, idx) => {
                         const isBuy = t.Action?.includes("BUY");
-                        const isSquareOff = t.Action?.includes("SQUARE_OFF") || t.Action?.includes("SQUAREOFF");
-                        const isSell = t.Action?.includes("SELL") || isSquareOff;
                         return (
                           <tr
                             key={t.id || idx}
                             onClick={() => setSelectedTrade(t)}
                             style={{
-                              borderBottom: '1px solid #1f2430',
+                              borderBottom: '1px solid #252A2C',
                               cursor: 'pointer',
                               transition: 'background-color 0.15s ease'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1c212e'}
+                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1c2022'}
                             onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                           >
-                            <td style={{ padding: '16px 20px', color: '#9ca3af' }}>
-                              <div style={{ fontWeight: '600', color: '#ffffff' }}>{t.Time || t.Timestamp?.slice(11, 16) || "10:15 AM"}</div>
-                              <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>{t.Date || t.Timestamp?.slice(0, 10)}</div>
+                            <td style={{ padding: '16px 20px', color: '#92999C' }}>
+                              <div style={{ fontWeight: '600', color: '#F1F3F4' }}>{t.Time || t.Timestamp?.slice(11, 16) || "10:15 AM"}</div>
+                              <div style={{ fontSize: '0.72rem', color: '#626A6E' }}>{t.Date || t.Timestamp?.slice(0, 10)}</div>
                             </td>
                             <td style={{ padding: '16px 20px' }}>
                               <span style={{
@@ -934,29 +1384,29 @@ export default function LiveBotDashboard({
                                 borderRadius: '6px',
                                 fontSize: '0.75rem',
                                 fontWeight: '700',
-                                backgroundColor: isBuy ? 'rgba(0, 208, 156, 0.15)' : 'rgba(235, 91, 60, 0.15)',
-                                color: isBuy ? '#00d09c' : '#eb5b3c',
-                                border: `1px solid ${isBuy ? 'rgba(0, 208, 156, 0.3)' : 'rgba(235, 91, 60, 0.3)'}`
+                                backgroundColor: isBuy ? 'rgba(0, 208, 156, 0.12)' : 'rgba(235, 91, 60, 0.12)',
+                                color: isBuy ? '#00D09C' : '#EB5B3C',
+                                border: `1px solid ${isBuy ? 'rgba(0, 208, 156, 0.28)' : 'rgba(235, 91, 60, 0.28)'}`
                               }}>
                                 {t.Action}
                               </span>
                             </td>
                             <td style={{ padding: '16px 20px' }}>
-                              <div style={{ fontWeight: '700', color: '#ffffff' }}>{t.Symbol}</div>
-                              <div style={{ fontSize: '0.72rem', color: '#6b7280' }}>NSE • MIS Intraday</div>
+                              <div style={{ fontWeight: '700', color: '#F1F3F4' }}>{t.Symbol}</div>
+                              <div style={{ fontSize: '0.72rem', color: '#626A6E' }}>NSE • MIS Intraday</div>
                             </td>
-                            <td style={{ padding: '16px 20px', textAlign: 'right', fontWeight: '600', color: '#ffffff' }}>
+                            <td style={{ padding: '16px 20px', textAlign: 'right', fontWeight: '600', color: '#F1F3F4' }} className="font-tabular">
                               {t.Shares}
                             </td>
-                            <td style={{ padding: '16px 20px', textAlign: 'right', fontWeight: '700', color: '#ffffff' }}>
+                            <td style={{ padding: '16px 20px', textAlign: 'right', fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">
                               {currency}{Number(t.Execution_Price || 0).toFixed(2)}
                             </td>
                             <td style={{
                               padding: '16px 20px',
                               textAlign: 'right',
                               fontWeight: '700',
-                              color: t.RawAmount > 0 ? '#00d09c' : (t.RawAmount < 0 ? '#eb5b3c' : '#ffffff')
-                            }}>
+                              color: t.RawAmount > 0 ? '#00D09C' : (t.RawAmount < 0 ? '#EB5B3C' : '#F1F3F4')
+                            }} className="font-tabular">
                               {t.Amount || t.Cash_Change}
                             </td>
                             <td style={{ padding: '16px 20px', textAlign: 'center' }}>
@@ -965,7 +1415,7 @@ export default function LiveBotDashboard({
                                 alignItems: 'center',
                                 gap: '4px',
                                 fontSize: '0.78rem',
-                                color: '#00d09c',
+                                color: '#00D09C',
                                 fontWeight: '600'
                               }}>
                                 <span>Charges</span>
@@ -984,18 +1434,103 @@ export default function LiveBotDashboard({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB 3: BOT CONFIG & RULES (CLEAN, DEDICATED CONFIGURATION)
+            VIEW 5: WATCHLIST
+            ═══════════════════════════════════════════════════════════════════ */}
+        {activeSubTab === "watchlist" && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
+                My Watchlist ({watchlist.length || popularStocks.length} Stocks)
+              </h2>
+              <span style={{ fontSize: '0.8rem', color: '#92999C' }}>
+                Click any stock to inspect chart, statistics, or select for trading
+              </span>
+            </div>
+
+            <div style={{
+              backgroundColor: '#151819',
+              border: '1px solid #252A2C',
+              borderRadius: '16px',
+              overflow: 'hidden'
+            }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#101314', color: '#92999C', borderBottom: '1px solid #252A2C' }}>
+                    <th style={{ padding: '14px 20px', fontWeight: '600' }}>Company / Symbol</th>
+                    <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'right' }}>Price</th>
+                    <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'right' }}>Change</th>
+                    <th style={{ padding: '14px 20px', fontWeight: '600', textAlign: 'center' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(watchlist.length > 0 ? watchlist : popularStocks).map((item, idx) => {
+                    const sym = item.symbol || item.sym;
+                    const price = item.price || "818.50";
+                    const isUp = item.change_pct ? item.change_pct >= 0 : item.isUp;
+                    const chgText = item.change_pct ? `${isUp ? '+' : ''}${item.change_pct.toFixed(2)}%` : item.chg;
+
+                    return (
+                      <tr
+                        key={idx}
+                        onClick={() => setSelectedInstrument(item)}
+                        style={{
+                          borderBottom: '1px solid #252A2C',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1c2022'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <td style={{ padding: '16px 20px' }}>
+                          <div style={{ fontWeight: '700', color: '#F1F3F4' }}>{sym}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#92999C' }}>{item.name || "National Stock Exchange"}</div>
+                        </td>
+                        <td style={{ padding: '16px 20px', textAlign: 'right', fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">
+                          {currency}{price}
+                        </td>
+                        <td style={{
+                          padding: '16px 20px',
+                          textAlign: 'right',
+                          fontWeight: '700',
+                          color: isUp ? '#00D09C' : '#EB5B3C'
+                        }} className="font-tabular">
+                          {chgText}
+                        </td>
+                        <td style={{ padding: '16px 20px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => {
+                              userSelectedSymbolRef.current = true;
+                              setSymbol(sym);
+                              setActiveSubTab("config");
+                            }}
+                            className="btn-groww-secondary"
+                            style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                          >
+                            <span>Select for Bot</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            VIEW 6: BOT CONFIG & RULES (SINGLE DYNAMIC PLAY/PAUSE BUTTON)
             ═══════════════════════════════════════════════════════════════════ */}
         {activeSubTab === "config" && (
           <div style={{ maxWidth: '880px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
             {configSuccessMsg && (
               <div style={{
-                backgroundColor: 'rgba(0, 208, 156, 0.15)',
-                border: '1px solid #00d09c',
+                backgroundColor: 'rgba(0, 208, 156, 0.12)',
+                border: '1px solid #00D09C',
                 borderRadius: '12px',
                 padding: '14px 20px',
-                color: '#00d09c',
+                color: '#00D09C',
                 fontWeight: '700',
                 fontSize: '0.875rem',
                 display: 'flex',
@@ -1008,28 +1543,28 @@ export default function LiveBotDashboard({
             )}
 
             <div style={{
-              backgroundColor: '#161922',
-              border: '1px solid #242938',
+              backgroundColor: '#151819',
+              border: '1px solid #252A2C',
               borderRadius: '20px',
               padding: '32px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.45)'
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
                 <div>
-                  <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>
+                  <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
                     Algo Bot Engine Configuration
                   </h2>
-                  <p style={{ fontSize: '0.825rem', color: '#9ca3af', marginTop: '4px', margin: 0 }}>
-                    Configure the trading instrument, execution model, and daily risk guardrails
+                  <p style={{ fontSize: '0.825rem', color: '#92999C', marginTop: '4px', margin: 0 }}>
+                    Configure the trading instrument, strategy rules, and execution controls
                   </p>
                 </div>
 
                 <div style={{
                   padding: '6px 14px',
                   borderRadius: '12px',
-                  backgroundColor: isRunning ? 'rgba(0, 208, 156, 0.15)' : 'rgba(251, 191, 36, 0.15)',
-                  border: `1px solid ${isRunning ? '#00d09c' : '#fbbf24'}`,
-                  color: isRunning ? '#00d09c' : '#fbbf24',
+                  backgroundColor: isRunning ? 'rgba(0, 208, 156, 0.12)' : 'rgba(245, 158, 11, 0.12)',
+                  border: `1px solid ${isRunning ? '#00D09C' : '#F59E0B'}`,
+                  color: isRunning ? '#00D09C' : '#F59E0B',
                   fontSize: '0.8rem',
                   fontWeight: '700'
                 }}>
@@ -1041,7 +1576,7 @@ export default function LiveBotDashboard({
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '24px' }}>
                 {/* 1. Instrument Picker */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#9ca3af' }}>
+                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
                     Trading Instrument (Stock)
                   </label>
                   <select
@@ -1053,9 +1588,9 @@ export default function LiveBotDashboard({
                     style={{
                       padding: '12px 16px',
                       borderRadius: '10px',
-                      backgroundColor: '#0c0e14',
-                      border: '1px solid #242938',
-                      color: '#ffffff',
+                      backgroundColor: '#080A0B',
+                      border: '1px solid #252A2C',
+                      color: '#F1F3F4',
                       fontSize: '0.9rem',
                       fontWeight: '600',
                       outline: 'none',
@@ -1077,7 +1612,7 @@ export default function LiveBotDashboard({
 
                 {/* 2. Strategy Selector */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#9ca3af' }}>
+                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
                     Strategy Execution Model
                   </label>
                   <select
@@ -1089,9 +1624,9 @@ export default function LiveBotDashboard({
                     style={{
                       padding: '12px 16px',
                       borderRadius: '10px',
-                      backgroundColor: '#0c0e14',
-                      border: '1px solid #242938',
-                      color: '#00d09c',
+                      backgroundColor: '#080A0B',
+                      border: '1px solid #252A2C',
+                      color: '#00D09C',
                       fontSize: '0.9rem',
                       fontWeight: '700',
                       outline: 'none',
@@ -1109,10 +1644,10 @@ export default function LiveBotDashboard({
                 {/* 3. Max Trades Per Stock Per Day */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#9ca3af' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
                       Max Trades Per Stock Per Day
                     </label>
-                    <span style={{ fontSize: '0.75rem', color: '#00d09c' }}>Protects Daily Profits</span>
+                    <span style={{ fontSize: '0.75rem', color: '#00D09C' }}>Protects Daily Profits</span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     {[
@@ -1132,9 +1667,9 @@ export default function LiveBotDashboard({
                           padding: '10px',
                           borderRadius: '8px',
                           border: '1px solid',
-                          borderColor: maxTradesPerSymbol === opt.val ? '#00d09c' : '#242938',
-                          backgroundColor: maxTradesPerSymbol === opt.val ? 'rgba(0, 208, 156, 0.15)' : '#0c0e14',
-                          color: maxTradesPerSymbol === opt.val ? '#00d09c' : '#ffffff',
+                          borderColor: maxTradesPerSymbol === opt.val ? '#00D09C' : '#252A2C',
+                          backgroundColor: maxTradesPerSymbol === opt.val ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                          color: maxTradesPerSymbol === opt.val ? '#00D09C' : '#F1F3F4',
                           fontWeight: '700',
                           fontSize: '0.8rem',
                           cursor: 'pointer'
@@ -1148,7 +1683,7 @@ export default function LiveBotDashboard({
 
                 {/* 4. Capital Allocation */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#9ca3af' }}>
+                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
                     Virtual Capital Allocation
                   </label>
                   <input
@@ -1158,9 +1693,9 @@ export default function LiveBotDashboard({
                     style={{
                       padding: '12px 16px',
                       borderRadius: '10px',
-                      backgroundColor: '#0c0e14',
-                      border: '1px solid #242938',
-                      color: '#ffffff',
+                      backgroundColor: '#080A0B',
+                      border: '1px solid #252A2C',
+                      color: '#F1F3F4',
                       fontSize: '0.9rem',
                       fontWeight: '600',
                       outline: 'none'
@@ -1169,79 +1704,50 @@ export default function LiveBotDashboard({
                 </div>
               </div>
 
-              {/* Bot Action Buttons */}
+              {/* Bot Action Buttons — Note: Single Play/Pause Button as Requested */}
               <div style={{
                 marginTop: '32px',
                 paddingTop: '24px',
-                borderTop: '1px solid #242938',
+                borderTop: '1px solid #252A2C',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: '16px'
               }}>
+                {/* Left: Dynamic Single Play / Pause Button */}
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button
-                    onClick={() => handleControl("START")}
+                    onClick={handleTogglePlayPause}
                     disabled={actionLoading}
+                    className={isRunning ? "btn-groww-pause" : "btn-groww-primary"}
                     style={{
                       padding: '12px 28px',
-                      borderRadius: '10px',
-                      backgroundColor: '#00d09c',
-                      color: '#0c0e14',
-                      fontWeight: '800',
                       fontSize: '0.9rem',
-                      border: 'none',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
+                      fontWeight: '800'
                     }}
                   >
-                    <Play size={16} fill="#0c0e14" />
-                    <span>Arm & Apply Settings</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleControl("PAUSE")}
-                    disabled={actionLoading}
-                    style={{
-                      padding: '12px 20px',
-                      borderRadius: '10px',
-                      backgroundColor: '#1f2430',
-                      color: '#ffffff',
-                      fontWeight: '700',
-                      fontSize: '0.85rem',
-                      border: '1px solid #2f374a',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <Pause size={15} />
-                    <span>Pause Bot</span>
+                    {isRunning ? (
+                      <>
+                        <Pause size={17} />
+                        <span>Pause Bot ({symbol})</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={17} fill="#080A0B" />
+                        <span>Start Bot ({symbol})</span>
+                      </>
+                    )}
                   </button>
                 </div>
 
+                {/* Right: Reset & Square Off All Buttons */}
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button
                     onClick={() => handleControl("RESET")}
                     disabled={actionLoading}
                     title="Reset Today's Trade Counter & State"
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: '10px',
-                      backgroundColor: '#161922',
-                      color: '#9ca3af',
-                      fontWeight: '600',
-                      fontSize: '0.85rem',
-                      border: '1px solid #242938',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
+                    className="btn-groww-secondary"
                   >
                     <RotateCcw size={14} />
                     <span>Reset Quota</span>
@@ -1250,21 +1756,9 @@ export default function LiveBotDashboard({
                   <button
                     onClick={() => handleControl("SQUARE_OFF")}
                     disabled={actionLoading}
-                    style={{
-                      padding: '12px 18px',
-                      borderRadius: '10px',
-                      backgroundColor: 'rgba(235, 91, 60, 0.12)',
-                      border: '1px solid rgba(235, 91, 60, 0.4)',
-                      color: '#eb5b3c',
-                      fontWeight: '700',
-                      fontSize: '0.85rem',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
+                    className="btn-groww-danger"
                   >
-                    <Square size={14} fill="#eb5b3c" />
+                    <Square size={14} fill="#EB5B3C" />
                     <span>Square Off All</span>
                   </button>
                 </div>
@@ -1273,8 +1767,8 @@ export default function LiveBotDashboard({
 
             {/* Institutional Risk Parameters Box */}
             <div style={{
-              backgroundColor: '#161922',
-              border: '1px solid #242938',
+              backgroundColor: '#151819',
+              border: '1px solid #252A2C',
               borderRadius: '16px',
               padding: '24px',
               display: 'flex',
@@ -1282,102 +1776,23 @@ export default function LiveBotDashboard({
               gap: '12px',
               fontSize: '0.85rem'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#00d09c', fontWeight: '700' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#00D09C', fontWeight: '700' }}>
                 <ShieldCheck size={18} />
                 <span>SEBI & Institutional Risk Guardrails</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginTop: '8px' }}>
-                <div style={{ padding: '12px', backgroundColor: '#0c0e14', borderRadius: '10px', border: '1px solid #1f2430' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.75rem' }}>Auto Square-Off</div>
-                  <div style={{ color: '#ffffff', fontWeight: '700', marginTop: '4px' }}>15:15 IST (3:15 PM)</div>
+                <div style={{ padding: '12px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                  <div style={{ color: '#626A6E', fontSize: '0.75rem' }}>Auto Square-Off</div>
+                  <div style={{ color: '#F1F3F4', fontWeight: '700', marginTop: '4px' }}>15:15 IST (3:15 PM)</div>
                 </div>
-                <div style={{ padding: '12px', backgroundColor: '#0c0e14', borderRadius: '10px', border: '1px solid #1f2430' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.75rem' }}>Max Drawdown Circuit</div>
-                  <div style={{ color: '#eb5b3c', fontWeight: '700', marginTop: '4px' }}>₹20,000 (2.0%)</div>
+                <div style={{ padding: '12px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                  <div style={{ color: '#626A6E', fontSize: '0.75rem' }}>Max Drawdown Circuit</div>
+                  <div style={{ color: '#EB5B3C', fontWeight: '700', marginTop: '4px' }}>₹20,000 (2.0%)</div>
                 </div>
-                <div style={{ padding: '12px', backgroundColor: '#0c0e14', borderRadius: '10px', border: '1px solid #1f2430' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.75rem' }}>Margin Multiplier</div>
-                  <div style={{ color: '#00d09c', fontWeight: '700', marginTop: '4px' }}>5x MIS (SEBI Limit)</div>
+                <div style={{ padding: '12px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                  <div style={{ color: '#626A6E', fontSize: '0.75rem' }}>Margin Multiplier</div>
+                  <div style={{ color: '#00D09C', fontWeight: '700', marginTop: '4px' }}>5x MIS (SEBI Limit)</div>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            TAB 4: EXPLORE WATCHLIST
-            ═══════════════════════════════════════════════════════════════════ */}
-        {activeSubTab === "explore" && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-            <div>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#ffffff', marginBottom: '16px' }}>
-                Popular Indian Stocks (NSE)
-              </h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-                gap: '16px'
-              }}>
-                {[
-                  { sym: "SBIN.NS", name: "State Bank of India", price: "818.50", chg: "+1.25%", isUp: true, logo: "SB" },
-                  { sym: "RELIANCE.NS", name: "Reliance Industries", price: "2,985.40", chg: "+0.85%", isUp: true, logo: "RL" },
-                  { sym: "HDFCBANK.NS", name: "HDFC Bank Ltd", price: "1,682.10", chg: "-0.40%", isUp: false, logo: "HD" },
-                  { sym: "TATAMOTORS.NS", name: "Tata Motors", price: "982.35", chg: "+2.15%", isUp: true, logo: "TM" },
-                  { sym: "TCS.NS", name: "Tata Consultancy", price: "4,120.00", chg: "+0.30%", isUp: true, logo: "TC" },
-                  { sym: "INFY.NS", name: "Infosys Ltd", price: "1,875.25", chg: "-0.65%", isUp: false, logo: "IN" }
-                ].map((item, i) => (
-                  <div
-                    key={i}
-                    onClick={() => {
-                      userSelectedSymbolRef.current = true;
-                      setSymbol(item.sym);
-                      setActiveSubTab("positions");
-                    }}
-                    style={{
-                      backgroundColor: '#161922',
-                      border: '1px solid #242938',
-                      borderRadius: '16px',
-                      padding: '20px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.borderColor = '#00d09c'}
-                    onMouseLeave={(e) => e.currentTarget.style.borderColor = '#242938'}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '10px',
-                        backgroundColor: '#1c2230',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '800',
-                        fontSize: '0.85rem',
-                        color: '#00d09c'
-                      }}>
-                        {item.logo}
-                      </div>
-                      <span style={{
-                        padding: '3px 8px',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: '700',
-                        backgroundColor: item.isUp ? 'rgba(0, 208, 156, 0.15)' : 'rgba(235, 91, 60, 0.15)',
-                        color: item.isUp ? '#00d09c' : '#eb5b3c'
-                      }}>
-                        {item.chg}
-                      </span>
-                    </div>
-                    <div style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.95rem' }}>{item.sym}</div>
-                    <div style={{ fontSize: '0.78rem', color: '#6b7280', marginBottom: '12px' }}>{item.name}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ffffff' }}>{currency}{item.price}</span>
-                      <span style={{ fontSize: '0.78rem', color: '#00d09c', fontWeight: '700' }}>Select for Bot →</span>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -1392,9 +1807,9 @@ export default function LiveBotDashboard({
           left: 0,
           right: 0,
           height: '380px',
-          backgroundColor: '#0c0e14',
-          borderTop: '2px solid #00d09c',
-          boxShadow: '0 -10px 40px rgba(0,0,0,0.8)',
+          backgroundColor: '#080A0B',
+          borderTop: '2px solid #00D09C',
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.85)',
           display: 'flex',
           flexDirection: 'column',
           zIndex: 900
@@ -1402,16 +1817,16 @@ export default function LiveBotDashboard({
           {/* Terminal Drawer Header */}
           <div style={{
             padding: '12px 24px',
-            backgroundColor: '#161922',
-            borderBottom: '1px solid #242938',
+            backgroundColor: '#151819',
+            borderBottom: '1px solid #252A2C',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#00d09c' }} />
-                <span style={{ fontWeight: '700', fontSize: '0.85rem', color: '#ffffff' }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#00D09C' }} />
+                <span style={{ fontWeight: '700', fontSize: '0.85rem', color: '#F1F3F4' }}>
                   Live Algo Execution Console
                 </span>
               </div>
@@ -1427,8 +1842,8 @@ export default function LiveBotDashboard({
                       borderRadius: '4px',
                       fontSize: '0.7rem',
                       fontWeight: '700',
-                      backgroundColor: logFilter === f ? '#00d09c' : '#0c0e14',
-                      color: logFilter === f ? '#0c0e14' : '#9ca3af',
+                      backgroundColor: logFilter === f ? '#00D09C' : '#080A0B',
+                      color: logFilter === f ? '#080A0B' : '#92999C',
                       border: 'none',
                       cursor: 'pointer'
                     }}
@@ -1442,57 +1857,32 @@ export default function LiveBotDashboard({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <button
                 onClick={() => setAutoScroll(!autoScroll)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  fontSize: '0.75rem',
-                  backgroundColor: autoScroll ? 'rgba(0, 208, 156, 0.15)' : '#0c0e14',
-                  color: autoScroll ? '#00d09c' : '#9ca3af',
-                  border: '1px solid #242938',
-                  cursor: 'pointer'
-                }}
+                className="btn-groww-secondary"
+                style={{ padding: '4px 10px', fontSize: '0.75rem' }}
               >
                 Auto-scroll {autoScroll ? "ON" : "OFF"}
               </button>
               <button
                 onClick={handleDownloadLogs}
                 title="Download log file"
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: '#0c0e14',
-                  color: '#9ca3af',
-                  border: '1px solid #242938',
-                  cursor: 'pointer'
-                }}
+                className="btn-groww-secondary"
+                style={{ padding: '4px 8px' }}
               >
                 <Download size={13} />
               </button>
               <button
                 onClick={handleClearLogs}
                 title="Clear console buffer"
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: '#0c0e14',
-                  color: '#9ca3af',
-                  border: '1px solid #242938',
-                  cursor: 'pointer'
-                }}
+                className="btn-groww-secondary"
+                style={{ padding: '4px 8px' }}
               >
                 <Trash2 size={13} />
               </button>
               <button
                 onClick={() => setIsTerminalOpen(false)}
                 title="Close Terminal Drawer"
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: '#0c0e14',
-                  color: '#9ca3af',
-                  border: '1px solid #242938',
-                  cursor: 'pointer'
-                }}
+                className="btn-groww-secondary"
+                style={{ padding: '4px 8px' }}
               >
                 <X size={15} />
               </button>
@@ -1516,21 +1906,21 @@ export default function LiveBotDashboard({
             }}
           >
             {filteredLogs.length === 0 ? (
-              <div style={{ color: '#6b7280', textAlign: 'center', marginTop: '40px' }}>
+              <div style={{ color: '#626A6E', textAlign: 'center', marginTop: '40px' }}>
                 Console initialized. Waiting for telemetry events...
               </div>
             ) : (
               filteredLogs.map((l, i) => (
                 <div key={i} style={{ display: 'flex', gap: '10px' }}>
-                  <span style={{ color: '#6b7280' }}>[{l.timestamp}]</span>
+                  <span style={{ color: '#626A6E' }}>[{l.timestamp}]</span>
                   <span style={{
-                    color: l.level === 'ORDER' ? '#00d09c' : (l.level === 'ERROR' ? '#eb5b3c' : (l.level === 'RISK' ? '#fbbf24' : '#60a5fa')),
+                    color: l.level === 'ORDER' ? '#00D09C' : (l.level === 'ERROR' ? '#EB5B3C' : (l.level === 'RISK' ? '#F59E0B' : '#60a5fa')),
                     fontWeight: '700'
                   }}>
                     [{l.level}]
                   </span>
-                  <span style={{ color: '#9ca3af' }}>[{l.symbol}]</span>
-                  <span style={{ color: '#ffffff' }}>{l.message}</span>
+                  <span style={{ color: '#92999C' }}>[{l.symbol}]</span>
+                  <span style={{ color: '#F1F3F4' }}>{l.message}</span>
                 </div>
               ))
             )}
@@ -1543,6 +1933,23 @@ export default function LiveBotDashboard({
         <TradeDetailsModal
           trade={selectedTrade}
           onClose={() => setSelectedTrade(null)}
+          currency={currency}
+        />
+      )}
+
+      {/* ── Instrument Details Modal (Spec Section 10) ── */}
+      {selectedInstrument && (
+        <InstrumentModal
+          instrument={selectedInstrument}
+          onClose={() => setSelectedInstrument(null)}
+          onSelectForBot={(targetSym) => {
+            userSelectedSymbolRef.current = true;
+            setSymbol(targetSym);
+            setActiveSubTab("config");
+          }}
+          onBacktest={(targetSym) => {
+            onNavigateToBacktest(targetSym);
+          }}
           currency={currency}
         />
       )}

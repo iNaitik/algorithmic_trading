@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Settings,
   CreditCard,
@@ -22,6 +22,17 @@ export default function GrowwUserProfileDropdown({
   onNavigateToOrders = () => {},
   onOpenSettings = () => {}
 }) {
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    if (isOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -44,28 +55,28 @@ export default function GrowwUserProfileDropdown({
         top: '64px',
         right: '24px',
         width: '320px',
-        backgroundColor: '#161922',
-        border: '1px solid #242938',
+        backgroundColor: '#151819',
+        border: '1px solid #252A2C',
         borderRadius: '16px',
-        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.65)',
+        boxShadow: '0 20px 48px rgba(0, 0, 0, 0.75)',
         zIndex: 1000,
-        color: '#ffffff',
+        color: '#F1F3F4',
         overflow: 'hidden',
         animation: 'fadeIn 0.15s ease-out'
       }}>
         {/* User Card Header */}
         <div style={{
           padding: '18px 20px',
-          borderBottom: '1px solid #242938',
+          borderBottom: '1px solid #252A2C',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
         }}>
           <div>
-            <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#ffffff' }}>
+            <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#F1F3F4' }}>
               {userName}
             </div>
-            <div style={{ fontSize: '0.75rem', color: '#8a939e', marginTop: '2px' }}>
+            <div style={{ fontSize: '0.75rem', color: '#92999C', marginTop: '2px' }}>
               {userEmail}
             </div>
           </div>
@@ -79,9 +90,9 @@ export default function GrowwUserProfileDropdown({
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              backgroundColor: '#1c202d',
-              border: 'none',
-              color: '#9ca3af',
+              backgroundColor: '#101314',
+              border: '1px solid #252A2C',
+              color: '#92999C',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -100,68 +111,68 @@ export default function GrowwUserProfileDropdown({
           }}
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid #242938',
+            borderBottom: '1px solid #252A2C',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             cursor: 'pointer',
             transition: 'background-color 0.15s ease'
           }}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1c202d'}
+          onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1c2022'}
           onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '34px',
+              height: '34px',
               borderRadius: '8px',
-              backgroundColor: 'rgba(0, 208, 156, 0.15)',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#00d09c'
+              color: '#00D09C'
             }}>
               <CreditCard size={18} />
             </div>
             <div>
-              <div style={{ fontSize: '0.98rem', fontWeight: '800', color: '#ffffff' }}>
+              <div style={{ fontSize: '0.98rem', fontWeight: '800', color: '#F1F3F4' }}>
                 ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <div style={{ fontSize: '0.70rem', color: '#8a939e' }}>
-                Stocks, F&O Trading Balance
+              <div style={{ fontSize: '0.70rem', color: '#92999C' }}>
+                Stocks, F&O balance
               </div>
             </div>
           </div>
-          <ChevronRight size={16} color="#6b7280" />
+          <ChevronRight size={16} color="#626A6E" />
         </div>
 
-        {/* US Stocks / Bot Mode Row */}
+        {/* US Stocks balance / Bot Mode Row */}
         <div style={{
           padding: '12px 20px',
-          borderBottom: '1px solid #242938',
+          borderBottom: '1px solid #252A2C',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '34px',
+              height: '34px',
               borderRadius: '8px',
-              backgroundColor: '#1c202d',
+              backgroundColor: '#101314',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#9ca3af'
+              color: '#92999C'
             }}>
               <Zap size={18} />
             </div>
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#c3c9d5' }}>
-                Autonomous Bot
+              <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F1F3F4' }}>
+                US Stocks balance
               </div>
-              <div style={{ fontSize: '0.70rem', color: '#8a939e' }}>
-                Execution Engine
+              <div style={{ fontSize: '0.70rem', color: '#92999C' }}>
+                --
               </div>
             </div>
           </div>
@@ -170,22 +181,21 @@ export default function GrowwUserProfileDropdown({
             fontWeight: '800',
             padding: '3px 8px',
             borderRadius: '6px',
-            backgroundColor: 'rgba(0, 208, 156, 0.15)',
-            color: '#00d09c',
-            border: '1px solid rgba(0, 208, 156, 0.3)'
+            backgroundColor: 'rgba(0, 208, 156, 0.12)',
+            color: '#00D09C',
+            border: '1px solid rgba(0, 208, 156, 0.28)'
           }}>
-            Active
+            Activate
           </span>
         </div>
 
-        {/* Menu Navigation Items */}
-        <div style={{ padding: '8px 0', borderBottom: '1px solid #242938' }}>
+        {/* Menu Navigation Items (Matches Screenshot 4) */}
+        <div style={{ padding: '8px 0', borderBottom: '1px solid #252A2C' }}>
           {[
-            { label: "All Orders & Fills", icon: FileText, action: onNavigateToOrders },
-            { label: "Risk Guardrails", icon: Shield, action: onOpenSettings },
-            { label: "Bank & Broker Details", icon: Building, action: null },
+            { label: "All Orders", icon: FileText, action: onNavigateToOrders },
+            { label: "Bank Details", icon: Building, action: null },
             { label: "24 x 7 Customer Support", icon: Headphones, action: null },
-            { label: "P&L Tax Reports", icon: FileSpreadsheet, action: null },
+            { label: "Reports", icon: FileSpreadsheet, action: null },
           ].map((item, idx) => {
             const Icon = item.icon;
             return (
@@ -203,33 +213,33 @@ export default function GrowwUserProfileDropdown({
                   justifyContent: 'space-between',
                   padding: '10px 20px',
                   fontSize: '0.82rem',
-                  color: '#c3c9d5',
+                  color: '#F1F3F4',
                   cursor: 'pointer',
                   transition: 'background-color 0.15s ease'
                 }}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1c202d'}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1c2022'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <Icon size={16} color="#8a939e" />
+                  <Icon size={16} color="#92999C" />
                   <span>{item.label}</span>
                 </div>
-                <ChevronRight size={14} color="#555e70" />
+                <ChevronRight size={14} color="#626A6E" />
               </div>
             );
           })}
         </div>
 
-        {/* Footer: Dark Mode & Log Out */}
+        {/* Footer: Dark Theme & Log Out */}
         <div style={{
           padding: '12px 20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#12151d'
+          backgroundColor: '#101314'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#8a939e', fontSize: '0.75rem' }}>
-            <Moon size={15} color="#00d09c" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92999C', fontSize: '0.75rem' }}>
+            <Moon size={15} color="#00D09C" />
             <span>Dark Theme</span>
           </div>
 
@@ -241,7 +251,7 @@ export default function GrowwUserProfileDropdown({
               gap: '6px',
               backgroundColor: 'transparent',
               border: 'none',
-              color: '#eb5b3c',
+              color: '#EB5B3C',
               fontSize: '0.80rem',
               fontWeight: '700',
               cursor: 'pointer'

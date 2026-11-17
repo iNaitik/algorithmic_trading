@@ -1,28 +1,28 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-app: #0c0e14;
-  --bg-surface: #12151d;
-  --bg-card: #161922;
-  --bg-card-inner: #1c202d;
-  --bg-card-hover: #222736;
-  --border-subtle: #242938;
-  --border-focus: #00d09c;
-  
-  --groww-mint: #00d09c;
-  --groww-mint-soft: rgba(0, 208, 156, 0.12);
-  --groww-mint-border: rgba(0, 208, 156, 0.3);
-  
-  --groww-red: #eb5b3c;
-  --groww-red-soft: rgba(235, 91, 60, 0.12);
-  --groww-red-border: rgba(235, 91, 60, 0.3);
+  /* Exact Groww Palette from Specification */
+  --bg-app: #080A0B;
+  --bg-secondary: #101314;
+  --bg-card: #151819;
+  --bg-card-hover: #1c2022;
+  --border: #252A2C;
+  --border-focus: #00D09C;
 
-  --groww-blue: #5367ff;
-  --groww-cyan: #00baf2;
+  --text-primary: #F1F3F4;
+  --text-secondary: #92999C;
+  --text-muted: #626A6E;
 
-  --text-primary: #ffffff;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
+  --positive: #00D09C;
+  --positive-soft: rgba(0, 208, 156, 0.12);
+  --positive-border: rgba(0, 208, 156, 0.28);
+
+  --negative: #EB5B3C;
+  --negative-soft: rgba(235, 91, 60, 0.12);
+  --negative-border: rgba(235, 91, 60, 0.28);
+
+  --groww-blue: #5367FF;
+  --groww-amber: #F59E0B;
 }
 
 * {
@@ -32,19 +32,26 @@
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-app);
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numbers for clean financial tickers */
+.font-tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 code, .font-mono {
   font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
 }
 
-/* Custom scrollbars */
+/* Custom Groww Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -53,81 +60,204 @@ code, .font-mono {
   background: var(--bg-app);
 }
 ::-webkit-scrollbar-thumb {
-  background: #242938;
+  background: #252A2C;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b4256;
+  background: #363C3E;
 }
 
-/* Input & Select */
+/* Inputs & Form Elements */
 input, select, button {
   font-family: inherit;
   font-size: 0.875rem;
 }
 
+/* Generic interactive button animations */
 button {
   cursor: pointer;
-  transition: all 0.15s ease-in-out;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+button:hover {
+  transform: translateY(-1px);
 }
 
 button:active {
-  transform: translateY(1px);
+  transform: translateY(1px) scale(0.98);
 }
 
+/* Groww interactive button classes */
+.btn-groww-primary {
+  background-color: var(--positive);
+  color: #080A0B;
+  font-weight: 700;
+  border-radius: 10px;
+  border: none;
+  padding: 10px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 10px rgba(0, 208, 156, 0.2);
+}
+
+.btn-groww-primary:hover {
+  background-color: #00e0a8;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 18px rgba(0, 208, 156, 0.35);
+}
+
+.btn-groww-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-groww-secondary {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 10px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-groww-secondary:hover {
+  background-color: var(--bg-card-hover);
+  border-color: #3b4245;
+  transform: translateY(-2px);
+  color: #ffffff;
+}
+
+.btn-groww-pause {
+  background-color: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 10px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-groww-pause:hover {
+  background-color: rgba(245, 158, 11, 0.22);
+  border-color: #fbbf24;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.25);
+}
+
+.btn-groww-danger {
+  background-color: var(--negative-soft);
+  color: var(--negative);
+  border: 1px solid var(--negative-border);
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 10px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-groww-danger:hover {
+  background-color: rgba(235, 91, 60, 0.2);
+  border-color: var(--negative);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(235, 91, 60, 0.25);
+}
+
+/* Groww interactive Stock Card */
+.groww-stock-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justifyContent: space-between;
+  min-height: 170px;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.groww-stock-card:hover {
+  background-color: var(--bg-card-hover);
+  border-color: #3b4347;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Groww Tabs */
+.groww-subtab {
+  padding: 14px 4px;
+  background: transparent;
+  border: none;
+  font-size: 0.92rem;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease;
+}
+
+.groww-subtab-active {
+  color: var(--text-primary) !important;
+  font-weight: 700;
+}
+
+.groww-subtab-inactive {
+  color: var(--text-secondary) !important;
+  font-weight: 500;
+}
+
+.groww-subtab-inactive:hover {
+  color: var(--text-primary) !important;
+}
+
+.groww-subtab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background-color: #ffffff;
+  border-radius: 2px;
+}
+
+/* Animations */
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-@keyframes pulseGlow {
+@keyframes pulseMint {
   0%, 100% {
-    opacity: 1;
-    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(0, 208, 156, 0.4);
   }
   50% {
-    opacity: 0.7;
-    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(0, 208, 156, 0);
   }
 }
 
-/* Responsive Layout System */
-@media (max-width: 900px) {
-  .app-sidebar {
-    display: none !important;
-  }
-  .app-header {
-    height: auto !important;
-    padding: 12px 16px !important;
-    flex-wrap: wrap !important;
-    gap: 12px !important;
-  }
-  .app-nav-pills {
-    width: 100% !important;
-    overflow-x: auto !important;
-    padding: 4px !important;
-    justify-content: flex-start !important;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-  .app-nav-pills::-webkit-scrollbar {
-    display: none;
-  }
-  .quant-dashboard-container {
-    padding: 14px 12px !important;
-    gap: 16px !important;
-  }
-  .quant-hero-grid {
+.pulse-mint-dot {
+  animation: pulseMint 2s infinite;
+}
+
+/* Responsive Grid Rules */
+@media (max-width: 1024px) {
+  .groww-explore-grid {
     grid-template-columns: 1fr !important;
   }
-  .quant-grid-split {
-    grid-template-columns: 1fr !important;
+  .groww-cards-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 
-@media (max-width: 600px) {
-  .quant-dashboard-container {
-    padding: 10px 8px !important;
+@media (max-width: 640px) {
+  .groww-cards-grid {
+    grid-template-columns: 1fr !important;
   }
 }
