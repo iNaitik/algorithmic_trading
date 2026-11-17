@@ -173,57 +173,48 @@ export default function App() {
 
       {/* ── ROW 1: Persistent Groww Header Navigation (Matches Groww Desktop) ── */}
       <header style={{
-        height: '70px',
+        height: '68px',
         backgroundColor: '#080A0B',
-        borderBottom: '1px solid #252A2C',
+        borderBottom: '1px solid #202426',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 32px',
-        gap: '24px',
+        gap: '28px',
         position: 'sticky',
         top: 0,
         zIndex: 1000
       }}>
-        {/* Left: Groww Brand Emblem + Primary Trading Categories */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-          {/* Groww Iconic Logo */}
+        {/* Left: Groww Brand Emblem + Primary Trading Categories (Matches Screenshot 1 & 5) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '28px' }}>
+          {/* Groww Iconic Circular Emblem */}
           <div
             onClick={() => setActiveCategory("stocks")}
+            title="Groww Home"
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              transition: 'transform 0.15s ease'
             }}
-          >
-            {/* Groww Mint Circular Emblem */}
-            <div style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '50%',
-              backgroundColor: '#00D09C',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 14px rgba(0, 208, 156, 0.35)',
-              transition: 'transform 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.04)'}
             onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1.0)'}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="9" stroke="#080A0B" strokeWidth="2.5" />
-                <path d="M12 7V12L15.5 14" stroke="#080A0B" strokeWidth="2.5" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', letterSpacing: '-0.02em' }}>
-              Groww
-            </span>
+          >
+            <svg width="36" height="36" viewBox="0 0 40 40" fill="none">
+              <defs>
+                <linearGradient id="growwGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#00D09C" />
+                  <stop offset="100%" stopColor="#00B5EC" />
+                </linearGradient>
+              </defs>
+              <circle cx="20" cy="20" r="19" fill="url(#growwGrad)" />
+              {/* Groww dynamic diagonal slash */}
+              <path d="M12 26L28 14M28 14H18M28 14V24" stroke="#080A0B" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </div>
 
-          {/* Primary Navigation Links (Matches Screenshot 1 & 4) */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* Primary Navigation Links (Matches Screenshot 1 & 5: Clean text, NO green pills!) */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             {[
               { id: "stocks", label: "Stocks" },
               { id: "fno", label: "F&O" },
@@ -235,18 +226,18 @@ export default function App() {
                   key={tab.id}
                   onClick={() => setActiveCategory(tab.id)}
                   style={{
-                    padding: '8px 16px',
-                    borderRadius: '20px',
+                    padding: '8px 0',
                     border: 'none',
-                    backgroundColor: isActive ? 'rgba(0, 208, 156, 0.12)' : 'transparent',
-                    color: isActive ? '#00D09C' : '#92999C',
-                    fontSize: '0.92rem',
+                    backgroundColor: 'transparent',
+                    color: isActive ? '#FFFFFF' : '#92999C',
+                    fontSize: '1rem',
                     fontWeight: isActive ? '700' : '500',
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease'
+                    transition: 'color 0.15s ease',
+                    letterSpacing: '-0.01em'
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.color = '#F1F3F4';
+                    if (!isActive) e.currentTarget.style.color = '#FFFFFF';
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive) e.currentTarget.style.color = '#92999C';
@@ -262,17 +253,28 @@ export default function App() {
               <button
                 onClick={() => setIsQuantDropdownOpen(!isQuantDropdownOpen)}
                 style={{
-                  padding: '8px 14px',
-                  borderRadius: '20px',
+                  padding: '8px 0',
                   border: 'none',
-                  backgroundColor: ['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory) ? 'rgba(0, 208, 156, 0.12)' : 'transparent',
-                  color: ['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory) ? '#00D09C' : '#92999C',
-                  fontSize: '0.92rem',
+                  backgroundColor: 'transparent',
+                  color: ['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory) ? '#FFFFFF' : '#92999C',
+                  fontSize: '1rem',
                   fontWeight: ['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory) ? '700' : '500',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px'
+                  gap: '4px',
+                  transition: 'color 0.15s ease',
+                  letterSpacing: '-0.01em'
+                }}
+                onMouseEnter={(e) => {
+                  if (!['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory)) {
+                    e.currentTarget.style.color = '#FFFFFF';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory)) {
+                    e.currentTarget.style.color = '#92999C';
+                  }
                 }}
               >
                 <span>Quant Lab</span>
@@ -385,23 +387,30 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right: Market Pill, Telegram Bell, User Profile Avatar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', position: 'relative' }}>
-          {/* Active Market Pill */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '6px 12px',
-            backgroundColor: '#151819',
-            borderRadius: '16px',
-            border: '1px solid #252A2C',
-            fontSize: '0.78rem',
-            fontWeight: '700',
-            color: '#00D09C'
-          }}>
-            <span>🇮🇳 NSE</span>
-          </div>
+        {/* Right: Quick Tools, Telegram Bell, User Profile Avatar (Matches Screenshot 1 & 4) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', position: 'relative' }}>
+          {/* Quick Scanner Pulse Trigger */}
+          <button
+            onClick={() => setActiveCategory(activeCategory === "scanner" ? "stocks" : "scanner")}
+            title="Quick Scanner Pulse"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              backgroundColor: 'transparent',
+              border: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#92999C',
+              transition: 'color 0.15s ease'
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = '#FFFFFF'}
+            onMouseLeave={e => e.currentTarget.style.color = '#92999C'}
+          >
+            <Activity size={19} />
+          </button>
 
           {/* Telegram Alerts Trigger */}
           <button
@@ -411,15 +420,19 @@ export default function App() {
               width: '38px',
               height: '38px',
               borderRadius: '50%',
-              backgroundColor: '#151819',
-              border: '1px solid #252A2C',
+              backgroundColor: 'transparent',
+              border: 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              color: '#92999C',
+              transition: 'color 0.15s ease'
             }}
+            onMouseEnter={e => e.currentTarget.style.color = '#FFFFFF'}
+            onMouseLeave={e => e.currentTarget.style.color = '#92999C'}
           >
-            <Bell size={16} color="#92999C" />
+            <Bell size={19} />
           </button>
 
           {/* User Profile Avatar with dropdown trigger (Matches Groww Screenshot 4) */}
@@ -427,23 +440,29 @@ export default function App() {
             onClick={() => setIsProfileOpen(!isProfileOpen)}
             title="Naitik Seth • Groww Account"
             style={{
-              width: '40px',
-              height: '40px',
+              width: '38px',
+              height: '38px',
               borderRadius: '50%',
-              backgroundColor: '#101314',
-              border: '2px solid #00D09C',
+              backgroundColor: '#1E2328',
+              border: '1.5px solid #363C40',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontWeight: '800',
-              color: '#00D09C',
-              fontSize: '0.9rem',
+              fontWeight: '700',
+              color: '#F1F3F4',
+              fontSize: '0.88rem',
               cursor: 'pointer',
               position: 'relative',
-              transition: 'transform 0.15s ease'
+              transition: 'transform 0.15s ease, border-color 0.15s ease'
             }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1.0)'}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.borderColor = '#00D09C';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'scale(1.0)';
+              e.currentTarget.style.borderColor = '#363C40';
+            }}
           >
             N
           </div>

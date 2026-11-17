@@ -1,8 +1,12 @@
 import React from 'react';
 
+/**
+ * GrowwRocketEmptyState matches the exact rocket launch illustration
+ * and typography from Groww's desktop Positions (Image 2) and Orders (Image 3) tabs.
+ */
 export default function GrowwRocketEmptyState({
   title = "No open positions",
-  subtitle = "Equity Intraday and automated bot positions will appear here.",
+  subtitle = "Equity, Intraday and MTF positions will appear here",
   actionButton = null
 }) {
   return (
@@ -11,87 +15,103 @@ export default function GrowwRocketEmptyState({
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '48px 24px',
+      padding: '60px 20px',
       textAlign: 'center',
-      minHeight: '380px'
+      minHeight: '420px',
+      width: '100%'
     }}>
-      {/* Groww Rocket & Launchpad SVG Illustration */}
-      <div style={{ width: '220px', height: '200px', marginBottom: '24px', position: 'relative' }}>
-        <svg viewBox="0 0 240 220" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
-          {/* Background Stars / Sparkles */}
-          <circle cx="36" cy="48" r="1.5" fill="#5c6579" />
-          <circle cx="80" cy="24" r="1" fill="#7d889e" />
-          <circle cx="204" cy="40" r="1.5" fill="#5c6579" />
-          <circle cx="190" cy="80" r="2" fill="#00d09c" opacity="0.6" />
-          <circle cx="30" cy="110" r="1.5" fill="#00d09c" opacity="0.4" />
-          
-          {/* Star cross */}
-          <path d="M42 76L44 80L48 82L44 84L42 88L40 84L36 82L40 80L42 76Z" fill="#7d889e" opacity="0.8" />
-          <path d="M198 120L199.5 123L202.5 124.5L199.5 126L198 129L196.5 126L193.5 124.5L196.5 123L198 120Z" fill="#00d09c" opacity="0.7" />
-          
-          {/* Launch Pad Lattice Tower (Left) */}
-          <line x1="88" y1="180" x2="88" y2="90" stroke="#252b3b" strokeWidth="2" strokeDasharray="3 3" />
-          <line x1="88" y1="100" x2="104" y2="108" stroke="#252b3b" strokeWidth="1.5" />
-          <line x1="88" y1="120" x2="104" y2="128" stroke="#252b3b" strokeWidth="1.5" />
-          <line x1="88" y1="140" x2="104" y2="148" stroke="#252b3b" strokeWidth="1.5" />
+      {/* Rocket & Launchpad Illustration (Matches Screenshot 2 & 3) */}
+      <div style={{ width: '260px', height: '240px', marginBottom: '24px', position: 'relative' }}>
+        <svg viewBox="0 0 260 240" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+          {/* Subtle Star Sparkles */}
+          <path d="M48 60L49.5 64L53.5 65.5L49.5 67L48 71L46.5 67L42.5 65.5L46.5 64L48 60Z" fill="#94A3B8" opacity="0.6" />
+          <path d="M216 75L217.5 78.5L221 80L217.5 81.5L216 85L214.5 81.5L211 80L214.5 78.5L216 75Z" fill="#00D09C" opacity="0.7" />
+          <circle cx="36" cy="115" r="1.5" fill="#64748B" />
+          <circle cx="228" cy="130" r="1.5" fill="#64748B" />
+          <circle cx="80" cy="40" r="1" fill="#94A3B8" />
 
-          {/* Smoke & Cloud base */}
-          <path d="M40 195 C 40 180, 60 175, 75 180 C 85 168, 110 168, 120 180 C 135 170, 160 172, 170 185 C 185 178, 205 185, 200 200 C 180 205, 60 205, 40 195 Z" fill="#181d28" />
-          <path d="M60 192 C 65 182, 85 180, 95 186 C 105 178, 125 178, 135 185 C 145 180, 165 182, 172 192 Z" fill="#202636" opacity="0.8" />
+          {/* Launch Truss / Tower on Left */}
+          <line x1="72" y1="210" x2="72" y2="95" stroke="#1E293B" strokeWidth="2.5" />
+          <line x1="72" y1="105" x2="88" y2="115" stroke="#1E293B" strokeWidth="1.5" />
+          <line x1="72" y1="125" x2="88" y2="135" stroke="#1E293B" strokeWidth="1.5" />
+          <line x1="72" y1="145" x2="88" y2="155" stroke="#1E293B" strokeWidth="1.5" />
+          <line x1="72" y1="165" x2="88" y2="175" stroke="#1E293B" strokeWidth="1.5" />
+          <line x1="72" y1="185" x2="88" y2="195" stroke="#1E293B" strokeWidth="1.5" />
+          <line x1="72" y1="115" x2="88" y2="105" stroke="#1E293B" strokeWidth="1" strokeDasharray="2 2" />
+          <line x1="72" y1="135" x2="88" y2="125" stroke="#1E293B" strokeWidth="1" strokeDasharray="2 2" />
+          <line x1="72" y1="155" x2="88" y2="145" stroke="#1E293B" strokeWidth="1" strokeDasharray="2 2" />
 
-          {/* Rocket Thruster Flame (Mint Teal glow) */}
-          <path d="M112 170 C 114 186, 120 196, 120 196 C 120 196, 126 186, 128 170 Z" fill="#00d09c" opacity="0.8" />
-          <path d="M116 170 C 117 180, 120 188, 120 188 C 120 188, 123 180, 124 170 Z" fill="#ffffff" />
+          {/* Layered Exhaust Billowing Clouds */}
+          {/* Deep base clouds */}
+          <path d="M40 215 C35 190, 60 170, 85 180 C95 160, 130 160, 145 178 C160 162, 195 165, 205 185 C225 185, 235 210, 220 225 C190 235, 60 235, 40 215 Z" fill="#0F172A" />
+          {/* Mid cloud layer */}
+          <path d="M55 210 C50 195, 70 185, 88 192 C98 178, 128 178, 138 190 C152 178, 180 180, 190 196 C205 198, 215 218, 200 226 C170 232, 70 230, 55 210 Z" fill="#1E293B" />
+          {/* Soft inner smoke highlights */}
+          <path d="M75 208 C80 198, 95 198, 105 205 C115 195, 135 195, 145 204 C155 198, 170 200, 178 210 C160 220, 90 220, 75 208 Z" fill="#334155" opacity="0.6" />
+
+          {/* Rocket Thruster Flame (Mint Glow) */}
+          <path d="M122 175 C124 195, 130 210, 130 210 C130 210, 136 195, 138 175 Z" fill="#00D09C" />
+          <path d="M126 175 C128 190, 130 200, 130 200 C130 200, 132 190, 134 175 Z" fill="#FFFFFF" />
 
           {/* Left Booster Rocket */}
-          <path d="M102 125 C 102 110, 107 100, 107 100 C 107 100, 112 110, 112 125 L 112 162 L 102 162 Z" fill="#2a3244" />
-          <path d="M102 125 C 102 112, 107 104, 107 104 L 107 162 L 102 162 Z" fill="#323b4f" />
-          <polygon points="98,162 102,152 102,166" fill="#1b212f" />
+          <path d="M106 120 C106 102, 112 90, 112 90 C112 90, 118 102, 118 120 L118 172 L106 172 Z" fill="#334155" />
+          <path d="M106 120 C106 102, 112 90, 112 90 L112 172 L106 172 Z" fill="#1E293B" />
+          <polygon points="102,172 106,160 106,176" fill="#0F172A" />
 
           {/* Right Booster Rocket */}
-          <path d="M128 125 C 128 110, 133 100, 133 100 C 133 100, 138 110, 138 125 L 138 162 L 128 162 Z" fill="#2a3244" />
-          <path d="M128 125 C 128 112, 133 104, 133 104 L 133 162 L 128 162 Z" fill="#3b465d" />
-          <polygon points="142,162 138,152 138,166" fill="#1b212f" />
+          <path d="M142 120 C142 102, 148 90, 148 90 C148 90, 154 102, 154 120 L154 172 L142 172 Z" fill="#334155" />
+          <path d="M148 90 C148 90, 154 102, 154 120 L154 172 L148 172 Z" fill="#475569" />
+          <polygon points="158,172 154,160 154,176" fill="#0F172A" />
 
-          {/* Main Central Rocket Body */}
-          <path d="M120 48 C 120 48, 108 80, 108 135 L 108 168 L 132 168 L 132 135 C 132 80, 120 48, 120 48 Z" fill="#e2e8f0" />
-          {/* Main Shading */}
-          <path d="M120 48 C 120 48, 120 80, 120 168 L 132 168 L 132 135 C 132 80, 120 48, 120 48 Z" fill="#cbd5e1" />
-          {/* Nose Cone Tip */}
-          <path d="M120 48 C 120 48, 114 65, 112 76 L 128 76 C 126 65, 120 48, 120 48 Z" fill="#00d09c" />
+          {/* Central Rocket Body (Soft Mint and White Shading) */}
+          <path d="M130 38 C130 38, 116 75, 116 138 L116 178 L144 178 L144 138 C144 75, 130 38, 130 38 Z" fill="#E2E8F0" />
+          {/* Right half shadow */}
+          <path d="M130 38 C130 38, 130 75, 130 178 L144 178 L144 138 C144 75, 130 38, 130 38 Z" fill="#CBD5E1" />
 
-          {/* Rocket Window / Porthole */}
-          <circle cx="120" cy="92" r="7" fill="#0c0e14" stroke="#00d09c" strokeWidth="2" />
-          <circle cx="120" cy="92" r="4" fill="#00d09c" opacity="0.3" />
+          {/* Soft Pastel Mint Nose Cone (Iconic Groww palette) */}
+          <path d="M130 38 C130 38, 122 58, 120 72 L140 72 C138 58, 130 38, 130 38 Z" fill="#5EEAD4" />
+          <path d="M130 38 C130 38, 130 58, 130 72 L140 72 C138 58, 130 38, 130 38 Z" fill="#2DD4BF" />
 
-          {/* Side Fins */}
-          <polygon points="108,142 96,166 108,164" fill="#00d09c" />
-          <polygon points="132,142 144,166 132,164" fill="#00b084" />
+          {/* Center Seam / Detail lines */}
+          <line x1="130" y1="72" x2="130" y2="178" stroke="#94A3B8" strokeWidth="1.2" />
+
+          {/* Circular Porthole Window */}
+          <circle cx="130" cy="100" r="7.5" fill="#0F172A" stroke="#5EEAD4" strokeWidth="2" />
+          <circle cx="130" cy="100" r="4.5" fill="#5EEAD4" opacity="0.4" />
+
+          {/* Left & Right Stabilizer Fins */}
+          <polygon points="116,148 102,176 116,172" fill="#2DD4BF" />
+          <polygon points="144,148 158,176 144,172" fill="#0F766E" />
         </svg>
       </div>
 
-      <div style={{
-        fontSize: '1.25rem',
+      {/* Main Title (Matches Screenshot 2 & 3: Bold, Clean White) */}
+      <h2 style={{
+        fontSize: '1.45rem',
         fontWeight: '700',
-        color: '#ffffff',
-        marginBottom: '8px',
-        letterSpacing: '-0.01em'
+        color: '#FFFFFF',
+        margin: '0 0 8px 0',
+        letterSpacing: '-0.02em',
+        fontFamily: "'Inter', -apple-system, sans-serif"
       }}>
         {title}
-      </div>
+      </h2>
 
-      <div style={{
-        fontSize: '0.85rem',
-        color: '#8a939e',
-        maxWidth: '420px',
-        lineHeight: '1.5',
-        marginBottom: actionButton ? '20px' : '0'
-      }}>
-        {subtitle}
-      </div>
+      {/* Subtitle (Subtle Gray, Exactly like Groww) */}
+      {subtitle && (
+        <p style={{
+          fontSize: '0.9rem',
+          color: '#92999C',
+          maxWidth: '460px',
+          lineHeight: '1.5',
+          margin: 0
+        }}>
+          {subtitle}
+        </p>
+      )}
 
       {actionButton && (
-        <div style={{ marginTop: '16px' }}>
+        <div style={{ marginTop: '20px' }}>
           {actionButton}
         </div>
       )}

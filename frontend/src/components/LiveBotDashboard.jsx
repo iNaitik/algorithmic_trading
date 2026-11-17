@@ -40,6 +40,7 @@ import {
 import GrowwRocketEmptyState from './GrowwRocketEmptyState';
 import TradeDetailsModal from './TradeDetailsModal';
 import InstrumentModal from './InstrumentModal';
+import CompanyLogo from './CompanyLogo';
 
 export default function LiveBotDashboard({
   market = "INDIA",
@@ -88,33 +89,41 @@ export default function LiveBotDashboard({
   const userSelectedQuotaRef = useRef(false);
   const terminalBodyRef = useRef(null);
 
-  // Live Market Indices Ticker Tape (Matches Groww Desktop Header)
+  // Live Market Indices Ticker Tape (Matches Groww Desktop Header & Screenshot 1, 5)
   const indices = [
-    { name: "NIFTY 50", price: "25,387.40", change: "+96.30", pct: "+0.38%", isUp: true },
-    { name: "SENSEX", price: "82,532.19", change: "+427.40", pct: "+0.52%", isUp: true },
-    { name: "BANK NIFTY", price: "62,273.25", change: "+697.35", pct: "+1.13%", isUp: true },
-    { name: "MIDCPNIFTY", price: "14,277.45", change: "-3.80", pct: "-0.03%", isUp: false },
-    { name: "FINNIFTY", price: "28,124.80", change: "+112.50", pct: "+0.40%", isUp: true }
+    { name: "NIFTY", price: "25,387.40", change: "96.30 (0.38%)", isUp: true },
+    { name: "SENSEX", price: "82,532.19", change: "427.40 (0.52%)", isUp: true },
+    { name: "BANKNIFTY", price: "62,273.25", change: "697.35 (1.13%)", isUp: true },
+    { name: "MIDCPNIFTY", price: "14,277.45", change: "-3.80 (0.03%)", isUp: false },
+    { name: "FINNIFTY", price: "28,124.80", change: "112.50 (0.40%)", isUp: true }
   ];
 
-  // Popular Stocks Data (4 cards per row)
+  // Popular US & Global Stocks Data (Matches Groww Desktop Screenshot 1 & 5)
+  const popularUSStocks = [
+    { sym: "NVDA", name: "NVIDIA", price: "156.12", chg: "0.00 (0.00%)", isUp: true, curr: "$" },
+    { sym: "SPY", name: "State Street SPDR S&P 500", price: "740.06", chg: "-1.16 (0.16%)", isUp: false, curr: "$" },
+    { sym: "MU", name: "Micron Technology", price: "709.57", chg: "-9.76 (1.36%)", isUp: false, curr: "$" },
+    { sym: "AMD", name: "Advanced Micro Devices", price: "501.71", chg: "-2.30 (0.46%)", isUp: false, curr: "$" }
+  ];
+
+  // Popular Indian Stocks Data (4 cards per row, official vector logos)
   const popularStocks = [
-    { sym: "SBIN.NS", name: "State Bank of India", price: "818.50", chg: "+1.25%", isUp: true, logo: "SB" },
-    { sym: "RELIANCE.NS", name: "Reliance Industries", price: "2,985.40", chg: "+0.85%", isUp: true, logo: "RL" },
-    { sym: "HDFCBANK.NS", name: "HDFC Bank Ltd", price: "1,682.10", chg: "-0.40%", isUp: false, logo: "HD" },
-    { sym: "TATAMOTORS.NS", name: "Tata Motors Ltd", price: "982.35", chg: "+2.15%", isUp: true, logo: "TM" },
-    { sym: "TCS.NS", name: "Tata Consultancy Services", price: "4,120.00", chg: "+0.30%", isUp: true, logo: "TC" },
-    { sym: "INFY.NS", name: "Infosys Ltd", price: "1,875.25", chg: "-0.65%", isUp: false, logo: "IN" },
-    { sym: "BHARTIARTL.NS", name: "Bharti Airtel Ltd", price: "1,610.80", chg: "+1.40%", isUp: true, logo: "BA" },
-    { sym: "ICICIBANK.NS", name: "ICICI Bank Ltd", price: "1,245.50", chg: "+0.95%", isUp: true, logo: "IC" }
+    { sym: "SBIN.NS", name: "State Bank of India", price: "818.50", chg: "+10.15 (1.25%)", isUp: true, curr: "₹" },
+    { sym: "RELIANCE.NS", name: "Reliance Industries", price: "2,985.40", chg: "+25.10 (0.85%)", isUp: true, curr: "₹" },
+    { sym: "HDFCBANK.NS", name: "HDFC Bank Ltd", price: "1,682.10", chg: "-6.75 (0.40%)", isUp: false, curr: "₹" },
+    { sym: "TATAMOTORS.NS", name: "Tata Motors Ltd", price: "982.35", chg: "+20.70 (2.15%)", isUp: true, curr: "₹" },
+    { sym: "TCS.NS", name: "Tata Consultancy Services", price: "4,120.00", chg: "+12.35 (0.30%)", isUp: true, curr: "₹" },
+    { sym: "INFY.NS", name: "Infosys Ltd", price: "1,875.25", chg: "-12.20 (0.65%)", isUp: false, curr: "₹" },
+    { sym: "BHARTIARTL.NS", name: "Bharti Airtel Ltd", price: "1,610.80", chg: "+22.40 (1.40%)", isUp: true, curr: "₹" },
+    { sym: "ICICIBANK.NS", name: "ICICI Bank Ltd", price: "1,245.50", chg: "+11.75 (0.95%)", isUp: true, curr: "₹" }
   ];
 
-  // Popular Bonds Data (4 cards per row)
+  // Popular Bonds Data (Matches Groww Desktop Screenshot 1)
   const popularBonds = [
-    { sym: "GS2033", name: "Govt of India 7.18% 2033", yieldRate: "7.18% YTM", price: "100.25", chg: "+0.05%", isUp: true, logo: "GOI" },
-    { sym: "REC2029", name: "REC Ltd AAA 7.65%", yieldRate: "7.65% YTM", price: "101.50", chg: "+0.12%", isUp: true, logo: "REC" },
-    { sym: "NHAI2031", name: "NHAI Tax Free 7.39%", yieldRate: "5.45% (TF)", price: "118.40", chg: "+0.08%", isUp: true, logo: "NHAI" },
-    { sym: "PFC2030", name: "PFC Ltd AAA 7.72%", yieldRate: "7.72% YTM", price: "102.10", chg: "-0.04%", isUp: false, logo: "PFC" }
+    { sym: "MUTHOOT", name: "Muthoot Finance AAA", yieldRate: "8.25% YTM", price: "1,024.50", chg: "+0.15%", isUp: true },
+    { sym: "INDEL", name: "Indel Money Senior Secured", yieldRate: "9.10% YTM", price: "1,012.00", chg: "+0.18%", isUp: true },
+    { sym: "PAISALO", name: "Paisalo Digital NCD", yieldRate: "9.85% YTM", price: "1,005.75", chg: "+0.22%", isUp: true },
+    { sym: "GS2033", name: "Govt of India 7.18% 2033", yieldRate: "7.18% YTM", price: "100.25", chg: "+0.05%", isUp: true }
   ];
 
   // Live Market Countdown Timer (09:15 AM IST Open / 03:15 PM MIS / 03:30 PM Close)
@@ -377,23 +386,25 @@ export default function LiveBotDashboard({
       color: '#F1F3F4'
     }}>
 
-      {/* ── ROW 2: Groww Underline Sub-Navigation Bar (Matches Screenshot 1 & 4) ── */}
+      {/* ── ROW 2: Groww Underline Sub-Navigation Bar (Matches Screenshot 1, 2, 3, 5) ── */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 32px',
-        borderBottom: '1px solid #252A2C',
-        backgroundColor: '#080A0B'
+        borderBottom: '1px solid #202426',
+        backgroundColor: '#080A0B',
+        position: 'relative'
       }}>
+        {/* Left Sub-Nav Tabs with Clean White Underline Indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           {[
             { id: "explore", label: "Explore" },
             { id: "holdings", label: "Holdings" },
-            { id: "positions", label: "Positions", badge: isInPosition ? "1" : null },
-            { id: "orders", label: "Orders", badge: todayFills.length > 0 ? todayFills.length : null },
+            { id: "positions", label: "Positions" },
+            { id: "orders", label: "Orders" },
             { id: "watchlist", label: "Watchlist" },
-            { id: "config", label: "Bot Config", badge: isRunning ? "RUNNING" : null }
+            { id: "config", label: "Bot Config" }
           ].map(tab => {
             const isActive = activeSubTab === tab.id;
             return (
@@ -404,111 +415,121 @@ export default function LiveBotDashboard({
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  padding: '14px 2px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: isActive ? '#FFFFFF' : '#92999C',
+                  fontSize: '0.92rem',
+                  fontWeight: isActive ? '600' : '500',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  letterSpacing: '-0.01em',
+                  transition: 'color 0.15s ease'
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) e.currentTarget.style.color = '#FFFFFF';
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) e.currentTarget.style.color = '#92999C';
                 }}
               >
                 <span>{tab.label}</span>
-                {tab.badge && (
-                  <span style={{
-                    padding: '1px 6px',
-                    borderRadius: '8px',
-                    fontSize: '0.68rem',
-                    fontWeight: '700',
-                    backgroundColor: tab.badge === "RUNNING" ? 'rgba(0, 208, 156, 0.15)' : '#252A2C',
-                    color: tab.badge === "RUNNING" ? '#00D09C' : '#92999C'
-                  }}>
-                    {tab.badge}
-                  </span>
+                {/* Clean Solid White Underline Indicator (Arrow 2 & Groww Screenshot 1, 2, 3) */}
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '2.5px',
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '1px'
+                  }} />
                 )}
-                {/* Clean Underline Indicator (as seen in Groww screenshot) */}
-                {isActive && <div className="groww-subtab-indicator" />}
               </button>
             );
           })}
         </div>
 
-        {/* Right side of Sub-Nav: Status Badge & Terminal Console Button */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          {/* Market Timing Badge */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '5px 12px',
-            borderRadius: '20px',
-            backgroundColor: '#151819',
-            border: '1px solid #252A2C',
-            fontSize: '0.75rem',
-            fontWeight: '600',
-            color: '#92999C'
-          }}>
-            <span
-              className={isRunning ? "pulse-mint-dot" : ""}
-              style={{
-                width: '7px',
-                height: '7px',
-                borderRadius: '50%',
-                backgroundColor: isRunning ? '#00D09C' : (isPaused ? '#F59E0B' : '#626A6E')
-              }}
-            />
-            <span>{countdownText}</span>
-          </div>
-
-          {/* Groww "Terminal" Button (Matches Screenshot 1, 2, 3) */}
+        {/* Right side of Sub-Nav: Terminal Console Pill Button (Matches Groww Screenshot 1, 2, 3) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={() => setIsTerminalOpen(!isTerminalOpen)}
             title="Toggle Live Algo Terminal Console"
-            className="btn-groww-secondary"
             style={{
               padding: '6px 14px',
               fontSize: '0.8rem',
-              backgroundColor: isTerminalOpen ? '#252A2C' : '#151819',
-              color: isTerminalOpen ? '#00D09C' : '#F1F3F4'
+              fontWeight: '500',
+              borderRadius: '8px',
+              backgroundColor: isTerminalOpen ? '#202528' : '#121516',
+              border: '1px solid #252A2C',
+              color: isTerminalOpen ? '#00D09C' : '#F1F3F4',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
             <SlidersHorizontal size={14} color={isTerminalOpen ? "#00D09C" : "#92999C"} />
             <span>Terminal</span>
-            {botData?.logs?.length > 0 && (
-              <span style={{
-                fontSize: '0.68rem',
-                color: '#92999C',
-                backgroundColor: '#101314',
-                padding: '1px 5px',
-                borderRadius: '6px'
-              }}>
-                {botData.logs.length}
-              </span>
-            )}
           </button>
         </div>
       </div>
 
-      {/* ── ROW 3: Groww Market Indices Ticker Tape (Placed Directly Below Sub-Nav) ── */}
+      {/* ── ROW 3: Groww Market Indices Ticker Tape (Directly Below Sub-Nav, Matches Screenshot 1 & 5) ── */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        padding: '10px 32px',
-        borderBottom: '1px solid #252A2C',
+        justifyContent: 'space-between',
+        padding: '9px 32px',
+        borderBottom: '1px solid #202426',
         backgroundColor: '#080A0B',
-        overflowX: 'auto',
-        gap: '36px',
-        whiteSpace: 'nowrap'
+        gap: '24px'
       }}>
-        {indices.map((idx, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem' }}>
-            <span style={{ fontWeight: '700', color: '#92999C' }}>{idx.name}</span>
-            <span style={{ fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">{idx.price}</span>
-            <span style={{
-              fontWeight: '600',
-              color: idx.isUp ? '#00D09C' : '#EB5B3C',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '2px'
-            }} className="font-tabular">
-              {idx.change} ({idx.pct})
-            </span>
-          </div>
-        ))}
+        {/* Horizontally scrollable indices with NO scrollbar */}
+        <div
+          className="no-scrollbar"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '36px',
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+          }}
+        >
+          {indices.map((idx, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8125rem' }}>
+              <span style={{ fontWeight: '600', color: '#92999C' }}>{idx.name}</span>
+              <span style={{ fontWeight: '600', color: '#F1F3F4' }} className="font-tabular">{idx.price}</span>
+              <span style={{
+                fontWeight: '600',
+                color: idx.isUp ? '#00D09C' : '#EB5B3C'
+              }} className="font-tabular">
+                {idx.change}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Subtle Market Filter / Globe Button (Matches Screenshot 1 & 5) */}
+        <div
+          title="Market: NSE India"
+          style={{
+            padding: '5px 7px',
+            borderRadius: '6px',
+            backgroundColor: '#121516',
+            border: '1px solid #202426',
+            color: '#92999C',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0
+          }}
+        >
+          <Globe size={13} color="#92999C" />
+        </div>
       </div>
 
       {/* ── Main Canvas ── */}
@@ -523,26 +544,89 @@ export default function LiveBotDashboard({
             {/* ── Left Column (72% width) ── */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
               
-              {/* SECTION A: Popular Stocks & ETFs */}
+              {/* SECTION A: Popular US Stocks & ETFs (Matches Groww Desktop Screenshot 1 & 5) */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#00D09C' }} />
                     <span style={{ fontSize: '0.72rem', fontWeight: '700', color: '#00D09C', letterSpacing: '0.04em' }}>LIVE</span>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', margin: 0, marginLeft: '4px' }}>
-                      Popular Indian Stocks & ETFs
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: '600', color: '#F1F3F4', margin: 0, marginLeft: '4px' }}>
+                      Popular US Stocks & ETFs
                     </h2>
                   </div>
                   <span
                     onClick={() => setActiveSubTab("watchlist")}
-                    style={{ fontSize: '0.825rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    style={{ fontSize: '0.8rem', color: '#00D09C', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <span>See more</span>
                     <ChevronRight size={14} />
                   </span>
                 </div>
 
-                {/* 4 Cards Per Row Grid */}
+                {/* 4 Cards Per Row Grid with Real Company Logos */}
+                <div className="groww-cards-grid" style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '16px'
+                }}>
+                  {popularUSStocks.map((stk, i) => (
+                    <div
+                      key={i}
+                      className="groww-stock-card"
+                      onClick={() => setSelectedInstrument(stk)}
+                    >
+                      {/* Company Logo Badge */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <CompanyLogo symbol={stk.sym} name={stk.name} size={38} />
+                      </div>
+
+                      {/* Stock Name */}
+                      <div style={{ margin: '8px 0 2px 0' }}>
+                        <div style={{ fontWeight: '500', color: '#F1F3F4', fontSize: '0.88rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {stk.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#92999C' }}>
+                          {stk.sym}
+                        </div>
+                      </div>
+
+                      {/* Price & Change Underneath */}
+                      <div>
+                        <div style={{ fontSize: '1.05rem', fontWeight: '600', color: '#F1F3F4' }} className="font-tabular">
+                          {stk.curr}{stk.price}
+                        </div>
+                        <div style={{
+                          fontSize: '0.78rem',
+                          fontWeight: '500',
+                          color: stk.isUp ? '#00D09C' : '#EB5B3C',
+                          marginTop: '2px'
+                        }} className="font-tabular">
+                          {stk.chg}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* SECTION B: Popular Indian Stocks */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <TrendingUp size={16} color="#00D09C" />
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: '600', color: '#F1F3F4', margin: 0 }}>
+                      Popular Indian Stocks
+                    </h2>
+                  </div>
+                  <span
+                    onClick={() => setActiveSubTab("watchlist")}
+                    style={{ fontSize: '0.8rem', color: '#00D09C', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <span>See more</span>
+                    <ChevronRight size={14} />
+                  </span>
+                </div>
+
                 <div className="groww-cards-grid" style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(4, 1fr)',
@@ -554,39 +638,26 @@ export default function LiveBotDashboard({
                       className="groww-stock-card"
                       onClick={() => setSelectedInstrument(stk)}
                     >
-                      {/* Company Logo Badge */}
-                      <div style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '10px',
-                        backgroundColor: '#101314',
-                        border: '1px solid #252A2C',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '800',
-                        fontSize: '0.9rem',
-                        color: '#00D09C'
-                      }}>
-                        {stk.logo}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <CompanyLogo symbol={stk.sym} name={stk.name} size={38} />
                       </div>
 
-                      {/* Stock Name */}
-                      <div style={{ margin: '14px 0 6px 0' }}>
-                        <div style={{ fontWeight: '700', color: '#F1F3F4', fontSize: '0.92rem' }}>{stk.sym}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#92999C', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      <div style={{ margin: '8px 0 2px 0' }}>
+                        <div style={{ fontWeight: '500', color: '#F1F3F4', fontSize: '0.88rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                           {stk.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#92999C' }}>
+                          {stk.sym}
                         </div>
                       </div>
 
-                      {/* Price & Change Underneath */}
                       <div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
-                          {currency}{stk.price}
+                        <div style={{ fontSize: '1.05rem', fontWeight: '600', color: '#F1F3F4' }} className="font-tabular">
+                          {stk.curr || currency}{stk.price}
                         </div>
                         <div style={{
                           fontSize: '0.78rem',
-                          fontWeight: '600',
+                          fontWeight: '500',
                           color: stk.isUp ? '#00D09C' : '#EB5B3C',
                           marginTop: '2px'
                         }} className="font-tabular">
@@ -598,22 +669,21 @@ export default function LiveBotDashboard({
                 </div>
               </div>
 
-              {/* SECTION B: Popular Bonds */}
+              {/* SECTION C: Popular Bonds (Matches Groww Desktop Screenshot 1) */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Briefcase size={18} color="#92999C" />
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
-                      Popular Bonds & Fixed Income
+                    <Briefcase size={16} color="#92999C" />
+                    <h2 style={{ fontSize: '1.2rem', fontWeight: '600', color: '#F1F3F4', margin: 0 }}>
+                      Popular Bonds
                     </h2>
                   </div>
-                  <span style={{ fontSize: '0.825rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '0.8rem', color: '#00D09C', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <span>See more</span>
                     <ChevronRight size={14} />
                   </span>
                 </div>
 
-                {/* 4 Cards Per Row Grid */}
                 <div className="groww-cards-grid" style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(4, 1fr)',
@@ -623,38 +693,28 @@ export default function LiveBotDashboard({
                     <div
                       key={i}
                       className="groww-stock-card"
-                      onClick={() => setSelectedInstrument({ sym: bnd.sym, name: bnd.name, price: bnd.price, chg: bnd.chg, isUp: bnd.isUp, logo: bnd.logo })}
+                      onClick={() => setSelectedInstrument({ sym: bnd.sym, name: bnd.name, price: bnd.price, chg: bnd.chg, isUp: bnd.isUp })}
                     >
-                      <div style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '10px',
-                        backgroundColor: '#101314',
-                        border: '1px solid #252A2C',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '800',
-                        fontSize: '0.8rem',
-                        color: '#5367FF'
-                      }}>
-                        {bnd.logo}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <CompanyLogo symbol={bnd.sym} name={bnd.name} size={38} />
                       </div>
 
-                      <div style={{ margin: '14px 0 6px 0' }}>
-                        <div style={{ fontWeight: '700', color: '#F1F3F4', fontSize: '0.92rem' }}>{bnd.sym}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#92999C' }}>
+                      <div style={{ margin: '8px 0 2px 0' }}>
+                        <div style={{ fontWeight: '500', color: '#F1F3F4', fontSize: '0.88rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {bnd.name}
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#92999C' }}>
                           {bnd.yieldRate}
                         </div>
                       </div>
 
                       <div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
-                          {currency}{bnd.price}
+                        <div style={{ fontSize: '1.05rem', fontWeight: '600', color: '#F1F3F4' }} className="font-tabular">
+                          ₹{bnd.price}
                         </div>
                         <div style={{
                           fontSize: '0.78rem',
-                          fontWeight: '600',
+                          fontWeight: '500',
                           color: bnd.isUp ? '#00D09C' : '#EB5B3C',
                           marginTop: '2px'
                         }} className="font-tabular">
@@ -665,158 +725,96 @@ export default function LiveBotDashboard({
                   ))}
                 </div>
               </div>
-
-              {/* SECTION C: Trending Automated Trading Instruments */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Zap size={18} color="#00D09C" />
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
-                      Active Scanner Momentum Equities
-                    </h2>
-                  </div>
-                  <span
-                    onClick={onNavigateToScanner}
-                    style={{ fontSize: '0.825rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <span>Morning Scanner</span>
-                    <ChevronRight size={14} />
-                  </span>
-                </div>
-
-                <div className="groww-cards-grid" style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: '16px'
-                }}>
-                  {popularStocks.slice(4, 8).map((stk, i) => (
-                    <div
-                      key={i}
-                      className="groww-stock-card"
-                      onClick={() => setSelectedInstrument(stk)}
-                    >
-                      <div style={{
-                        width: '42px',
-                        height: '42px',
-                        borderRadius: '10px',
-                        backgroundColor: '#101314',
-                        border: '1px solid #252A2C',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: '800',
-                        fontSize: '0.9rem',
-                        color: '#00D09C'
-                      }}>
-                        {stk.logo}
-                      </div>
-
-                      <div style={{ margin: '14px 0 6px 0' }}>
-                        <div style={{ fontWeight: '700', color: '#F1F3F4', fontSize: '0.92rem' }}>{stk.sym}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#92999C', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          {stk.name}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
-                          {currency}{stk.price}
-                        </div>
-                        <div style={{
-                          fontSize: '0.78rem',
-                          fontWeight: '600',
-                          color: stk.isUp ? '#00D09C' : '#EB5B3C',
-                          marginTop: '2px'
-                        }} className="font-tabular">
-                          {stk.chg}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* ── Right Column (28% width) ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               
-              {/* SUBSECTION A: Your Investments (Matches Screenshot 1) */}
+              {/* SUBSECTION A: Your Investments (Matches Groww Desktop Screenshot 1) */}
               <div style={{
-                backgroundColor: '#151819',
-                border: '1px solid #252A2C',
-                borderRadius: '16px',
-                padding: '24px',
+                backgroundColor: '#121516',
+                border: '1px solid #202426',
+                borderRadius: '14px',
+                padding: '20px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '16px'
+                gap: '14px'
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '600', color: '#F1F3F4', margin: 0 }}>
                     Your investments
                   </h3>
                   <span
                     onClick={() => setActiveSubTab("holdings")}
-                    style={{ fontSize: '0.78rem', color: '#00D09C', fontWeight: '700', cursor: 'pointer' }}
+                    style={{ fontSize: '0.75rem', color: '#00D09C', fontWeight: '600', cursor: 'pointer' }}
                   >
                     View details
                   </span>
                 </div>
 
                 {!isInPosition && todayFills.length === 0 ? (
-                  /* Clean Empty State Illustration */
+                  /* Clean Empty State with Two Figures and Foliage (Matches Groww Screenshot 1) */
                   <div style={{
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '36px 12px',
+                    padding: '16px 8px',
                     textAlign: 'center'
                   }}>
-                    <div style={{ width: '120px', height: '90px', marginBottom: '14px', opacity: 0.85 }}>
-                      <svg viewBox="0 0 140 100" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
-                        <rect x="20" y="20" width="100" height="60" rx="8" fill="#101314" stroke="#252A2C" strokeWidth="1.5" />
-                        <circle cx="50" cy="45" r="8" fill="#00D09C" opacity="0.3" />
-                        <line x1="70" y1="40" x2="105" y2="40" stroke="#252A2C" strokeWidth="2" strokeLinecap="round" />
-                        <line x1="70" y1="48" x2="95" y2="48" stroke="#252A2C" strokeWidth="2" strokeLinecap="round" />
-                        <path d="M35 70L55 55L75 62L105 45" stroke="#00D09C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <div style={{ width: '130px', height: '75px', marginBottom: '12px' }}>
+                      <svg viewBox="0 0 140 80" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>
+                        {/* Dark card screen */}
+                        <rect x="25" y="10" width="90" height="55" rx="6" fill="#090B0D" stroke="#1F2428" strokeWidth="1.2" />
+                        <rect x="35" y="20" width="28" height="4" rx="2" fill="#00D09C" opacity="0.8" />
+                        <line x1="35" y1="30" x2="58" y2="30" stroke="#252A2C" strokeWidth="2" strokeLinecap="round" />
+                        <line x1="35" y1="38" x2="50" y2="38" stroke="#252A2C" strokeWidth="2" strokeLinecap="round" />
+                        {/* Minimal green foliage */}
+                        <path d="M98 55C98 42 108 38 108 38C108 38 106 48 101 55Z" fill="#00D09C" opacity="0.6" />
+                        <path d="M103 55C103 46 112 43 112 43C112 43 110 50 106 55Z" fill="#00B5EC" opacity="0.5" />
+                        {/* Two figures silhouettes */}
+                        <circle cx="70" cy="35" r="5" fill="#E2E8F0" />
+                        <path d="M64 55C64 47 67 43 70 43C73 43 76 47 76 55Z" fill="#94A3B8" />
+                        <circle cx="85" cy="37" r="4.5" fill="#E2E8F0" />
+                        <path d="M79 55C79 48 82 45 85 45C88 45 91 48 91 55Z" fill="#64748B" />
                       </svg>
                     </div>
-                    <div style={{ fontSize: '0.92rem', fontWeight: '700', color: '#F1F3F4' }}>
+                    <div style={{ fontSize: '0.92rem', fontWeight: '500', color: '#F1F3F4', marginBottom: '4px' }}>
                       You haven't invested yet
                     </div>
-                    <p style={{ fontSize: '0.78rem', color: '#92999C', marginTop: '4px' }}>
+                    <p style={{ fontSize: '0.75rem', color: '#92999C', margin: '0 0 14px 0', lineHeight: '1.4' }}>
                       Arm the algorithmic bot to begin autonomous intraday trading.
                     </p>
                     <button
                       onClick={() => setActiveSubTab("config")}
                       className="btn-groww-primary"
-                      style={{ marginTop: '16px', fontSize: '0.8rem', padding: '8px 18px' }}
+                      style={{ fontSize: '0.82rem', padding: '9px 18px', borderRadius: '8px', width: '100%', justifyContent: 'center' }}
                     >
                       Configure & Arm Bot
                     </button>
                   </div>
                 ) : (
                   /* Active Portfolio Summary */
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #252A2C' }}>
-                      <span style={{ fontSize: '0.82rem', color: '#92999C' }}>Stocks & F&O Balance</span>
-                      <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid #202426' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#92999C' }}>Stocks & F&O Balance</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#F1F3F4' }} className="font-tabular">
                         {currency}{(bot.cash || 1000000.0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #252A2C' }}>
-                      <span style={{ fontSize: '0.82rem', color: '#92999C' }}>Current Position Value</span>
-                      <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid #202426' }}>
+                      <span style={{ fontSize: '0.8rem', color: '#92999C' }}>Current Position Value</span>
+                      <span style={{ fontSize: '0.9rem', fontWeight: '600', color: '#F1F3F4' }} className="font-tabular">
                         {currency}{positionValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                       </span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '0.82rem', color: '#92999C' }}>Today's Total P&L</span>
+                      <span style={{ fontSize: '0.8rem', color: '#92999C' }}>Today's Total P&L</span>
                       <span style={{
-                        fontSize: '0.92rem',
-                        fontWeight: '800',
+                        fontSize: '0.9rem',
+                        fontWeight: '600',
                         color: (dailyRealizedPnl + unrealizedPnl) >= 0 ? '#00D09C' : '#EB5B3C'
                       }} className="font-tabular">
                         {(dailyRealizedPnl + unrealizedPnl) >= 0 ? `+${currency}${(dailyRealizedPnl + unrealizedPnl).toFixed(2)}` : `-${currency}${Math.abs(dailyRealizedPnl + unrealizedPnl).toFixed(2)}`}
@@ -826,57 +824,124 @@ export default function LiveBotDashboard({
                 )}
               </div>
 
-              {/* SUBSECTION B: Products & Tools */}
+              {/* SUBSECTION B: Products & Tools (Matches Groww Desktop Screenshot 1) */}
               <div style={{
-                backgroundColor: '#151819',
-                border: '1px solid #252A2C',
-                borderRadius: '16px',
-                padding: '24px',
+                backgroundColor: '#121516',
+                border: '1px solid #202426',
+                borderRadius: '14px',
+                padding: '20px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '16px'
+                gap: '12px'
               }}>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: '600', color: '#F1F3F4', margin: 0 }}>
                   Products & Tools
                 </h3>
-
+                
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {[
-                    { label: "⚡ Morning Breakout Screener", desc: "09:16 AM Volume & Gap Scanner", action: onNavigateToScanner },
-                    { label: "📊 Strategy Studio Backtester", desc: "Multi-year simulation & slippage", action: onNavigateToBacktest },
-                    { label: "🔬 Factor Matrix Optimizer", desc: "Cross-asset multi-timeframe grid", action: onNavigateToMatrix },
-                    { label: "📱 Telegram Mobile Alerts", desc: "Instant trade execution pushes", action: () => {} }
-                  ].map((tool, i) => (
-                    <div
-                      key={i}
-                      onClick={tool.action}
-                      style={{
-                        padding: '12px 14px',
-                        borderRadius: '10px',
-                        backgroundColor: '#101314',
-                        border: '1px solid #252A2C',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#1c2022';
-                        e.currentTarget.style.borderColor = '#00D09C';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#101314';
-                        e.currentTarget.style.borderColor = '#252A2C';
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F1F3F4' }}>{tool.label}</div>
-                        <div style={{ fontSize: '0.72rem', color: '#92999C' }}>{tool.desc}</div>
+                  {/* IPO Row */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    backgroundColor: '#151819',
+                    border: '1px solid #202426'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: '#101314', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00D09C' }}>
+                        <Zap size={15} />
                       </div>
-                      <ChevronRight size={14} color="#92999C" />
+                      <span style={{ fontSize: '0.85rem', fontWeight: '500', color: '#F1F3F4' }}>IPO</span>
                     </div>
-                  ))}
+                    <span style={{ fontSize: '0.72rem', fontWeight: '700', padding: '2px 8px', borderRadius: '10px', backgroundColor: 'rgba(0, 208, 156, 0.12)', color: '#00D09C', border: '1px solid rgba(0, 208, 156, 0.25)' }}>
+                      2 open
+                    </span>
+                  </div>
+
+                  {/* Algo Trading Engine Status Item */}
+                  <div
+                    onClick={() => setActiveSubTab("config")}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#151819',
+                      border: '1px solid #202426',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s ease'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1c2022'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#151819'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: '#101314', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isRunning ? '#00D09C' : '#92999C' }}>
+                        <Activity size={15} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '500', color: '#F1F3F4' }}>Algo Trading Engine</div>
+                        <div style={{ fontSize: '0.70rem', color: isRunning ? '#00D09C' : '#92999C' }}>
+                          {isRunning ? "ACTIVE • RUNNING" : "STANDBY"}
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight size={14} color="#626A6E" />
+                  </div>
+
+                  {/* Morning Scanner */}
+                  <div
+                    onClick={onNavigateToScanner}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#151819',
+                      border: '1px solid #202426',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s ease'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1c2022'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#151819'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: '#101314', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5367FF' }}>
+                        <Zap size={15} />
+                      </div>
+                      <span style={{ fontSize: '0.85rem', fontWeight: '500', color: '#F1F3F4' }}>Morning Scanner</span>
+                    </div>
+                    <ChevronRight size={14} color="#626A6E" />
+                  </div>
+
+                  {/* Strategy Studio */}
+                  <div
+                    onClick={() => onNavigateToBacktest("SBIN.NS")}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#151819',
+                      border: '1px solid #202426',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s ease'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.backgroundColor = '#1c2022'}
+                    onMouseLeave={e => e.currentTarget.style.backgroundColor = '#151819'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: '#101314', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#00D09C' }}>
+                        <BarChart2 size={15} />
+                      </div>
+                      <span style={{ fontSize: '0.85rem', fontWeight: '500', color: '#F1F3F4' }}>Strategy Studio</span>
+                    </div>
+                    <ChevronRight size={14} color="#626A6E" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -922,20 +987,11 @@ export default function LiveBotDashboard({
             </div>
 
             {!isInPosition ? (
-              <div style={{
-                backgroundColor: '#151819',
-                borderRadius: '16px',
-                border: '1px solid #252A2C',
-                padding: '40px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }}>
-                <GrowwRocketEmptyState
-                  title="No holdings available"
-                  subtitle="You do not have any open delivery or intraday holdings at this moment."
-                />
-              </div>
+              /* Groww Rocket Empty State for Holdings (Clean, Unboxed) */
+              <GrowwRocketEmptyState
+                title="No holdings available"
+                subtitle="You do not have any open delivery or intraday holdings at this moment."
+              />
             ) : (
               <div style={{
                 backgroundColor: '#151819',
@@ -985,30 +1041,11 @@ export default function LiveBotDashboard({
         {activeSubTab === "positions" && (
           <div>
             {!isInPosition ? (
-              /* Groww Rocket Empty State (Matches Screenshot 2) */
-              <div style={{
-                backgroundColor: '#151819',
-                borderRadius: '16px',
-                border: '1px solid #252A2C',
-                padding: '40px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }}>
-                <GrowwRocketEmptyState
-                  title="No open positions"
-                  subtitle="Equity, Intraday and MTF positions will appear here."
-                  actionButton={
-                    <button
-                      onClick={() => setActiveSubTab("config")}
-                      className="btn-groww-primary"
-                      style={{ marginTop: '16px' }}
-                    >
-                      ⚙️ Configure & Arm Bot
-                    </button>
-                  }
-                />
-              </div>
+              /* Groww Rocket Empty State (Matches Screenshot 2: Clean, unboxed) */
+              <GrowwRocketEmptyState
+                title="No open positions"
+                subtitle="Equity, Intraday and MTF positions will appear here"
+              />
             ) : (
               /* LIVE POSITION CARD WITH REAL-TIME FLUCTUATION */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1323,22 +1360,12 @@ export default function LiveBotDashboard({
               </div>
             </div>
 
-            {/* Orders List or Rocket Empty State (Matches Screenshot 3) */}
+            {/* Orders List or Rocket Empty State (Matches Screenshot 3: Clean, unboxed) */}
             {filteredTrades.length === 0 ? (
-              <div style={{
-                backgroundColor: '#151819',
-                borderRadius: '16px',
-                border: '1px solid #252A2C',
-                padding: '40px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }}>
-                <GrowwRocketEmptyState
-                  title="You don't have any open orders"
-                  subtitle="When your algorithmic trading bot places buy or sell orders, they will appear here with instant statutory charges."
-                />
-              </div>
+              <GrowwRocketEmptyState
+                title="You don't have any open orders"
+                subtitle="Orders placed today will appear here"
+              />
             ) : (
               <div style={{
                 backgroundColor: '#151819',

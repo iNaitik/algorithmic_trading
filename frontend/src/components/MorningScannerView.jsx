@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import CompanyLogo from './CompanyLogo';
 import {
   Zap,
   TrendingUp,
@@ -503,27 +504,26 @@ export default function MorningScannerView({
       }}>
         {/* Card A: Top Long Breakout Spotlight */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(0, 208, 156, 0.18) 0%, #151819 100%)',
-          borderRadius: '20px',
+          backgroundColor: '#151819',
+          borderRadius: '16px',
           padding: '24px',
-          border: '1px solid rgba(0, 208, 156, 0.35)',
+          border: '1px solid #202426',
+          borderTop: '3px solid #00D09C',
           color: '#F1F3F4',
-          boxShadow: '0 8px 32px rgba(0, 208, 156, 0.15)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          position: 'relative',
-          overflow: 'hidden'
+          position: 'relative'
         }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{
                   fontSize: '0.7rem',
-                  fontWeight: '800',
-                  letterSpacing: '0.06em',
+                  fontWeight: '700',
+                  letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  backgroundColor: 'rgba(0, 208, 156, 0.25)',
+                  backgroundColor: 'rgba(0, 208, 156, 0.12)',
                   color: '#00D09C',
                   padding: '3px 8px',
                   borderRadius: '6px'
@@ -544,7 +544,7 @@ export default function MorningScannerView({
 
               <span style={{
                 fontSize: '0.74rem',
-                fontWeight: '800',
+                fontWeight: '700',
                 backgroundColor: '#101314',
                 color: '#00D09C',
                 border: '1px solid rgba(0, 208, 156, 0.28)',
@@ -555,52 +555,31 @@ export default function MorningScannerView({
               </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '16px' }}>
-              <div>
-                <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#F1F3F4' }}>
-                  {topLong ? topLong.symbol : "Scanning Breakouts..."}
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#92999C', marginTop: '2px' }}>
-                  {topLong ? `${topLong.name} • ${topLong.sector}` : "Awaiting morning volume surge"}
-                </div>
-                {topLong && topLong.hist_wr && (
-                  <div style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    fontSize: '0.7rem',
-                    fontWeight: '800',
-                    backgroundColor: 'rgba(0, 208, 156, 0.12)',
-                    color: '#00D09C',
-                    border: '1px solid rgba(0, 208, 156, 0.28)',
-                    padding: '2px 8px',
-                    borderRadius: '6px',
-                    marginTop: '8px'
-                  }}>
-                    <span>🏆 Factor Edge: Tier {topLong.edge_tier}</span>
-                    <span>•</span>
-                    <span>{topLong.hist_wr}% WR</span>
-                    <span>•</span>
-                    <span>PF {topLong.hist_pf}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {topLong && <CompanyLogo symbol={topLong.symbol} name={topLong.name} size={38} />}
+                <div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: '700', color: '#F1F3F4' }}>
+                    {topLong ? topLong.symbol : "Scanning Breakouts..."}
                   </div>
-                )}
+                  <div style={{ fontSize: '0.8rem', color: '#92999C', marginTop: '2px' }}>
+                    {topLong ? `${topLong.name} • ${topLong.sector}` : "Awaiting morning volume surge"}
+                  </div>
+                </div>
               </div>
 
               {topLong && (
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                  <div style={{ fontSize: '1.4rem', fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">
                     {currentCurrency}{topLong.price.toFixed(2)}
                   </div>
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '3px',
-                    fontSize: '0.82rem',
-                    fontWeight: '800',
-                    backgroundColor: 'rgba(0, 208, 156, 0.15)',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
                     color: '#00D09C',
-                    padding: '2px 8px',
-                    borderRadius: '6px',
                     marginTop: '2px'
                   }} className="font-tabular">
                     <ArrowUpRight size={14} />
@@ -684,27 +663,26 @@ export default function MorningScannerView({
 
         {/* Card B: Top Short Breakdown Spotlight */}
         <div style={{
-          background: 'linear-gradient(135deg, rgba(235, 91, 60, 0.18) 0%, #151819 100%)',
-          borderRadius: '20px',
+          backgroundColor: '#151819',
+          borderRadius: '16px',
           padding: '24px',
-          border: '1px solid rgba(235, 91, 60, 0.35)',
+          border: '1px solid #202426',
+          borderTop: '3px solid #EB5B3C',
           color: '#F1F3F4',
-          boxShadow: '0 8px 32px rgba(235, 91, 60, 0.12)',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          position: 'relative',
-          overflow: 'hidden'
+          position: 'relative'
         }}>
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{
                   fontSize: '0.7rem',
-                  fontWeight: '800',
-                  letterSpacing: '0.06em',
+                  fontWeight: '700',
+                  letterSpacing: '0.04em',
                   textTransform: 'uppercase',
-                  backgroundColor: 'rgba(235, 91, 60, 0.25)',
+                  backgroundColor: 'rgba(235, 91, 60, 0.12)',
                   color: '#EB5B3C',
                   padding: '3px 8px',
                   borderRadius: '6px'
@@ -725,7 +703,7 @@ export default function MorningScannerView({
 
               <span style={{
                 fontSize: '0.74rem',
-                fontWeight: '800',
+                fontWeight: '700',
                 backgroundColor: '#101314',
                 color: '#EB5B3C',
                 border: '1px solid rgba(235, 91, 60, 0.28)',
@@ -736,31 +714,31 @@ export default function MorningScannerView({
               </span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: '16px' }}>
-              <div>
-                <div style={{ fontSize: '1.75rem', fontWeight: '800', color: '#F1F3F4' }}>
-                  {topShort ? topShort.symbol : "No Active Short Breakdown"}
-                </div>
-                <div style={{ fontSize: '0.82rem', color: '#92999C', marginTop: '2px' }}>
-                  {topShort ? `${topShort.name} • ${topShort.sector}` : "Market displaying positive opening momentum"}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {topShort && <CompanyLogo symbol={topShort.symbol} name={topShort.name} size={38} />}
+                <div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: '700', color: '#F1F3F4' }}>
+                    {topShort ? topShort.symbol : "No Active Short Breakdown"}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#92999C', marginTop: '2px' }}>
+                    {topShort ? `${topShort.name} • ${topShort.sector}` : "Market displaying positive opening momentum"}
+                  </div>
                 </div>
               </div>
 
               {topShort && (
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
+                  <div style={{ fontSize: '1.4rem', fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">
                     {currentCurrency}{topShort.price.toFixed(2)}
                   </div>
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '3px',
-                    fontSize: '0.82rem',
-                    fontWeight: '800',
-                    backgroundColor: 'rgba(235, 91, 60, 0.15)',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
                     color: '#EB5B3C',
-                    padding: '2px 8px',
-                    borderRadius: '6px',
                     marginTop: '2px'
                   }} className="font-tabular">
                     <ArrowDownRight size={14} />

@@ -67,6 +67,15 @@ code, .font-mono {
   background: #363C3E;
 }
 
+/* Hide scrollbars for market ticker and smooth carousels */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Inputs & Form Elements */
 input, select, button {
   font-family: inherit;
