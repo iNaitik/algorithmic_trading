@@ -1,7 +1,7 @@
 """
-test_statutory_reconciliation.py
-================================
-Independent validation of Indian statutory charges and trade P&L reconciliation.
+test_statutory_reconciliation.py (Unit Test)
+============================================
+Isolated validation of Indian statutory charges and trade P&L reconciliation.
 
 Calculates:
 - Gross Realized P&L
@@ -13,28 +13,28 @@ Calculates:
 - GST (18% on Brokerage + Exchange + SEBI)
 - Net Realized P&L
 
-Compares independent mathematical derivations against engine calculations and verified test fixtures.
+Isolation Guarantee:
+- Pure functional calculations with zero network, disk write, or database mutation.
 """
 
 import sys
 import os
 import math
 
-# Ensure local project import
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add root directory to sys.path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from engine.live_trader import calculate_buy_costs, calculate_sell_proceeds, SLIPPAGE_PCT
 
 def calculate_independent_breakdown(shares: int, buy_price: float, sell_price: float, is_short: bool = False):
     """Independently calculates each fee component to micro-cent accuracy according to NSE/SEBI rules."""
-    # 1. Fill prices with slippage
     exec_buy_price = round(buy_price * (1.0 + SLIPPAGE_PCT), 2)
     exec_sell_price = round(sell_price * (1.0 - SLIPPAGE_PCT), 2)
 
     buy_val = shares * exec_buy_price
     sell_val = shares * exec_sell_price
 
-    # 2. Buy Leg Charges
+    # Buy Leg Charges
     brokerage_buy = min(20.0, buy_val * 0.0003)
     exchange_buy = buy_val * 0.0000297
     sebi_buy = buy_val * 0.000001
@@ -43,7 +43,7 @@ def calculate_independent_breakdown(shares: int, buy_price: float, sell_price: f
     total_buy_fees = brokerage_buy + exchange_buy + sebi_buy + stamp_duty + gst_buy
     total_buy_cost = round(buy_val + total_buy_fees, 2)
 
-    # 3. Sell Leg Charges
+    # Sell Leg Charges
     brokerage_sell = min(20.0, sell_val * 0.0003)
     exchange_sell = sell_val * 0.0000297
     sebi_sell = sell_val * 0.000001
@@ -52,7 +52,7 @@ def calculate_independent_breakdown(shares: int, buy_price: float, sell_price: f
     total_sell_fees = brokerage_sell + exchange_sell + sebi_sell + stt_sell + gst_sell
     total_sell_proceeds = round(sell_val - total_sell_fees, 2)
 
-    # 4. Aggregates
+    # Aggregates
     total_brokerage = round(brokerage_buy + brokerage_sell, 2)
     total_stt = round(stt_sell, 2)
     total_exchange = round(exchange_buy + exchange_sell, 2)
@@ -61,11 +61,7 @@ def calculate_independent_breakdown(shares: int, buy_price: float, sell_price: f
     total_gst = round(gst_buy + gst_sell, 2)
     total_all_charges = round(total_buy_fees + total_sell_fees, 2)
 
-    if is_short:
-        gross_pnl = round((exec_sell_price - exec_buy_price) * shares, 2)
-    else:
-        gross_pnl = round((exec_sell_price - exec_buy_price) * shares, 2)
-
+    gross_pnl = round((exec_sell_price - exec_buy_price) * shares, 2)
     net_realized_pnl = round(total_sell_proceeds - total_buy_cost, 2)
 
     return {
@@ -89,7 +85,7 @@ def calculate_independent_breakdown(shares: int, buy_price: float, sell_price: f
 
 def run_statutory_tests():
     print("\n========================================================")
-    print("--- TEST SUITE 3: FINANCIAL RECONCILIATION & CHARGES ---")
+    print("--- UNIT TEST SUITE: STATUTORY CHARGES RECONCILIATION ---")
     print("========================================================\n")
 
     test_cases = [
@@ -121,8 +117,6 @@ def run_statutory_tests():
         # Comparisons
         diff_buy_cost = abs(ind["engine_buy_cost"] - engine_buy_cost)
         diff_sell_proceeds = abs(ind["engine_sell_proceeds"] - engine_sell_proceeds)
-        
-        # Verify Gross - Charges = Net
         math_check = abs((ind["gross_realized_pnl"] - ind["total_charges"]) - ind["net_realized_pnl"])
 
         status = "PASS" if (diff_buy_cost < 0.05 and diff_sell_proceeds < 0.05 and math_check < 0.1) else "FAIL"

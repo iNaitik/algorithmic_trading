@@ -1,23 +1,18 @@
 /**
- * test_trade_engine_edge_cases.js
- * ===============================
- * Automated Test Suite for Trading Ledger Edge Cases (TASK 02.1)
+ * test_trade_engine_edge_cases.js (Unit Test)
+ * ===========================================
+ * Isolated, pure in-memory unit tests for trade matching, statutory friction,
+ * and portfolio accounting logic (TASK 02.1 / 02.2).
  * 
- * Tests:
- * 1. Multiple entries followed by one exit.
- * 2. One entry followed by multiple partial exits.
- * 3. Multiple independent trades in the same instrument.
- * 4. SHORT followed by COVER.
- * 5. Partial square-offs.
- * 6. Unmatched entry legs.
- * 7. Duplicate execution records.
- * 8. Out-of-order execution timestamps.
- * 9. Financial reconciliation & fee allocation.
- * 10. Long & Short portfolio valuation and double-counting prevention.
+ * Isolation Guarantee:
+ * - Operates entirely in-memory with synthetic mock fixtures.
+ * - Zero file I/O against data/trade_history.csv or bot state JSON files.
+ * - Zero network calls to live servers or broker APIs.
  */
 
 const assert = require('assert');
-const { computeRoundTrips, computePortfolioMetrics, parseTimestamp } = require('../frontend/src/utils/tradeUtils.js');
+const path = require('path');
+const { computeRoundTrips, computePortfolioMetrics, parseTimestamp } = require('../../frontend/src/utils/tradeUtils.js');
 
 let passedTests = 0;
 let totalTests = 0;
@@ -36,7 +31,7 @@ function test(name, fn) {
 }
 
 console.log('\n======================================================');
-console.log('--- TEST SUITE 1: FIFO MATCHING & LEDGER EDGE CASES ---');
+console.log('--- UNIT TEST SUITE: FIFO MATCHING & LEDGER EDGE CASES ---');
 console.log('======================================================\n');
 
 // ── TEST 1: Multiple entries followed by one exit ──
@@ -228,7 +223,7 @@ test('8. Out-of-order execution timestamps (Chronological sorting before FIFO ma
 });
 
 console.log('\n======================================================');
-console.log('--- TEST SUITE 2: PORTFOLIO ACCOUNTING & VALUATION ---');
+console.log('--- UNIT TEST SUITE: PORTFOLIO ACCOUNTING & VALUATION ---');
 console.log('======================================================\n');
 
 // ── TEST 9: Long Position Mark-to-Market Valuation & Total Equity ──
@@ -259,7 +254,7 @@ test('9. Long position mark-to-market valuation (Profit & Loss scenarios)', () =
   assert.strictEqual(metricsLoss.totalPortfolioValue, 975000.0); // Cash 500k + Pos 475k
 });
 
-// ── TEST 10: Short Position Mark-to-Market Valuation & Total Equity (CRITICAL EDGE CASE) ──
+// ── TEST 10: Short Position Mark-to-Market Valuation & Total Equity ──
 test('10. Short position mark-to-market valuation (Correct inverse price sensitivity)', () => {
   const botStateShort = {
     bot_state: {
@@ -306,11 +301,6 @@ test('11. Verify absence of double-counting between cash, margin, and unrealized
   };
 
   const metrics = computePortfolioMetrics(botState, 1020.0, 1000000.0);
-  // Initial capital: 1,000,000
-  // Entry: 250 shares @ 1000 = 250,000 deducted from cash -> available cash = 750,000
-  // Mark to market: 250 * 1020 = 255,000
-  // Unrealized P&L: +5,000
-  // Total Equity: 750,000 + 255,000 = 1,005,000
   assert.strictEqual(metrics.totalPortfolioValue, 1005000.0);
   assert.strictEqual(
     metrics.totalPortfolioValue,
@@ -320,12 +310,12 @@ test('11. Verify absence of double-counting between cash, margin, and unrealized
 });
 
 console.log('\n======================================================');
-console.log(`SUMMARY: ${passedTests} / ${totalTests} TESTS PASSED`);
+console.log(`UNIT TEST SUMMARY: ${passedTests} / ${totalTests} TESTS PASSED`);
 if (failures.length > 0) {
   console.log(`FAILURES: ${failures.length}`);
   failures.forEach(f => console.error(` - ${f.name}: ${f.error.message}`));
   process.exit(1);
 } else {
-  console.log('ALL TRADING LEDGER EDGE-CASE TESTS PASSED PERFECTLY!');
+  console.log('ALL UNIT TESTS PASSED WITH 100% ISOLATION!');
   console.log('======================================================\n');
 }
