@@ -42,16 +42,26 @@ import GrowwRocketEmptyState from './GrowwRocketEmptyState';
 import TradeDetailsModal from './TradeDetailsModal';
 import InstrumentModal from './InstrumentModal';
 import CompanyLogo from './CompanyLogo';
+import OverviewDashboard from './OverviewDashboard';
+import BacktesterView from './BacktesterView';
+import MorningScannerView from './MorningScannerView';
+import FactorMatrixView from './FactorMatrixView';
+import TradeJournal from './TradeJournal';
 
 export default function LiveBotDashboard({
   market = "INDIA",
   currency = "₹",
   onNavigateToBacktest = () => {},
   onNavigateToScanner = () => {},
-  onNavigateToMatrix = () => {}
+  onNavigateToMatrix = () => {},
+  marketDefs = null,
+  strategiesList = [],
+  backtestResult = null,
+  onRunBacktest = () => {}
 }) {
-  // Navigation sub-tabs: "explore", "holdings", "positions", "orders", "watchlist", "config"
-  const [activeSubTab, setActiveSubTab] = useState("explore");
+  // Navigation sub-tabs: "overview", "explore", "holdings", "positions", "orders", "watchlist", "quant", "automation"
+  const [activeSubTab, setActiveSubTab] = useState("overview");
+  const [quantSubTool, setQuantSubTool] = useState("scanner"); // "scanner", "studio", "matrix", "journal"
 
   // Terminal slide-out drawer state
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
@@ -400,12 +410,14 @@ export default function LiveBotDashboard({
         {/* Left Sub-Nav Tabs with Clean White Underline Indicator */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
           {[
+            { id: "overview", label: "Overview" },
             { id: "explore", label: "Explore" },
             { id: "holdings", label: "Holdings" },
             { id: "positions", label: "Positions" },
             { id: "orders", label: "Orders" },
             { id: "watchlist", label: "Watchlist" },
-            { id: "config", label: "Bot Config" }
+            { id: "quant", label: "Quant Lab" },
+            { id: "automation", label: "Automation" }
           ].map(tab => {
             const isActive = activeSubTab === tab.id;
             return (
@@ -535,6 +547,27 @@ export default function LiveBotDashboard({
 
       {/* ── Main Canvas ── */}
       <div style={{ flex: 1, padding: '28px 32px', maxWidth: '1440px', width: '100%', margin: '0 auto' }}>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            VIEW 0: OVERVIEW (ALGORITHMIC TRADING COMMAND CENTER)
+            ═══════════════════════════════════════════════════════════════════ */}
+        {activeSubTab === "overview" && (
+          <OverviewDashboard
+            botData={botData}
+            currentLtp={currentLtp}
+            currency={currency}
+            onNavigate={(tab) => {
+              if (tab === "automation") setActiveSubTab("automation");
+              else if (tab === "orders") setActiveSubTab("orders");
+              else if (tab === "positions") setActiveSubTab("positions");
+              else if (tab === "quant") {
+                setActiveSubTab("quant");
+                setQuantSubTool("scanner");
+              } else setActiveSubTab(tab);
+            }}
+            onControl={handleControl}
+          />
+        )}
 
         {/* ═══════════════════════════════════════════════════════════════════
             VIEW 1: EXPLORE (TWO-COLUMN LAYOUT MATCHING SCREENSHOT 1 & 4)
@@ -1657,9 +1690,9 @@ export default function LiveBotDashboard({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            VIEW 6: BOT CONFIG & RULES (SINGLE DYNAMIC PLAY/PAUSE BUTTON)
+            VIEW 6: AUTOMATION (BOT CONFIG & RULES)
             ═══════════════════════════════════════════════════════════════════ */}
-        {activeSubTab === "config" && (
+        {(activeSubTab === "automation" || activeSubTab === "config") && (
           <div style={{ maxWidth: '880px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
             {configSuccessMsg && (
@@ -1933,6 +1966,135 @@ export default function LiveBotDashboard({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            VIEW 7: QUANT LAB (STUDIO, SCANNER, MATRIX, JOURNAL)
+            ═══════════════════════════════════════════════════════════════════ */}
+        {activeSubTab === "quant" && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Quant Lab Sub-Tool Switcher */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#151819',
+              border: '1px solid #252A2C',
+              borderRadius: '14px',
+              padding: '6px 10px',
+              flexWrap: 'wrap',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                {[
+                  { id: "scanner", label: "⚡ Morning Scanner" },
+                  { id: "studio", label: "📊 Strategy Studio" },
+                  { id: "matrix", label: "🔬 Factor Matrix" },
+                  { id: "journal", label: "📜 Trade Journal" }
+                ].map(tool => {
+                  const isToolActive = quantSubTool === tool.id;
+                  return (
+                    <button
+                      key={tool.id}
+                      onClick={() => setQuantSubTool(tool.id)}
+                      style={{
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        backgroundColor: isToolActive ? '#00D09C' : 'transparent',
+                        color: isToolActive ? '#080A0B' : '#92999C',
+                        fontWeight: '700',
+                        fontSize: '0.85rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={e => {
+                        if (!isToolActive) e.currentTarget.style.color = '#F1F3F4';
+                      }}
+                      onMouseLeave={e => {
+                        if (!isToolActive) e.currentTarget.style.color = '#92999C';
+                      }}
+                    >
+                      {tool.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <span style={{ fontSize: '0.78rem', color: '#626A6E', paddingRight: '8px' }}>
+                Quantitative Research & Market Intelligence Suite
+              </span>
+            </div>
+
+            {/* Sub-tool 1: Morning Scanner */}
+            {quantSubTool === "scanner" && (
+              <MorningScannerView
+                onSelectForBacktest={(sym, strat) => {
+                  if (sym) setSymbol(sym);
+                  if (strat) setStrategy(strat);
+                  setQuantSubTool("studio");
+                  if (onNavigateToBacktest) onNavigateToBacktest(sym);
+                }}
+                onSelectForBot={(sym) => {
+                  if (sym) setSymbol(sym);
+                  setActiveSubTab("automation");
+                }}
+                currency={currency}
+              />
+            )}
+
+            {/* Sub-tool 2: Strategy Studio */}
+            {quantSubTool === "studio" && (
+              <div style={{ minHeight: '680px', display: 'flex' }}>
+                <BacktesterView
+                  marketDefs={marketDefs}
+                  strategiesList={strategiesList}
+                  selectedMarket={market}
+                  setSelectedMarket={() => {}}
+                  symbol={symbol}
+                  setSymbol={setSymbol}
+                  customSymbol=""
+                  setCustomSymbol={() => {}}
+                  interval={timeframe}
+                  setInterval={setTimeframe}
+                  lookbackDays={60}
+                  setLookbackDays={() => {}}
+                  capitalInput="10L"
+                  setCapitalInput={() => {}}
+                  initialCapital={capitalAllocation}
+                  selectedStrategy={strategy}
+                  setSelectedStrategy={setStrategy}
+                  loading={false}
+                  backtestResult={backtestResult}
+                  errorMsg={null}
+                  onRunBacktest={() => onRunBacktest(symbol)}
+                />
+              </div>
+            )}
+
+            {/* Sub-tool 3: Factor Matrix */}
+            {quantSubTool === "matrix" && (
+              <FactorMatrixView
+                onSelectCombination={(combo) => {
+                  if (combo.asset) setSymbol(combo.asset);
+                  if (combo.strategy) setStrategy(combo.strategy);
+                  if (combo.timeframe) setTimeframe(combo.timeframe);
+                  setQuantSubTool("studio");
+                }}
+                currency={currency}
+              />
+            )}
+
+            {/* Sub-tool 4: Trade Journal */}
+            {quantSubTool === "journal" && (
+              <div style={{ backgroundColor: '#151819', border: '1px solid #252A2C', borderRadius: '16px', padding: '24px' }}>
+                <TradeJournal
+                  trades={backtestResult?.trades || allBotFills}
+                  currency={currency}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>

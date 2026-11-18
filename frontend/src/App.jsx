@@ -213,7 +213,7 @@ export default function App() {
             </svg>
           </div>
 
-          {/* Primary Navigation Links (Matches Screenshot 1 & 5: Clean text, NO green pills!) */}
+          {/* Primary Navigation Links: Stocks, F&O, Mutual Funds */}
           <nav style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
             {[
               { id: "stocks", label: "Stocks" },
@@ -247,103 +247,6 @@ export default function App() {
                 </button>
               );
             })}
-
-            {/* Quant Tools Dropdown (Preserving Backtester, Scanner, Factor Matrix) */}
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => setIsQuantDropdownOpen(!isQuantDropdownOpen)}
-                style={{
-                  padding: '8px 0',
-                  border: 'none',
-                  backgroundColor: 'transparent',
-                  color: ['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory) ? '#FFFFFF' : '#92999C',
-                  fontSize: '1rem',
-                  fontWeight: ['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory) ? '700' : '500',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  transition: 'color 0.15s ease',
-                  letterSpacing: '-0.01em'
-                }}
-                onMouseEnter={(e) => {
-                  if (!['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory)) {
-                    e.currentTarget.style.color = '#FFFFFF';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!['scanner', 'backtester', 'matrix', 'journal', 'risk'].includes(activeCategory)) {
-                    e.currentTarget.style.color = '#92999C';
-                  }
-                }}
-              >
-                <span>Quant Lab</span>
-                <ChevronDown size={14} />
-              </button>
-
-              {isQuantDropdownOpen && (
-                <>
-                  <div
-                    onClick={() => setIsQuantDropdownOpen(false)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 998 }}
-                  />
-                  <div style={{
-                    position: 'absolute',
-                    top: '46px',
-                    left: 0,
-                    width: '230px',
-                    backgroundColor: '#151819',
-                    border: '1px solid #252A2C',
-                    borderRadius: '12px',
-                    boxShadow: '0 16px 36px rgba(0, 0, 0, 0.65)',
-                    padding: '6px',
-                    zIndex: 999,
-                    animation: 'fadeIn 0.15s ease-out'
-                  }}>
-                    {[
-                      { id: "scanner", label: "⚡ Morning Scanner", icon: Zap },
-                      { id: "backtester", label: "📊 Strategy Studio", icon: BarChart2 },
-                      { id: "matrix", label: "🔬 Factor Matrix", icon: Layers },
-                      { id: "journal", label: "📜 Trade Journal", icon: FileText },
-                      { id: "risk", label: "🛡️ Risk Controls", icon: ShieldCheck }
-                    ].map(item => {
-                      const Icon = item.icon;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => {
-                            setActiveCategory(item.id);
-                            setIsQuantDropdownOpen(false);
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            padding: '10px 14px',
-                            borderRadius: '8px',
-                            fontSize: '0.85rem',
-                            fontWeight: '600',
-                            color: activeCategory === item.id ? '#00D09C' : '#F1F3F4',
-                            backgroundColor: activeCategory === item.id ? 'rgba(0, 208, 156, 0.12)' : 'transparent',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.15s ease'
-                          }}
-                          onMouseEnter={e => {
-                            if (activeCategory !== item.id) e.currentTarget.style.backgroundColor = '#1c2022';
-                          }}
-                          onMouseLeave={e => {
-                            if (activeCategory !== item.id) e.currentTarget.style.backgroundColor = 'transparent';
-                          }}
-                        >
-                          <Icon size={16} color={activeCategory === item.id ? "#00D09C" : "#92999C"} />
-                          <span>{item.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
           </nav>
         </div>
 
@@ -488,18 +391,21 @@ export default function App() {
 
       {/* ── Main View Switcher ── */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        {/* VIEW: STOCKS (Live Paper Bot & Groww Explore / Positions / Orders / Watchlist) */}
+        {/* VIEW: STOCKS / F&O / MUTUAL FUNDS (Hosts Groww Sub-Nav & Command Center) */}
         {(activeCategory === "stocks" || activeCategory === "fno" || activeCategory === "mutual_funds") && (
           <LiveBotDashboard
             market={selectedMarket}
             currency={currency}
+            marketDefs={marketDefs}
+            strategiesList={strategiesList}
+            backtestResult={backtestResult}
+            onRunBacktest={runBacktest}
             onNavigateToBacktest={(sym) => {
               if (sym) setSymbol(sym);
-              setActiveCategory("backtester");
-              setTimeout(() => runBacktest(sym), 100);
+              runBacktest(sym);
             }}
-            onNavigateToScanner={() => setActiveCategory("scanner")}
-            onNavigateToMatrix={() => setActiveCategory("matrix")}
+            onNavigateToScanner={() => {}}
+            onNavigateToMatrix={() => {}}
           />
         )}
 
