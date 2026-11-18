@@ -82,6 +82,9 @@ export default function LiveBotDashboard({
   const [botData, setBotData] = useState(null);
   const [watchlist, setWatchlist] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+  const isFetchingRef = useRef(false);
 
   // Terminal & filters
   const [logFilter, setLogFilter] = useState("ALL");
@@ -193,8 +196,10 @@ export default function LiveBotDashboard({
     return () => clearInterval(intervalId);
   }, []);
 
-  // Poll Bot Status & Watchlist from backend
+  // Poll Bot Status & Watchlist from backend with concurrency guard
   const fetchData = async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     try {
       const [statusRes, watchRes] = await Promise.all([
         fetch(`/api/bot/status?symbol=${encodeURIComponent(symbol)}`),
@@ -204,6 +209,8 @@ export default function LiveBotDashboard({
       if (statusRes.ok) {
         const sData = await statusRes.json();
         setBotData(sData);
+        setIsConnected(true);
+        setLastSyncTime(sData.ist_time || new Date().toLocaleTimeString('en-IN', { hour12: false }));
 
         if (sData.bot_state) {
           if (!userSelectedSymbolRef.current && sData.bot_state.symbol) {
@@ -216,6 +223,8 @@ export default function LiveBotDashboard({
             setMaxTradesPerSymbol(sData.bot_state.max_trades_per_symbol);
           }
         }
+      } else {
+        setIsConnected(false);
       }
 
       if (watchRes.ok) {
@@ -224,6 +233,9 @@ export default function LiveBotDashboard({
       }
     } catch (e) {
       console.error("Dashboard fetch error:", e);
+      setIsConnected(false);
+    } finally {
+      isFetchingRef.current = false;
     }
   };
 
@@ -259,6 +271,7 @@ export default function LiveBotDashboard({
 
   // Execute bot control actions
   const handleControl = async (action, targetSymbol = symbol, targetStrategy = strategy, targetQuota = maxTradesPerSymbol) => {
+    if (actionLoading) return;
     setActionLoading(true);
     try {
       const res = await fetch('/api/bot/control', {
@@ -556,6 +569,9 @@ export default function LiveBotDashboard({
             botData={botData}
             currentLtp={currentLtp}
             currency={currency}
+            actionLoading={actionLoading}
+            isConnected={isConnected}
+            lastSyncTime={lastSyncTime}
             onNavigate={(tab) => {
               if (tab === "automation") setActiveSubTab("automation");
               else if (tab === "orders") setActiveSubTab("orders");

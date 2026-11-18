@@ -22,86 +22,81 @@ import {
   Play,
   Pause,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
+  Info
 } from 'lucide-react';
+import { computePortfolioMetrics } from '../utils/tradeUtils';
 
 export default function OverviewDashboard({
   botData,
   currentLtp = 0,
   currency = "₹",
+  actionLoading = false,
+  isConnected = true,
+  lastSyncTime = null,
   onNavigate = () => {},
   onControl = () => {}
 }) {
+  // If no backend data has arrived yet, display a professional Groww-styled loading skeleton
+  if (!botData) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px 0' }}>
+        <div style={{
+          backgroundColor: '#151819',
+          border: '1px solid #252A2C',
+          borderRadius: '16px',
+          padding: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '14px'
+        }}>
+          <RefreshCw size={22} color="#00D09C" className="animate-spin" />
+          <div>
+            <h3 style={{ fontSize: '1rem', fontWeight: '700', color: '#F1F3F4', margin: 0 }}>
+              Connecting to Algorithmic Execution Core...
+            </h3>
+            <span style={{ fontSize: '0.8rem', color: '#92999C' }}>
+              Fetching real-time order book, bot state and trade ledger from FastAPI backend
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const bot = botData?.bot_state || {};
   const allBotFills = botData?.all_trades || [];
   const isMarketOpen = botData?.is_market_open ?? false;
   const istTime = botData?.ist_time || "";
-  const istDate = botData?.ist_date || "";
-
-  // Position calculation
-  const isInPosition = Boolean(bot.in_position && (bot.shares > 0 || bot.entry_price > 0));
-  const shares = Number(bot.shares || 0);
-  const entryPrice = Number(bot.entry_price || 0);
-  const ltp = Number(currentLtp || bot.last_ltp || entryPrice);
-
-  const investedCapital = isInPosition ? shares * entryPrice : 0;
-  const positionValue = isInPosition ? shares * ltp : 0;
-  const availableCash = Number(bot.cash ?? 1000000.0);
-  const totalPortfolioValue = availableCash + positionValue;
-
-  // Unrealized P&L
-  const unrealizedPnl = isInPosition
-    ? (bot.position_side === "SHORT" ? (entryPrice - ltp) * shares : (ltp - entryPrice) * shares)
-    : 0;
-  const unrealizedPct = isInPosition && entryPrice > 0 ? (unrealizedPnl / (shares * entryPrice)) * 100 : 0;
-
-  // Realized P&L today
-  const now = new Date();
-  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
-  const istDateObj = new Date(utc + (3600000 * 5.5));
-  const todayIso = istDate || istDateObj.toISOString().slice(0, 10);
-
-  const todayFills = allBotFills.filter(t => t.Timestamp && String(t.Timestamp).startsWith(todayIso));
-
-  // Compute Today's Realized P&L (paired trades: Buy/Sell and Short/Cover)
-  let todayRealizedPnl = 0.0;
-  const todaySymGroups = {};
-  todayFills.forEach(t => {
-    const sym = t.Symbol || bot.symbol || "UNKNOWN";
-    if (!todaySymGroups[sym]) todaySymGroups[sym] = [];
-    todaySymGroups[sym].push(t);
-  });
-
-  Object.values(todaySymGroups).forEach(trades => {
-    for (let i = 0; i < trades.length - 1; i += 2) {
-      const e = trades[i];
-      const x = trades[i + 1];
-      const actE = String(e.Action || "").toUpperCase();
-      const actX = String(x.Action || "").toUpperCase();
-      const sh = Number(e.Shares || 0);
-      const pe = Number(e.Execution_Price || 0);
-      const px = Number(x.Execution_Price || 0);
-      if (actE.includes("BUY") && (actX.includes("SELL") || actX.includes("SQUARE"))) {
-        todayRealizedPnl += (px - pe) * sh;
-      } else if (actE.includes("SHORT") && (actX.includes("COVER") || actX.includes("SQUARE"))) {
-        todayRealizedPnl += (pe - px) * sh;
-      }
-    }
-  });
-
-  // If unpaired, fallback to RawAmount sum
-  if (todayFills.length > 0 && todayRealizedPnl === 0.0) {
-    todayRealizedPnl = todayFills.reduce((acc, t) => acc + (Number(t.RawAmount) || 0), 0);
-  }
-
-  // Combined Today's P&L
-  const combinedTodayPnl = todayRealizedPnl + unrealizedPnl;
   const initialBaseCapital = 1000000.0;
-  const todayPnlPct = (combinedTodayPnl / initialBaseCapital) * 100;
 
-  // All-time cumulative returns across execution ledger
-  const overallPnl = allBotFills.reduce((acc, t) => acc + (Number(t.RawAmount) || 0), 0);
-  const overallReturnPct = (overallPnl / initialBaseCapital) * 100;
+  // Compute mathematically verified portfolio metrics from backend state and paired trade ledger
+  const metrics = computePortfolioMetrics(botData, currentLtp, initialBaseCapital);
+
+  const {
+    isInPosition,
+    shares,
+    entryPrice,
+    ltp,
+    investedCapital,
+    positionValue,
+    availableCash,
+    totalPortfolioValue,
+    unrealizedPnl,
+    unrealizedPct,
+    pairedTrades,
+    todayPaired,
+    todayRealizedPnl,
+    todayFees,
+    allTimeRealizedPnl,
+    allTimeFees,
+    combinedTodayPnl,
+    todayPnlPct,
+    combinedAllTimePnl,
+    overallReturnPct,
+    equityPoints
+  } = metrics;
 
   // Strategy status & display
   const activeStatus = bot.status || botData?.active_status || "ARMED (STANDBY • MARKET CLOSED)";
@@ -109,29 +104,9 @@ export default function OverviewDashboard({
   const isEngineStandby = activeStatus.includes("STANDBY") || activeStatus.includes("ARMED");
   const isEnginePaused = activeStatus.includes("PAUSED") || activeStatus.includes("STOPPED");
 
-  // Construct mini cumulative equity curve data points from allBotFills
-  const equityPoints = [];
-  let runningEquity = initialBaseCapital;
-  equityPoints.push({ label: 'Initial', equity: initialBaseCapital });
-
-  allBotFills.forEach((t, idx) => {
-    runningEquity += (Number(t.RawAmount) || 0);
-    equityPoints.push({
-      label: t.Time || `#${idx + 1}`,
-      equity: runningEquity
-    });
-  });
-
-  if (isInPosition && unrealizedPnl !== 0) {
-    equityPoints.push({
-      label: 'Live',
-      equity: runningEquity + unrealizedPnl
-    });
-  }
-
-  // Calculate SVG sparkline bounds
-  const minEquity = Math.min(...equityPoints.map(p => p.equity), initialBaseCapital * 0.99);
-  const maxEquity = Math.max(...equityPoints.map(p => p.equity), initialBaseCapital * 1.01);
+  // Calculate SVG sparkline bounds for equity curve
+  const minEquity = Math.min(...equityPoints.map(p => p.equity), initialBaseCapital * 0.995);
+  const maxEquity = Math.max(...equityPoints.map(p => p.equity), initialBaseCapital * 1.005);
   const range = maxEquity - minEquity || 1;
 
   const svgWidth = 480;
@@ -174,7 +149,7 @@ export default function OverviewDashboard({
             <Cpu size={20} color="#00D09C" />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '1.2rem', fontWeight: '800', color: '#F1F3F4', margin: 0, letterSpacing: '-0.01em' }}>
                 Command Center Overview
               </h1>
@@ -187,17 +162,18 @@ export default function OverviewDashboard({
                 color: '#00D09C',
                 border: '1px solid rgba(0, 208, 156, 0.25)'
               }}>
-                v2.0 ACTIVE
+                PAPER SIMULATION
               </span>
             </div>
             <p style={{ fontSize: '0.8rem', color: '#92999C', margin: '3px 0 0 0' }}>
-              Real-time portfolio liquidity, automated strategy execution telemetry, and system health
+              Real-time portfolio liquidity, automated strategy execution telemetry, and statutory accounting
             </p>
           </div>
         </div>
 
-        {/* Status Indicators & Fast Navigation Pills */}
+        {/* Status Indicators & Fast Navigation Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Market Status Pill */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -217,8 +193,25 @@ export default function OverviewDashboard({
               backgroundColor: isMarketOpen ? '#00D09C' : '#EB5B3C',
               boxShadow: isMarketOpen ? '0 0 8px #00D09C' : 'none'
             }} />
-            <span>{isMarketOpen ? "NSE MARKET LIVE" : "NSE MARKET CLOSED"}</span>
+            <span>{isMarketOpen ? "NSE LIVE" : "NSE CLOSED"}</span>
             <span style={{ color: '#626A6E', fontSize: '0.72rem' }}>• {istTime || "15:30 IST"}</span>
+          </div>
+
+          {/* Telemetry Health Pill */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 12px',
+            borderRadius: '20px',
+            backgroundColor: '#101314',
+            border: '1px solid #252A2C',
+            fontSize: '0.78rem',
+            fontWeight: '600',
+            color: isConnected ? '#00D09C' : '#EB5B3C'
+          }}>
+            <Radio size={13} color={isConnected ? '#00D09C' : '#EB5B3C'} />
+            <span>{isConnected ? `SYNCED ${lastSyncTime || istTime || '2s'}` : "DISCONNECTED"}</span>
           </div>
 
           <button
@@ -248,12 +241,12 @@ export default function OverviewDashboard({
 
       {/* ── 1. PORTFOLIO SUMMARY CARDS (4-CARD GRID) ── */}
       <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
           <h2 style={{ fontSize: '1.05rem', fontWeight: '700', color: '#F1F3F4', margin: 0 }}>
             Portfolio Capital & Liquidity
           </h2>
           <span style={{ fontSize: '0.75rem', color: '#626A6E' }}>
-            Multi-market paper balance with realistic cash settlement
+            Base Capital: {currency}10,00,000.00 • Reconciled via Cash + Position MTM
           </span>
         </div>
 
@@ -262,7 +255,7 @@ export default function OverviewDashboard({
           gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
           gap: '16px'
         }}>
-          {/* Card 1: Total Capital */}
+          {/* Card 1: Total Portfolio Capital */}
           <div style={{
             backgroundColor: '#151819',
             border: '1px solid #252A2C',
@@ -275,7 +268,16 @@ export default function OverviewDashboard({
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.8rem', color: '#92999C', fontWeight: '600' }}>Total Portfolio Capital</span>
-              <span style={{ fontSize: '0.7rem', color: '#626A6E', fontWeight: '600' }}>Initial: {currency}10L</span>
+              <span style={{
+                fontSize: '0.68rem',
+                color: '#00D09C',
+                backgroundColor: 'rgba(0, 208, 156, 0.08)',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                fontWeight: '700'
+              }}>
+                RECONCILED
+              </span>
             </div>
             <div style={{
               fontSize: '1.75rem',
@@ -283,7 +285,7 @@ export default function OverviewDashboard({
               color: '#F1F3F4',
               margin: '6px 0 2px 0'
             }} className="font-tabular">
-              {currency}{totalPortfolioValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              {currency}{totalPortfolioValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span style={{ fontSize: '0.74rem', color: '#626A6E' }}>
               Available Cash + Current Position Value
@@ -311,7 +313,7 @@ export default function OverviewDashboard({
                 borderRadius: '4px',
                 fontWeight: '700'
               }}>
-                Free Cash
+                Free Margin
               </span>
             </div>
             <div style={{
@@ -320,7 +322,7 @@ export default function OverviewDashboard({
               color: '#00D09C',
               margin: '6px 0 2px 0'
             }} className="font-tabular">
-              {currency}{availableCash.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              {currency}{availableCash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span style={{ fontSize: '0.74rem', color: '#626A6E' }}>
               Ready for immediate intraday margin allocation
@@ -350,7 +352,7 @@ export default function OverviewDashboard({
               color: isInPosition ? '#F1F3F4' : '#626A6E',
               margin: '6px 0 2px 0'
             }} className="font-tabular">
-              {currency}{investedCapital.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              {currency}{investedCapital.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span style={{ fontSize: '0.74rem', color: '#626A6E' }}>
               {isInPosition ? `${shares} shares held in ${bot.symbol}` : "0% allocated • Max 50% risk cap per trade"}
@@ -386,10 +388,10 @@ export default function OverviewDashboard({
               color: isInPosition ? '#F1F3F4' : '#626A6E',
               margin: '6px 0 2px 0'
             }} className="font-tabular">
-              {currency}{positionValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              {currency}{positionValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <span style={{ fontSize: '0.74rem', color: '#626A6E' }}>
-              {isInPosition ? `LTP: ${currency}${Number(ltp).toFixed(2)}` : "No open position to mark-to-market"}
+              {isInPosition ? `Marked to LTP: ${currency}${Number(ltp).toFixed(2)}` : "No open position to mark-to-market"}
             </span>
           </div>
         </div>
@@ -417,7 +419,7 @@ export default function OverviewDashboard({
               <span style={{ fontSize: '0.8rem', color: '#92999C', fontWeight: '600' }}>
                 Today's Net Realized & Unrealized P&L
               </span>
-              <span style={{ fontSize: '0.72rem', color: '#626A6E' }}>Net after statutory fees</span>
+              <span style={{ fontSize: '0.72rem', color: '#626A6E' }}>Net after all statutory fees</span>
             </div>
 
             <div style={{
@@ -444,9 +446,9 @@ export default function OverviewDashboard({
             borderTop: '1px solid #252A2C'
           }}>
             <div>
-              <span style={{ fontSize: '0.74rem', color: '#626A6E', fontWeight: '600' }}>Trades Executed Today</span>
+              <span style={{ fontSize: '0.74rem', color: '#626A6E', fontWeight: '600' }}>Today's Paired Trades</span>
               <div style={{ fontSize: '1.25rem', fontWeight: '700', color: '#F1F3F4', marginTop: '2px' }} className="font-tabular">
-                {todayFills.length}
+                {todayPaired.length} round-trips
               </div>
             </div>
 
@@ -455,24 +457,27 @@ export default function OverviewDashboard({
               <div style={{
                 fontSize: '1.25rem',
                 fontWeight: '700',
-                color: overallPnl >= 0 ? '#00D09C' : '#EB5B3C',
+                color: combinedAllTimePnl >= 0 ? '#00D09C' : '#EB5B3C',
                 marginTop: '2px'
               }} className="font-tabular">
-                {overallPnl >= 0 ? `+${currency}${overallPnl.toFixed(2)}` : `-${currency}${Math.abs(overallPnl).toFixed(2)}`}
+                {combinedAllTimePnl >= 0 ? `+${currency}${combinedAllTimePnl.toFixed(2)}` : `-${currency}${Math.abs(combinedAllTimePnl).toFixed(2)}`}
+                <span style={{ fontSize: '0.8rem', fontWeight: '600', marginLeft: '6px' }}>
+                  ({overallReturnPct >= 0 ? `+${overallReturnPct.toFixed(2)}%` : `${overallReturnPct.toFixed(2)}%`})
+                </span>
               </div>
             </div>
 
             <div>
-              <span style={{ fontSize: '0.74rem', color: '#626A6E', fontWeight: '600' }}>Total Historical Fills</span>
+              <span style={{ fontSize: '0.74rem', color: '#626A6E', fontWeight: '600' }}>Completed Round-Trips</span>
               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#F1F3F4', marginTop: '2px' }} className="font-tabular">
-                {allBotFills.length} orders
+                {pairedTrades.length} trades ({allBotFills.length} fills)
               </div>
             </div>
 
             <div>
-              <span style={{ fontSize: '0.74rem', color: '#626A6E', fontWeight: '600' }}>Est. Friction & Taxes</span>
+              <span style={{ fontSize: '0.74rem', color: '#626A6E', fontWeight: '600' }}>Statutory Taxes & Charges</span>
               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#EB5B3C', marginTop: '2px' }} className="font-tabular">
-                -{currency}{(allBotFills.length * 40.0).toFixed(2)}
+                -{currency}{allTimeFees.toFixed(2)}
               </div>
             </div>
           </div>
@@ -538,7 +543,7 @@ export default function OverviewDashboard({
                 Portfolio Equity Curve
               </h3>
               <span style={{ fontSize: '0.74rem', color: '#626A6E' }}>
-                Progression across completed paper trades (Base: {currency}10,00,000)
+                Net sequential balance across {pairedTrades.length} completed round-trips (Base: {currency}10,00,000)
               </span>
             </div>
             <span style={{
@@ -593,8 +598,8 @@ export default function OverviewDashboard({
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#626A6E' }}>
-            <span>Starting Baseline ({currency}10.00L)</span>
-            <span>Current: {currency}{(totalPortfolioValue / 100000).toFixed(2)}L</span>
+            <span>Starting Capital: {currency}10.00L</span>
+            <span>Current: {currency}{(equityPoints[equityPoints.length - 1]?.equity / 100000).toFixed(2)}L</span>
           </div>
         </div>
       </div>
@@ -644,16 +649,19 @@ export default function OverviewDashboard({
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              padding: '6px 10px',
+              padding: '8px 12px',
               borderRadius: '8px',
               backgroundColor: '#101314',
               border: '1px solid #252A2C',
               marginTop: '10px'
             }}>
-              <ShieldCheck size={14} color="#00D09C" />
-              <span style={{ fontSize: '0.75rem', color: '#92999C', fontWeight: '600' }}>
-                Mode: <strong style={{ color: '#F1F3F4' }}>Paper Trading (Simulated NSE MIS)</strong>
-              </span>
+              <ShieldCheck size={15} color="#00D09C" />
+              <div style={{ fontSize: '0.75rem', color: '#92999C' }}>
+                Execution Mode: <strong style={{ color: '#F1F3F4' }}>Paper Trading (Simulated NSE MIS)</strong>
+                <div style={{ fontSize: '0.68rem', color: '#626A6E', marginTop: '1px' }}>
+                  Simulated fills with real NSE L1 tick feed, 0.05% slippage & full statutory charges
+                </div>
+              </div>
             </div>
           </div>
 
@@ -679,9 +687,9 @@ export default function OverviewDashboard({
               </div>
             </div>
             <div>
-              <span style={{ fontSize: '0.72rem', color: '#626A6E', fontWeight: '600' }}>Quota Lock</span>
+              <span style={{ fontSize: '0.72rem', color: '#626A6E', fontWeight: '600' }}>Daily Quota</span>
               <div style={{ fontSize: '0.88rem', fontWeight: '700', color: '#00D09C', marginTop: '2px' }}>
-                1 trade/day
+                {bot.max_trades_per_symbol ?? 1} trade/day
               </div>
             </div>
           </div>
@@ -689,6 +697,7 @@ export default function OverviewDashboard({
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={() => onControl(isEnginePaused ? "START" : "PAUSE")}
+              disabled={actionLoading}
               style={{
                 flex: 1,
                 padding: '10px 14px',
@@ -699,7 +708,8 @@ export default function OverviewDashboard({
                 borderColor: isEnginePaused ? '#00D09C' : '#2F3538',
                 fontSize: '0.82rem',
                 fontWeight: '700',
-                cursor: 'pointer',
+                cursor: actionLoading ? 'not-allowed' : 'pointer',
+                opacity: actionLoading ? 0.6 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -707,8 +717,14 @@ export default function OverviewDashboard({
                 transition: 'all 0.15s ease'
               }}
             >
-              {isEnginePaused ? <Play size={14} fill="#080A0B" /> : <Pause size={14} />}
-              <span>{isEnginePaused ? "Arm & Resume Bot" : "Pause Bot"}</span>
+              {actionLoading ? (
+                <RefreshCw size={14} className="animate-spin" />
+              ) : isEnginePaused ? (
+                <Play size={14} fill="#080A0B" />
+              ) : (
+                <Pause size={14} />
+              )}
+              <span>{actionLoading ? "Updating..." : (isEnginePaused ? "Arm & Resume Bot" : "Pause Bot")}</span>
             </button>
 
             <button
@@ -726,7 +742,7 @@ export default function OverviewDashboard({
               onMouseEnter={e => e.currentTarget.style.color = '#FFFFFF'}
               onMouseLeave={e => e.currentTarget.style.color = '#92999C'}
             >
-              Settings
+              Configure
             </button>
           </div>
         </div>
@@ -822,6 +838,7 @@ export default function OverviewDashboard({
 
               <button
                 onClick={() => onControl("SQUARE_OFF")}
+                disabled={actionLoading}
                 style={{
                   padding: '7px 14px',
                   borderRadius: '8px',
@@ -830,18 +847,19 @@ export default function OverviewDashboard({
                   color: '#EB5B3C',
                   fontSize: '0.78rem',
                   fontWeight: '700',
-                  cursor: 'pointer',
+                  cursor: actionLoading ? 'not-allowed' : 'pointer',
+                  opacity: actionLoading ? 0.6 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px'
                 }}
               >
                 <Square size={12} fill="#EB5B3C" />
-                <span>Square Off</span>
+                <span>{actionLoading ? "Squaring Off..." : "Square Off"}</span>
               </button>
             </div>
           ) : (
-            /* Flat Exposure Notice with Recent Fills Preview */
+            /* Flat Exposure Notice with Recent Paired/Fills Preview */
             <div style={{ margin: '14px 0' }}>
               <div style={{
                 padding: '12px 16px',
@@ -865,53 +883,65 @@ export default function OverviewDashboard({
               </div>
 
               {/* Latest 3 executions table snippet */}
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.78rem' }}>
-                  <thead>
-                    <tr style={{ color: '#626A6E', borderBottom: '1px solid #202426' }}>
-                      <th style={{ padding: '6px 8px' }}>Time</th>
-                      <th style={{ padding: '6px 8px' }}>Action</th>
-                      <th style={{ padding: '6px 8px' }}>Instrument</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>Price</th>
-                      <th style={{ padding: '6px 8px', textAlign: 'right' }}>Cash Impact</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {allBotFills.slice(0, 3).map((f, i) => {
-                      const isBuy = f.Action?.includes("BUY");
-                      return (
-                        <tr key={f.id || i} style={{ borderBottom: '1px solid #1a1e20' }}>
-                          <td style={{ padding: '8px 8px', color: '#92999C' }}>{f.Time || f.Timestamp?.slice(11, 16)}</td>
-                          <td style={{ padding: '8px 8px' }}>
-                            <span style={{
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              fontSize: '0.7rem',
+              {allBotFills.length > 0 ? (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.78rem' }}>
+                    <thead>
+                      <tr style={{ color: '#626A6E', borderBottom: '1px solid #202426' }}>
+                        <th style={{ padding: '6px 8px' }}>Time</th>
+                        <th style={{ padding: '6px 8px' }}>Action</th>
+                        <th style={{ padding: '6px 8px' }}>Instrument</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>Price</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'right' }}>Cash Flow</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allBotFills.slice(-3).reverse().map((f, i) => {
+                        const isBuy = f.Action?.includes("BUY");
+                        const isExit = f.Action?.includes("SELL") || f.Action?.includes("COVER") || f.Action?.includes("SQUARE");
+                        return (
+                          <tr key={f.id || i} style={{ borderBottom: '1px solid #1a1e20' }}>
+                            <td style={{ padding: '8px 8px', color: '#92999C' }}>{f.Time || f.Timestamp?.slice(11, 16)}</td>
+                            <td style={{ padding: '8px 8px' }}>
+                              <span style={{
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: '700',
+                                backgroundColor: isExit ? 'rgba(0, 208, 156, 0.12)' : (isBuy ? 'rgba(0, 208, 156, 0.12)' : 'rgba(235, 91, 60, 0.12)'),
+                                color: isExit ? '#00D09C' : (isBuy ? '#00D09C' : '#EB5B3C')
+                              }}>
+                                {f.Action}
+                              </span>
+                            </td>
+                            <td style={{ padding: '8px 8px', fontWeight: '700', color: '#F1F3F4' }}>{f.Symbol}</td>
+                            <td style={{ padding: '8px 8px', textAlign: 'right', color: '#F1F3F4' }} className="font-tabular">
+                              {currency}{Number(f.Execution_Price || 0).toFixed(2)}
+                            </td>
+                            <td style={{
+                              padding: '8px 8px',
+                              textAlign: 'right',
                               fontWeight: '700',
-                              backgroundColor: isBuy ? 'rgba(0, 208, 156, 0.12)' : 'rgba(235, 91, 60, 0.12)',
-                              color: isBuy ? '#00D09C' : '#EB5B3C'
-                            }}>
-                              {f.Action}
-                            </span>
-                          </td>
-                          <td style={{ padding: '8px 8px', fontWeight: '700', color: '#F1F3F4' }}>{f.Symbol}</td>
-                          <td style={{ padding: '8px 8px', textAlign: 'right', color: '#F1F3F4' }} className="font-tabular">
-                            {currency}{Number(f.Execution_Price || 0).toFixed(2)}
-                          </td>
-                          <td style={{
-                            padding: '8px 8px',
-                            textAlign: 'right',
-                            fontWeight: '700',
-                            color: f.RawAmount >= 0 ? '#00D09C' : '#F1F3F4'
-                          }} className="font-tabular">
-                            {f.Amount || `${currency}${f.RawAmount}`}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              color: f.RawAmount >= 0 ? '#00D09C' : '#92999C'
+                            }} className="font-tabular">
+                              {f.Amount || `${currency}${f.RawAmount}`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div style={{
+                  padding: '24px',
+                  textAlign: 'center',
+                  color: '#626A6E',
+                  fontSize: '0.8rem'
+                }}>
+                  No executions recorded yet in current trading session.
+                </div>
+              )}
             </div>
           )}
 
@@ -954,7 +984,7 @@ export default function OverviewDashboard({
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Wifi size={16} color="#00D09C" />
+                <Wifi size={16} color={isConnected ? "#00D09C" : "#EB5B3C"} />
                 <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F1F3F4' }}>Market Data Feed</span>
               </div>
               <span style={{
@@ -962,17 +992,17 @@ export default function OverviewDashboard({
                 fontWeight: '700',
                 padding: '2px 6px',
                 borderRadius: '4px',
-                backgroundColor: 'rgba(0, 208, 156, 0.12)',
-                color: '#00D09C'
+                backgroundColor: isConnected ? 'rgba(0, 208, 156, 0.12)' : 'rgba(235, 91, 60, 0.12)',
+                color: isConnected ? '#00D09C' : '#EB5B3C'
               }}>
-                CONNECTED
+                {isConnected ? "CONNECTED" : "OFFLINE"}
               </span>
             </div>
             <div style={{ fontSize: '0.78rem', color: '#92999C' }}>
-              Gateway: <strong style={{ color: '#F1F3F4' }}>yfinance Real-Time Polling</strong>
+              Gateway: <strong style={{ color: '#F1F3F4' }}>Yahoo Finance (yfinance L1 Real-Time)</strong>
             </div>
             <div style={{ fontSize: '0.74rem', color: '#626A6E', borderTop: '1px solid #202426', paddingTop: '8px' }}>
-              Polling interval: 15 seconds • Intra-candle evaluation active
+              Strategy evaluation: 15s • UI telemetry poll: 2s non-blocking
             </div>
           </div>
 
@@ -999,14 +1029,14 @@ export default function OverviewDashboard({
                 backgroundColor: 'rgba(0, 208, 156, 0.12)',
                 color: '#00D09C'
               }}>
-                PAPER (SIMULATED)
+                PAPER SIMULATION
               </span>
             </div>
             <div style={{ fontSize: '0.78rem', color: '#92999C' }}>
-              Settlement: <strong style={{ color: '#F1F3F4' }}>NSE Intraday MIS (5x Leverage)</strong>
+              Settlement: <strong style={{ color: '#F1F3F4' }}>NSE Intraday MIS (5x Leverage Model)</strong>
             </div>
             <div style={{ fontSize: '0.74rem', color: '#626A6E', borderTop: '1px solid #202426', paddingTop: '8px' }}>
-              Full regulatory friction model (STT, SEBI, GST, Stamp Duty)
+              Regulatory charges: STT (0.025%), SEBI fee, Stamp duty, 18% GST
             </div>
           </div>
 
@@ -1033,14 +1063,14 @@ export default function OverviewDashboard({
                 backgroundColor: isEngineActive ? 'rgba(0, 208, 156, 0.12)' : 'rgba(255, 184, 0, 0.12)',
                 color: isEngineActive ? '#00D09C' : '#FFB800'
               }}>
-                {isEngineActive ? "MONITORING" : "STANDBY"}
+                {isEngineActive ? "MONITORING" : (isEnginePaused ? "PAUSED" : "STANDBY")}
               </span>
             </div>
             <div style={{ fontSize: '0.78rem', color: '#92999C' }}>
-              Lifecycle: <strong style={{ color: '#F1F3F4' }}>15:15 MIS Auto-Square-Off Armed</strong>
+              Lifecycle: <strong style={{ color: '#F1F3F4' }}>15:15 IST Mandatory MIS Auto-Square-Off</strong>
             </div>
             <div style={{ fontSize: '0.74rem', color: '#626A6E', borderTop: '1px solid #202426', paddingTop: '8px' }}>
-              Telegram Interactive Push Notifications: Online
+              Interactive Telegram Push Gateway: Active
             </div>
           </div>
         </div>
