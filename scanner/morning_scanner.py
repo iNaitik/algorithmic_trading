@@ -720,22 +720,38 @@ def auto_market_close_and_summarize():
     if os.path.exists(hist_file):
         try:
             df = pd.read_csv(hist_file)
-            if "Timestamp" in df.columns:
+            if "Timestamp" in df.columns and not df.empty:
                 df["Date"] = df["Timestamp"].astype(str).str.slice(0, 10)
                 today_df = df[df["Date"] == today_str]
                 total_trades = len(today_df)
-                if total_trades > 0 and "Cash_Change" in today_df.columns:
-                    for val in today_df["Cash_Change"]:
-                        try:
-                            net_pnl += float(str(val).replace("+", "").replace(",", ""))
-                        except Exception:
-                            pass
+                if total_trades > 0:
+                    # Calculate real paired trade P&L (supports BUY/SELL and SHORT/COVER)
+                    gross_pnl = 0.0
+                    for sym, group in today_df.groupby("Symbol"):
+                        rows = group.to_dict("records")
+                        for i in range(0, len(rows) - 1, 2):
+                            e = rows[i]
+                            x = rows[i + 1]
+                            act_e = str(e.get("Action", "")).upper()
+                            act_x = str(x.get("Action", "")).upper()
+                            shs = int(e.get("Shares", 0))
+                            pe = float(e.get("Execution_Price", 0.0))
+                            px = float(x.get("Execution_Price", 0.0))
+                            if "BUY" in act_e and ("SELL" in act_x or "SQUARE" in act_x):
+                                trade_pnl = (px - pe) * shs
+                            elif "SHORT" in act_e and ("COVER" in act_x or "SQUARE" in act_x):
+                                trade_pnl = (pe - px) * shs
+                            else:
+                                trade_pnl = 0.0
+                            gross_pnl += trade_pnl
+                            if trade_pnl > 0:
+                                wins += 1
+                            else:
+                                losses += 1
                     charges = total_trades * 40.0
-                    net_pnl -= charges
-                    wins = max(1, total_trades // 2) if total_trades > 0 else 0
-                    losses = max(0, total_trades - wins)
-        except Exception:
-            pass
+                    net_pnl = gross_pnl - charges
+        except Exception as e:
+            print(f"[MARKET CLOSE] Trade summary error: {e}")
 
     # 3. Send Telegram Daily Summary
     try:

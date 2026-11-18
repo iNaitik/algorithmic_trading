@@ -322,25 +322,29 @@ def evaluate_strategy_signal(df: pd.DataFrame, strategy_name: str) -> Tuple[int,
                         last_sig = val
                         break
 
-            # 4. Extract Stop Loss
+            # 4. Extract Stop Loss with directional sanity check
             sl = None
             for sl_col in ['stop_loss', 'StopLoss', 'stop', 'Stop']:
                 if sl_col in res_df.columns and not res_df[sl_col].empty:
                     val = float(res_df[sl_col].iloc[-1])
                     if val > 0 and not np.isnan(val):
-                        sl = round(val, 2)
-                        break
+                        # Verify direction: for LONG, stop must be below price; for SHORT, stop must be above price
+                        if (last_sig == 1 and val < curr_close) or (last_sig == -1 and val > curr_close):
+                            sl = round(val, 2)
+                            break
             if sl is None:
                 sl = round(curr_close * 0.992 if last_sig == 1 else curr_close * 1.008, 2)
 
-            # 5. Extract Target Price
+            # 5. Extract Target Price with directional sanity check
             tp = None
             for tp_col in ['target_price', 'TargetPrice', 'target', 'Target', 'take_profit']:
                 if tp_col in res_df.columns and not res_df[tp_col].empty:
                     val = float(res_df[tp_col].iloc[-1])
                     if val > 0 and not np.isnan(val):
-                        tp = round(val, 2)
-                        break
+                        # Verify direction: for LONG, target must be above price; for SHORT, target must be below price
+                        if (last_sig == 1 and val > curr_close) or (last_sig == -1 and val < curr_close):
+                            tp = round(val, 2)
+                            break
             if tp is None:
                 tp = round(curr_close * 1.016 if last_sig == 1 else curr_close * 0.984, 2)
 
