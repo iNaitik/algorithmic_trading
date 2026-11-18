@@ -1,36 +1,160 @@
 /**
  * tradeUtils.js
  * =============
- * Precision financial accounting and trade reconciliation utilities for Algo Trading Bot.
+ * Institutional-grade quantitative trade matching, statutory accounting,
+ * and portfolio reconciliation engine.
  * 
- * Reconciles individual order fill legs into paired round-trip positions (BUY -> SELL, SHORT -> COVER),
- * computing exact gross P&L, statutory exchange/regulatory charges (STT, SEBI, GST, Stamp Duty, Brokerage),
- * and net realized P&L without heuristic estimations.
+ * Supports:
+ * - Multi-leg FIFO order matching (1:N, N:1, partial fills, partial square-offs)
+ * - Exact pro-rata statutory fee and cash-flow allocation
+ * - Duplicate execution deduplication
+ * - Out-of-order timestamp sorting
+ * - Accurate Long & Short mark-to-market position valuations
+ * - Mathematical reconciliation preventing double counting
  */
 
 /**
- * Pairs raw order fill legs into closed round trips using side-specific FIFO matching.
+ * Safely parse date strings into epoch milliseconds for reliable sorting.
+ */
+export function parseTimestamp(ts) {
+  if (!ts) return 0;
+  if (typeof ts === 'number') return ts;
+  const str = String(ts).trim();
+  // If formatted as "YYYY-MM-DD HH:MM:SS"
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(str)) {
+    return new Date(str.replace(' ', 'T')).getTime();
+  }
+  const parsed = Date.parse(str);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/**
+ * Pairs raw order fill legs into closed round trips using multi-leg FIFO matching.
+ * Handles:
+ * - 1 Entry -> Multiple Partial Exits
+ * - Multiple Entries -> 1 Exit
+ * - Multiple independent trades in the same instrument
+ * - SHORT followed by COVER
+ * - Partial Square-Offs
+ * - Unmatched entry legs
+ * - Duplicate execution records
+ * - Out-of-order execution timestamps
  * 
- * @param {Array} allTrades - Raw execution fill records from trade ledger (CSV / API).
- * @returns {Object} { pairedTrades, openLongs, openShorts }
+ * @param {Array} allTrades - Raw execution fill records from trade ledger.
+ * @returns {Object} { pairedTrades, openLongs, openShorts, unmatchedExits, duplicatesCount }
  */
 export function computeRoundTrips(allTrades = []) {
   if (!Array.isArray(allTrades) || allTrades.length === 0) {
-    return { pairedTrades: [], openLongs: {}, openShorts: {} };
+    return {
+      pairedTrades: [],
+      openLongs: {},
+      openShorts: {},
+      unmatchedExits: [],
+      duplicatesCount: 0
+    };
+  }
+
+  // 1. Sort chronologically by timestamp (oldest first)
+  const sorted = [...allTrades].sort((a, b) => {
+    return parseTimestamp(a.Timestamp || a.Time) - parseTimestamp(b.Timestamp || b.Time);
+  });
+
+  // 2. Deduplicate identical execution records
+  const seenKeys = new Set();
+  const dedupedFills = [];
+  let duplicatesCount = 0;
+
+  for (const fill of sorted) {
+    const act = String(fill.Action || "").toUpperCase();
+    const sym = fill.Symbol || "UNKNOWN";
+    const shs = Number(fill.Shares || 0);
+    const px = Number(fill.Execution_Price || 0);
+    const ts = fill.Timestamp || fill.Time || "";
+    const raw = Number(fill.RawAmount || 0);
+
+    // If explicit ID exists, use it; otherwise create unique composite fingerprint
+    const key = fill.id
+      ? String(fill.id)
+      : `${ts}|${sym}|${act}|${shs}|${px}|${raw}`;
+
+    if (seenKeys.has(key)) {
+      duplicatesCount++;
+      continue;
+    }
+    seenKeys.add(key);
+    dedupedFills.push(fill);
   }
 
   const pairedTrades = [];
-  const openLongs = {};   // symbol -> array of BUY legs
-  const openShorts = {};  // symbol -> array of SHORT legs
+  const openLongs = {};   // sym -> Array of { ..., remainingShares, originalShares, rawAmt }
+  const openShorts = {};  // sym -> Array of { ..., remainingShares, originalShares, rawAmt }
+  const unmatchedExits = [];
 
-  // Ensure chronological order (oldest to newest)
-  const sorted = [...allTrades].sort((a, b) => {
-    const ta = new Date(a.Timestamp || 0).getTime();
-    const tb = new Date(b.Timestamp || 0).getTime();
-    return ta - tb;
-  });
+  // Helper to process an exit against an open inventory queue
+  function matchExit(sym, fill, queue, isShort) {
+    let exitRemaining = Number(fill.Shares || 0);
+    const exitOriginal = exitRemaining;
+    const exitPrice = Number(fill.Execution_Price || 0);
+    const exitRawAmt = Number(fill.RawAmount || 0);
 
-  for (const fill of sorted) {
+    while (exitRemaining > 0.0001 && queue.length > 0) {
+      const entry = queue[0];
+      const matchedShares = Math.min(exitRemaining, entry.remainingShares);
+
+      // Pro-rate cash flow (outflows/inflows) for partial allocations
+      const entryCashFrac = entry.originalShares > 0
+        ? entry.rawAmt * (matchedShares / entry.originalShares)
+        : 0;
+      const exitCashFrac = exitOriginal > 0
+        ? exitRawAmt * (matchedShares / exitOriginal)
+        : 0;
+
+      // Gross Realized P&L
+      const grossPnl = isShort
+        ? (entry.price - exitPrice) * matchedShares
+        : (exitPrice - entry.price) * matchedShares;
+
+      // Net Realized P&L from pro-rated marginal cash impacts
+      const netPnl = exitCashFrac + entryCashFrac;
+      const fees = Math.max(0, grossPnl - netPnl);
+
+      pairedTrades.push({
+        id: `RT-${entry.id || 'E'}-${fill.id || 'X'}-${pairedTrades.length + 1}`,
+        symbol: sym,
+        side: isShort ? "SHORT" : "LONG",
+        shares: matchedShares,
+        entryTime: entry.Timestamp || entry.Time || "",
+        exitTime: fill.Timestamp || fill.Time || "",
+        entryDate: entry.Date || (entry.Timestamp ? entry.Timestamp.slice(0, 10) : ""),
+        exitDate: fill.Date || (fill.Timestamp ? fill.Timestamp.slice(0, 10) : ""),
+        entryPrice: entry.price,
+        exitPrice: exitPrice,
+        grossPnl: Number(grossPnl.toFixed(2)),
+        netPnl: Number(netPnl.toFixed(2)),
+        fees: Number(fees.toFixed(2)),
+        returnPct: entry.price > 0
+          ? Number(((grossPnl / (entry.price * matchedShares)) * 100).toFixed(2))
+          : 0
+      });
+
+      entry.remainingShares -= matchedShares;
+      exitRemaining -= matchedShares;
+
+      if (entry.remainingShares <= 0.0001) {
+        queue.shift(); // Entry fully exhausted
+      }
+    }
+
+    if (exitRemaining > 0.0001) {
+      unmatchedExits.push({
+        ...fill,
+        unmatchedShares: exitRemaining
+      });
+    }
+  }
+
+  // 3. Process fills sequentially in FIFO order
+  for (const fill of dedupedFills) {
     const sym = fill.Symbol || "UNKNOWN";
     const act = String(fill.Action || "").toUpperCase();
     const shs = Number(fill.Shares || 0);
@@ -41,140 +165,70 @@ export function computeRoundTrips(allTrades = []) {
     if (!openShorts[sym]) openShorts[sym] = [];
 
     if (act.includes("BUY")) {
-      openLongs[sym].push({ ...fill, shs, price, rawAmt });
+      openLongs[sym].push({
+        ...fill,
+        price,
+        rawAmt,
+        originalShares: shs,
+        remainingShares: shs
+      });
     } else if (act.includes("SHORT")) {
-      openShorts[sym].push({ ...fill, shs, price, rawAmt });
+      openShorts[sym].push({
+        ...fill,
+        price,
+        rawAmt,
+        originalShares: shs,
+        remainingShares: shs
+      });
     } else if (act.includes("COVER")) {
-      // Exits a SHORT position
-      if (openShorts[sym].length > 0) {
-        const entry = openShorts[sym].shift();
-        const tradeShs = Math.min(shs, entry.shs);
-        const grossPnl = (entry.price - price) * tradeShs;
-        // In the engine, entry cash flow is -margin_req, exit is +margin_req + net_pnl
-        const netPnl = rawAmt + entry.rawAmt;
-        const fees = Math.max(0, grossPnl - netPnl);
-
-        pairedTrades.push({
-          id: `RT-${entry.id || 'E'}-${fill.id || 'X'}`,
-          symbol: sym,
-          side: "SHORT",
-          shares: tradeShs,
-          entryTime: entry.Timestamp || entry.Time || "",
-          exitTime: fill.Timestamp || fill.Time || "",
-          entryDate: entry.Date || (entry.Timestamp ? entry.Timestamp.slice(0, 10) : ""),
-          exitDate: fill.Date || (fill.Timestamp ? fill.Timestamp.slice(0, 10) : ""),
-          entryPrice: entry.price,
-          exitPrice: price,
-          grossPnl: Number(grossPnl.toFixed(2)),
-          netPnl: Number(netPnl.toFixed(2)),
-          fees: Number(fees.toFixed(2)),
-          returnPct: entry.price > 0 ? Number(((grossPnl / (entry.price * tradeShs)) * 100).toFixed(2)) : 0
-        });
-      }
+      matchExit(sym, fill, openShorts[sym], true);
     } else if (act.includes("SELL")) {
-      // Exits a LONG position
-      if (openLongs[sym].length > 0) {
-        const entry = openLongs[sym].shift();
-        const tradeShs = Math.min(shs, entry.shs);
-        const grossPnl = (price - entry.price) * tradeShs;
-        // In the engine, entry cash flow is -total_cost, exit is +net_proceeds
-        const netPnl = rawAmt + entry.rawAmt;
-        const fees = Math.max(0, grossPnl - netPnl);
-
-        pairedTrades.push({
-          id: `RT-${entry.id || 'E'}-${fill.id || 'X'}`,
-          symbol: sym,
-          side: "LONG",
-          shares: tradeShs,
-          entryTime: entry.Timestamp || entry.Time || "",
-          exitTime: fill.Timestamp || fill.Time || "",
-          entryDate: entry.Date || (entry.Timestamp ? entry.Timestamp.slice(0, 10) : ""),
-          exitDate: fill.Date || (fill.Timestamp ? fill.Timestamp.slice(0, 10) : ""),
-          entryPrice: entry.price,
-          exitPrice: price,
-          grossPnl: Number(grossPnl.toFixed(2)),
-          netPnl: Number(netPnl.toFixed(2)),
-          fees: Number(fees.toFixed(2)),
-          returnPct: entry.price > 0 ? Number(((grossPnl / (entry.price * tradeShs)) * 100).toFixed(2)) : 0
-        });
-      }
+      matchExit(sym, fill, openLongs[sym], false);
     } else if (act.includes("SQUARE")) {
-      // Manual square-off or end-of-day auto-square-off
+      // Manual or intraday square-off applies to whichever open side exists
       if (openShorts[sym].length > 0) {
-        const entry = openShorts[sym].shift();
-        const tradeShs = Math.min(shs, entry.shs);
-        const grossPnl = (entry.price - price) * tradeShs;
-        const netPnl = rawAmt + entry.rawAmt;
-        const fees = Math.max(0, grossPnl - netPnl);
-
-        pairedTrades.push({
-          id: `RT-${entry.id || 'E'}-${fill.id || 'X'}`,
-          symbol: sym,
-          side: "SHORT",
-          shares: tradeShs,
-          entryTime: entry.Timestamp || entry.Time || "",
-          exitTime: fill.Timestamp || fill.Time || "",
-          entryDate: entry.Date || (entry.Timestamp ? entry.Timestamp.slice(0, 10) : ""),
-          exitDate: fill.Date || (fill.Timestamp ? fill.Timestamp.slice(0, 10) : ""),
-          entryPrice: entry.price,
-          exitPrice: price,
-          grossPnl: Number(grossPnl.toFixed(2)),
-          netPnl: Number(netPnl.toFixed(2)),
-          fees: Number(fees.toFixed(2)),
-          returnPct: entry.price > 0 ? Number(((grossPnl / (entry.price * tradeShs)) * 100).toFixed(2)) : 0
-        });
+        matchExit(sym, fill, openShorts[sym], true);
       } else if (openLongs[sym].length > 0) {
-        const entry = openLongs[sym].shift();
-        const tradeShs = Math.min(shs, entry.shs);
-        const grossPnl = (price - entry.price) * tradeShs;
-        const netPnl = rawAmt + entry.rawAmt;
-        const fees = Math.max(0, grossPnl - netPnl);
-
-        pairedTrades.push({
-          id: `RT-${entry.id || 'E'}-${fill.id || 'X'}`,
-          symbol: sym,
-          side: "LONG",
-          shares: tradeShs,
-          entryTime: entry.Timestamp || entry.Time || "",
-          exitTime: fill.Timestamp || fill.Time || "",
-          entryDate: entry.Date || (entry.Timestamp ? entry.Timestamp.slice(0, 10) : ""),
-          exitDate: fill.Date || (fill.Timestamp ? fill.Timestamp.slice(0, 10) : ""),
-          entryPrice: entry.price,
-          exitPrice: price,
-          grossPnl: Number(grossPnl.toFixed(2)),
-          netPnl: Number(netPnl.toFixed(2)),
-          fees: Number(fees.toFixed(2)),
-          returnPct: entry.price > 0 ? Number(((grossPnl / (entry.price * tradeShs)) * 100).toFixed(2)) : 0
-        });
+        matchExit(sym, fill, openLongs[sym], false);
+      } else {
+        unmatchedExits.push(fill);
       }
     }
   }
 
-  return { pairedTrades, openLongs, openShorts };
+  return {
+    pairedTrades,
+    openLongs,
+    openShorts,
+    unmatchedExits,
+    duplicatesCount
+  };
 }
 
 /**
  * Computes portfolio liquidity, mark-to-market valuations, equity progression,
  * and mathematical reconciliation between balance ledger and realized/unrealized P&L.
+ * 
+ * Accurately prevents double counting:
+ * Total Portfolio Equity = Available Cash + Reserved Margin + Unrealized P&L
  */
 export function computePortfolioMetrics(botData, currentLtp = 0, initialCapital = 1000000.0) {
   const bot = botData?.bot_state || {};
   const allFills = botData?.all_trades || [];
   const istDate = botData?.ist_date || "";
 
-  // 1. Current Open Position
+  // 1. Current Live Position
   const isInPosition = Boolean(bot.in_position && (bot.shares > 0 || bot.entry_price > 0));
   const shares = Number(bot.shares || 0);
   const entryPrice = Number(bot.entry_price || 0);
   const ltp = Number(currentLtp || bot.last_ltp || entryPrice);
   const side = (bot.position_side || "LONG").toUpperCase();
 
+  // Invested Capital / Reserved Margin committed to active position
   const investedCapital = isInPosition ? shares * entryPrice : 0;
-  const positionValue = isInPosition ? shares * ltp : 0;
-  const availableCash = Number(bot.cash ?? initialCapital);
-  const totalPortfolioValue = availableCash + positionValue;
+  const reservedMargin = investedCapital;
 
-  // 2. Mark-to-market unrealized P&L
+  // Mark-to-market unrealized P&L
   const unrealizedPnl = isInPosition
     ? (side === "SHORT" ? (entryPrice - ltp) * shares : (ltp - entryPrice) * shares)
     : 0;
@@ -182,8 +236,28 @@ export function computePortfolioMetrics(botData, currentLtp = 0, initialCapital 
     ? (unrealizedPnl / (shares * entryPrice)) * 100
     : 0;
 
-  // 3. Paired trade ledger calculations
-  const { pairedTrades, openLongs, openShorts } = computeRoundTrips(allFills);
+  // Position Valuation:
+  // For LONG: shares * ltp = reservedMargin + unrealizedPnl
+  // For SHORT: shares * (2 * entryPrice - ltp) = reservedMargin + unrealizedPnl
+  const positionValue = isInPosition
+    ? (side === "SHORT" ? shares * (2 * entryPrice - ltp) : shares * ltp)
+    : 0;
+
+  // Available Cash (free margin unencumbered)
+  const availableCash = Number(bot.cash ?? initialCapital);
+
+  // Total Portfolio Capital = Available Cash + Position Value
+  // = Available Cash + Reserved Margin + Unrealized P&L (No double counting)
+  const totalPortfolioValue = availableCash + positionValue;
+
+  // 2. Paired trade ledger calculations (multi-leg FIFO)
+  const {
+    pairedTrades,
+    openLongs,
+    openShorts,
+    unmatchedExits,
+    duplicatesCount
+  } = computeRoundTrips(allFills);
 
   // Today ISO date matching
   let todayIso = istDate;
@@ -215,7 +289,7 @@ export function computePortfolioMetrics(botData, currentLtp = 0, initialCapital 
   const combinedAllTimePnl = allTimeRealizedPnl + unrealizedPnl;
   const overallReturnPct = (combinedAllTimePnl / initialCapital) * 100;
 
-  // 4. Construct mathematically verified equity curve points
+  // 3. Construct mathematically verified equity curve points
   const equityPoints = [];
   let runningEquity = initialCapital;
   equityPoints.push({ label: 'Initial', equity: initialCapital, time: 'Start' });
@@ -237,9 +311,7 @@ export function computePortfolioMetrics(botData, currentLtp = 0, initialCapital 
     });
   }
 
-  // 5. Mathematical reconciliation verification
-  // Total Portfolio Capital = Available Cash + Position Value
-  // Starting Capital + Realized P&L + Unrealized P&L should match
+  // 4. Mathematical reconciliation verification
   const theoreticalTotal = initialCapital + allTimeRealizedPnl + unrealizedPnl;
   const isMathematicallyReconciled = Math.abs(totalPortfolioValue - theoreticalTotal) < 1.0;
 
@@ -250,6 +322,7 @@ export function computePortfolioMetrics(botData, currentLtp = 0, initialCapital 
     ltp,
     side,
     investedCapital,
+    reservedMargin,
     positionValue,
     availableCash,
     totalPortfolioValue,
@@ -270,6 +343,10 @@ export function computePortfolioMetrics(botData, currentLtp = 0, initialCapital 
     equityPoints,
     theoreticalTotal,
     isMathematicallyReconciled,
-    initialCapital
+    initialCapital,
+    openLongs,
+    openShorts,
+    unmatchedExits,
+    duplicatesCount
   };
 }
