@@ -510,6 +510,7 @@ def startup_event():
 
 
 @app.get("/api/bot/state")
+@app.get("/api/bot/status")
 def get_bot_state(symbol: Optional[str] = None):
     """Fetches real-time status and logs directly from the active live execution engine."""
     live_state = get_live_state()

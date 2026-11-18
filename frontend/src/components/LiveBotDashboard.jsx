@@ -1042,11 +1042,89 @@ export default function LiveBotDashboard({
         {activeSubTab === "positions" && (
           <div>
             {!isInPosition ? (
-              /* Groww Rocket Empty State (Matches Screenshot 2: Clean, unboxed) */
-              <GrowwRocketEmptyState
-                title="No open positions"
-                subtitle="Equity, Intraday and MTF positions will appear here"
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {/* Groww Rocket Empty State (Matches Screenshot 2: Clean, unboxed) */}
+                <GrowwRocketEmptyState
+                  title="No open positions"
+                  subtitle="Equity, Intraday and MTF positions will appear here"
+                />
+
+                {/* Live Bot Execution Status Card */}
+                <div style={{
+                  marginTop: '28px',
+                  maxWidth: '560px',
+                  width: '100%',
+                  backgroundColor: '#151819',
+                  border: '1px solid #252A2C',
+                  borderRadius: '14px',
+                  padding: '20px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: bot.status?.includes("ACTIVE") ? '#00D09C' : '#EB5B3C',
+                        boxShadow: bot.status?.includes("ACTIVE") ? '0 0 8px #00D09C' : 'none'
+                      }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F1F3F4' }}>
+                        Live Bot: {bot.status || "ACTIVE (MONITORING)"}
+                      </span>
+                    </div>
+                    <span style={{
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(0, 208, 156, 0.1)',
+                      color: '#00D09C',
+                      fontSize: '0.72rem',
+                      fontWeight: '700'
+                    }}>
+                      {botData?.is_market_open ? "🟢 NSE MARKET LIVE" : "MARKET CLOSED"}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', paddingTop: '10px', borderTop: '1px solid #252A2C' }}>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: '#626A6E', fontWeight: '600' }}>Active Stock</div>
+                      <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#F1F3F4', marginTop: '2px' }}>{bot.symbol || symbol}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: '#626A6E', fontWeight: '600' }}>Live LTP</div>
+                      <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#00D09C', marginTop: '2px' }} className="font-tabular">
+                        {currency}{Number(currentLtp).toFixed(2)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: '#626A6E', fontWeight: '600' }}>Strategy</div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#F1F3F4', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {bot.strategy || strategy}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    fontSize: '0.78rem',
+                    color: '#92999C',
+                    backgroundColor: '#101314',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span>⚡</span>
+                    <span>
+                      {bot.status?.includes("PAUSED")
+                        ? "Bot is currently PAUSED. Click 'Arm & Apply' in Explore to engage live signals."
+                        : "Actively scanning 5m candles. When price breaks out beyond the opening range, the order executes automatically and live P&L tracks here."}
+                    </span>
+                  </div>
+                </div>
+              </div>
             ) : (
               /* LIVE POSITION CARD WITH REAL-TIME FLUCTUATION */
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1363,10 +1441,42 @@ export default function LiveBotDashboard({
 
             {/* Orders List or Rocket Empty State (Matches Screenshot 3: Clean, unboxed) */}
             {filteredTrades.length === 0 ? (
-              <GrowwRocketEmptyState
-                title="You don't have any open orders"
-                subtitle="Orders placed today will appear here"
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <GrowwRocketEmptyState
+                  title="You don't have any open orders"
+                  subtitle={orderSessionFilter === "TODAY" ? "No trades executed today yet. Orders placed today will appear here." : "No orders found."}
+                />
+                {orderSessionFilter === "TODAY" && allBotFills.length > 0 && (
+                  <button
+                    onClick={() => setOrderSessionFilter("ALL")}
+                    style={{
+                      marginTop: '16px',
+                      padding: '10px 22px',
+                      borderRadius: '10px',
+                      backgroundColor: '#151819',
+                      border: '1px solid #00D09C',
+                      color: '#00D09C',
+                      fontSize: '0.85rem',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = '#00D09C';
+                      e.currentTarget.style.color = '#080A0B';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = '#151819';
+                      e.currentTarget.style.color = '#00D09C';
+                    }}
+                  >
+                    <span>View All Past Executed Orders ({allBotFills.length})</span>
+                  </button>
+                )}
+              </div>
             ) : (
               <div style={{
                 backgroundColor: '#151819',
