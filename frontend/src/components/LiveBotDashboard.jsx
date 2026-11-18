@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   TrendingUp,
   TrendingDown,
@@ -47,6 +47,7 @@ import BacktesterView from './BacktesterView';
 import MorningScannerView from './MorningScannerView';
 import FactorMatrixView from './FactorMatrixView';
 import TradeJournal from './TradeJournal';
+import { computeRoundTrips } from '../utils/tradeUtils';
 
 export default function LiveBotDashboard({
   market = "INDIA",
@@ -77,6 +78,107 @@ export default function LiveBotDashboard({
   const [capitalAllocation, setCapitalAllocation] = useState(1000000.0);
   const [timeframe, setTimeframe] = useState("5m");
   const [configSuccessMsg, setConfigSuccessMsg] = useState("");
+
+  // Quant Lab - Strategy Studio isolated state
+  const [quantMarket, setQuantMarket] = useState(market || "INDIA");
+  const [quantSymbol, setQuantSymbol] = useState(symbol || "SBIN.NS");
+  const [quantCustomSymbol, setQuantCustomSymbol] = useState("");
+  const [quantInterval, setQuantInterval] = useState(timeframe || "5m");
+  const [quantLookbackDays, setQuantLookbackDays] = useState(60);
+  const [quantCapitalInput, setQuantCapitalInput] = useState(market === "INDIA" ? "10L" : "100k");
+  const [quantInitialCapital, setQuantInitialCapital] = useState(market === "INDIA" ? 1000000.0 : 100000.0);
+  const [quantStrategy, setQuantStrategy] = useState(strategy || "NSE Intraday ORB Breakout");
+  const [quantLoading, setQuantLoading] = useState(false);
+  const [quantErrorMsg, setQuantErrorMsg] = useState(null);
+  const [quantBacktestResult, setQuantBacktestResult] = useState(backtestResult);
+
+  // Parse capital allocation string dynamically for Strategy Studio
+  useEffect(() => {
+    let parsed = quantMarket === "INDIA" ? 1000000.0 : 100000.0;
+    const raw = (quantCapitalInput || "").trim().toLowerCase();
+    if (raw.endsWith('cr') || raw.endsWith('crore') || raw.endsWith('crores')) {
+      const v = parseFloat(raw.replace(/crores|crore|cr/g, ''));
+      if (!isNaN(v)) parsed = v * 10000000.0;
+    } else if (raw.endsWith('l') || raw.endsWith('lakh') || raw.endsWith('lakhs')) {
+      const v = parseFloat(raw.replace(/lakhs|lakh|l/g, ''));
+      if (!isNaN(v)) parsed = v * 100000.0;
+    } else if (raw.endsWith('k')) {
+      const v = parseFloat(raw.replace(/k/g, ''));
+      if (!isNaN(v)) parsed = v * 1000.0;
+    } else if (raw.endsWith('m') || raw.endsWith('million')) {
+      const v = parseFloat(raw.replace(/million|m/g, ''));
+      if (!isNaN(v)) parsed = v * 1000000.0;
+    } else {
+      const v = parseFloat(raw);
+      if (!isNaN(v) && v > 0) parsed = v;
+    }
+    setQuantInitialCapital(parsed);
+  }, [quantCapitalInput, quantMarket]);
+
+  // Sync initial backtestResult from parent if provided
+  useEffect(() => {
+    if (backtestResult && !quantBacktestResult) {
+      setQuantBacktestResult(backtestResult);
+    }
+  }, [backtestResult]);
+
+  // Handle Strategy Studio market switch
+  const handleQuantMarketChange = (m) => {
+    setQuantMarket(m);
+    setQuantCustomSymbol("");
+    if (m === "INDIA") {
+      setQuantSymbol("SBIN.NS");
+      setQuantCapitalInput("10L");
+      setQuantInterval("5m");
+      setQuantLookbackDays(60);
+      setQuantStrategy("NSE Intraday ORB Breakout");
+    } else if (m === "US") {
+      setQuantSymbol("AAPL");
+      setQuantCapitalInput("100k");
+      setQuantInterval("1d");
+      setQuantLookbackDays(365);
+      setQuantStrategy("SMA Crossover");
+    } else if (m === "FOREX") {
+      setQuantSymbol("EUR/USD");
+      setQuantCapitalInput("100k");
+      setQuantInterval("1h");
+      setQuantLookbackDays(60);
+      setQuantStrategy("London Handoff Momentum");
+    }
+  };
+
+  // Run Strategy Studio Backtest action
+  const handleRunQuantBacktest = async (targetSym) => {
+    setQuantLoading(true);
+    setQuantErrorMsg(null);
+    try {
+      const activeSym = (targetSym || quantCustomSymbol.trim() || quantSymbol).trim();
+      const res = await fetch('/api/backtest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          market: quantMarket,
+          symbol: activeSym,
+          interval: quantInterval,
+          lookback_days: Number(quantLookbackDays),
+          initial_capital: quantInitialCapital,
+          strategy_name: quantStrategy
+        })
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.detail || "Backtest execution failed");
+      }
+
+      const data = await res.json();
+      setQuantBacktestResult(data);
+    } catch (err) {
+      setQuantErrorMsg(err.message || "Failed to execute backtest");
+    } finally {
+      setQuantLoading(false);
+    }
+  };
 
   // Live polling data
   const [botData, setBotData] = useState(null);
@@ -387,6 +489,77 @@ export default function LiveBotDashboard({
     const stamp = t.Action?.includes("BUY") ? val * 0.00003 : 0;
     return acc + (brokerage + stt + exFee + sebi + gst + stamp);
   }, 0);
+
+  // Quant Lab Trade Journal - Reconciled Round Trips & Open Inventory
+  const [journalSource, setJournalSource] = useState("auto"); // "auto", "live", "backtest"
+
+  const adaptedLiveRoundTrips = useMemo(() => {
+    if (!allBotFills || allBotFills.length === 0) return [];
+    const { pairedTrades } = computeRoundTrips(allBotFills);
+    return (pairedTrades || []).map((pt, idx) => ({
+      id: pt.id || `LIVE-${idx + 1}`,
+      symbol: pt.symbol || "UNKNOWN",
+      placed_at: pt.entryTime || pt.entryDate || "N/A",
+      exited_at: pt.exitTime || pt.exitDate || "N/A",
+      side: pt.side || "LONG",
+      entry_price: Number(pt.entryPrice || 0),
+      exit_price: Number(pt.exitPrice || 0),
+      shares: Number(pt.shares || 0),
+      gross_pnl: Number(pt.grossPnl || 0),
+      fees: Number(pt.fees || 0),
+      net_pnl: Number(pt.netPnl || 0),
+      pnl_pct: Number(pt.returnPct || 0),
+      is_win: Number(pt.netPnl || 0) >= 0
+    }));
+  }, [allBotFills]);
+
+  const openPositionsList = useMemo(() => {
+    if (!allBotFills || allBotFills.length === 0) return [];
+    const { openLongs, openShorts } = computeRoundTrips(allBotFills);
+    const open = [];
+
+    Object.entries(openLongs || {}).forEach(([sym, entries]) => {
+      (entries || []).forEach((e, idx) => {
+        if (e.remainingShares > 0.0001) {
+          open.push({
+            id: `OPEN-L-${sym}-${idx}`,
+            symbol: sym,
+            side: "LONG",
+            placed_at: e.Timestamp || e.Time || "N/A",
+            entry_price: Number(e.price || e.Execution_Price || 0),
+            shares: Number(e.remainingShares || 0),
+            original_shares: Number(e.originalShares || e.Shares || 0),
+            status: "OPEN"
+          });
+        }
+      });
+    });
+
+    Object.entries(openShorts || {}).forEach(([sym, entries]) => {
+      (entries || []).forEach((e, idx) => {
+        if (e.remainingShares > 0.0001) {
+          open.push({
+            id: `OPEN-S-${sym}-${idx}`,
+            symbol: sym,
+            side: "SHORT",
+            placed_at: e.Timestamp || e.Time || "N/A",
+            entry_price: Number(e.price || e.Execution_Price || 0),
+            shares: Number(e.remainingShares || 0),
+            original_shares: Number(e.originalShares || e.Shares || 0),
+            status: "OPEN"
+          });
+        }
+      });
+    });
+
+    return open;
+  }, [allBotFills]);
+
+  const unmatchedExitsList = useMemo(() => {
+    if (!allBotFills || allBotFills.length === 0) return [];
+    const { unmatchedExits } = computeRoundTrips(allBotFills);
+    return unmatchedExits || [];
+  }, [allBotFills]);
 
   // Filtered Logs
   const allLogs = botData?.logs || [];
@@ -2047,10 +2220,18 @@ export default function LiveBotDashboard({
             {quantSubTool === "scanner" && (
               <MorningScannerView
                 onSelectForBacktest={(sym, strat) => {
-                  if (sym) setSymbol(sym);
-                  if (strat) setStrategy(strat);
+                  if (sym) {
+                    setSymbol(sym);
+                    setQuantSymbol(sym);
+                    setQuantCustomSymbol("");
+                  }
+                  if (strat) {
+                    setStrategy(strat);
+                    setQuantStrategy(strat);
+                  }
                   setQuantSubTool("studio");
                   if (onNavigateToBacktest) onNavigateToBacktest(sym);
+                  handleRunQuantBacktest(sym);
                 }}
                 onSelectForBot={(sym) => {
                   if (sym) setSymbol(sym);
@@ -2066,25 +2247,25 @@ export default function LiveBotDashboard({
                 <BacktesterView
                   marketDefs={marketDefs}
                   strategiesList={strategiesList}
-                  selectedMarket={market}
-                  setSelectedMarket={() => {}}
-                  symbol={symbol}
-                  setSymbol={setSymbol}
-                  customSymbol=""
-                  setCustomSymbol={() => {}}
-                  interval={timeframe}
-                  setInterval={setTimeframe}
-                  lookbackDays={60}
-                  setLookbackDays={() => {}}
-                  capitalInput="10L"
-                  setCapitalInput={() => {}}
-                  initialCapital={capitalAllocation}
-                  selectedStrategy={strategy}
-                  setSelectedStrategy={setStrategy}
-                  loading={false}
-                  backtestResult={backtestResult}
-                  errorMsg={null}
-                  onRunBacktest={() => onRunBacktest(symbol)}
+                  selectedMarket={quantMarket}
+                  setSelectedMarket={handleQuantMarketChange}
+                  symbol={quantSymbol}
+                  setSymbol={setQuantSymbol}
+                  customSymbol={quantCustomSymbol}
+                  setCustomSymbol={setQuantCustomSymbol}
+                  interval={quantInterval}
+                  setInterval={setQuantInterval}
+                  lookbackDays={quantLookbackDays}
+                  setLookbackDays={setQuantLookbackDays}
+                  capitalInput={quantCapitalInput}
+                  setCapitalInput={setQuantCapitalInput}
+                  initialCapital={quantInitialCapital}
+                  selectedStrategy={quantStrategy}
+                  setSelectedStrategy={setQuantStrategy}
+                  loading={quantLoading}
+                  backtestResult={quantBacktestResult}
+                  errorMsg={quantErrorMsg}
+                  onRunBacktest={() => handleRunQuantBacktest()}
                 />
               </div>
             )}
@@ -2093,9 +2274,19 @@ export default function LiveBotDashboard({
             {quantSubTool === "matrix" && (
               <FactorMatrixView
                 onSelectCombination={(combo) => {
-                  if (combo.asset) setSymbol(combo.asset);
-                  if (combo.strategy) setStrategy(combo.strategy);
-                  if (combo.timeframe) setTimeframe(combo.timeframe);
+                  if (combo.asset) {
+                    setSymbol(combo.asset);
+                    setQuantSymbol(combo.asset);
+                    setQuantCustomSymbol("");
+                  }
+                  if (combo.strategy) {
+                    setStrategy(combo.strategy);
+                    setQuantStrategy(combo.strategy);
+                  }
+                  if (combo.timeframe) {
+                    setTimeframe(combo.timeframe);
+                    setQuantInterval(combo.timeframe);
+                  }
                   setQuantSubTool("studio");
                 }}
                 currency={currency}
@@ -2103,14 +2294,97 @@ export default function LiveBotDashboard({
             )}
 
             {/* Sub-tool 4: Trade Journal */}
-            {quantSubTool === "journal" && (
-              <div style={{ backgroundColor: '#151819', border: '1px solid #252A2C', borderRadius: '16px', padding: '24px' }}>
-                <TradeJournal
-                  trades={backtestResult?.trades || allBotFills}
-                  currency={currency}
-                />
-              </div>
-            )}
+            {quantSubTool === "journal" && (() => {
+              const backtestTrades = quantBacktestResult?.trades || backtestResult?.trades || [];
+              const effectiveJournalSource = journalSource === "auto"
+                ? (backtestTrades.length > 0 ? "backtest" : "live")
+                : journalSource;
+
+              const activeJournalTrades = effectiveJournalSource === "backtest"
+                ? backtestTrades
+                : adaptedLiveRoundTrips;
+
+              const activeOpenPositions = effectiveJournalSource === "live"
+                ? openPositionsList
+                : [];
+
+              const activeUnmatchedExits = effectiveJournalSource === "live"
+                ? unmatchedExitsList
+                : [];
+
+              return (
+                <div style={{ backgroundColor: '#151819', border: '1px solid #252A2C', borderRadius: '16px', padding: '24px' }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: '16px',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}>
+                    <div>
+                      <h3 style={{ fontSize: '1rem', fontWeight: '700', color: '#ffffff', margin: 0 }}>
+                        Institutional Trade Journal
+                      </h3>
+                      <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '4px 0 0 0' }}>
+                        Audited multi-leg execution ledger reconciled with statutory fee schedules
+                      </p>
+                    </div>
+
+                    {/* Source Switcher: Live Execution Ledger vs Strategy Backtest */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      backgroundColor: '#101314',
+                      padding: '4px',
+                      borderRadius: '10px',
+                      border: '1px solid #252A2C',
+                      gap: '4px'
+                    }}>
+                      <button
+                        onClick={() => setJournalSource("live")}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          backgroundColor: effectiveJournalSource === "live" ? '#00D09C' : 'transparent',
+                          color: effectiveJournalSource === "live" ? '#080A0B' : '#92999C',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        Live Bot Ledger ({adaptedLiveRoundTrips.length})
+                      </button>
+                      <button
+                        onClick={() => setJournalSource("backtest")}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          fontSize: '0.75rem',
+                          fontWeight: '700',
+                          backgroundColor: effectiveJournalSource === "backtest" ? '#00D09C' : 'transparent',
+                          color: effectiveJournalSource === "backtest" ? '#080A0B' : '#92999C',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        Strategy Backtest ({backtestTrades.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <TradeJournal
+                    trades={activeJournalTrades}
+                    openPositions={activeOpenPositions}
+                    unmatchedExits={activeUnmatchedExits}
+                    currency={currency}
+                  />
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

@@ -1039,6 +1039,7 @@ def run_matrix_evaluation(req: MatrixRunRequest):
 
 
 @app.get("/api/matrix/task/{task_id}")
+@app.get("/api/matrix/tasks/{task_id}")
 def get_matrix_task_status(task_id: str):
     """Retrieves live status, progress percentage, and progressive results for a matrix evaluation run."""
     task = MATRIX_TASKS.get(task_id)

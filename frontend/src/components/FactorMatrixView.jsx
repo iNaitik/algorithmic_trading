@@ -82,10 +82,25 @@ export default function FactorMatrixView({
   useEffect(() => {
     if (!currentTaskId) return;
 
+    let pollErrorCount = 0;
+    const maxPollErrors = 5;
+
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/matrix/tasks/${currentTaskId}`);
-        if (!res.ok) return;
+        const res = await fetch(`/api/matrix/task/${currentTaskId}`);
+        if (!res.ok) {
+          pollErrorCount++;
+          if (pollErrorCount >= maxPollErrors) {
+            setIsRunningTask(false);
+            setTaskError(`Task polling error (${res.status} ${res.statusText}). Polling aborted.`);
+            setCurrentTaskId(null);
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          }
+          return;
+        }
+
+        // Reset error count on successful poll response
+        pollErrorCount = 0;
 
         const data = await res.json();
         setTaskProgress({
@@ -98,20 +113,29 @@ export default function FactorMatrixView({
         if (data.status === "COMPLETED") {
           setIsRunningTask(false);
           setCurrentTaskId(null);
-          clearInterval(pollIntervalRef.current);
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           fetchSummary();
         } else if (data.status === "FAILED") {
           setIsRunningTask(false);
           setTaskError(data.error || "Matrix task failed");
           setCurrentTaskId(null);
-          clearInterval(pollIntervalRef.current);
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         }
       } catch (err) {
+        pollErrorCount++;
         console.error("Error polling matrix task status:", err);
+        if (pollErrorCount >= maxPollErrors) {
+          setIsRunningTask(false);
+          setTaskError(`Network error while polling task: ${err.message}`);
+          setCurrentTaskId(null);
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+        }
       }
     }, 1200);
 
-    return () => clearInterval(pollIntervalRef.current);
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
   }, [currentTaskId]);
 
   // Execute Combinatorial Matrix Task
