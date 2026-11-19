@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Clock,
   Layers,
+  Lock,
   CreditCard,
   Send,
   Download,
@@ -47,6 +48,7 @@ import BacktesterView from './BacktesterView';
 import MorningScannerView from './MorningScannerView';
 import FactorMatrixView from './FactorMatrixView';
 import TradeJournal from './TradeJournal';
+import ExecutionMonitorView from './ExecutionMonitorView';
 import { computeRoundTrips } from '../utils/tradeUtils';
 
 export default function LiveBotDashboard({
@@ -62,6 +64,7 @@ export default function LiveBotDashboard({
 }) {
   // Navigation sub-tabs: "overview", "explore", "holdings", "positions", "orders", "watchlist", "quant", "automation"
   const [activeSubTab, setActiveSubTab] = useState("overview");
+  const [ordersViewMode, setOrdersViewMode] = useState("monitor"); // "monitor" (Execution Monitor) or "history" (Trades Journal)
   const [quantSubTool, setQuantSubTool] = useState("scanner"); // "scanner", "studio", "matrix", "journal"
 
   // Terminal slide-out drawer state
@@ -77,7 +80,12 @@ export default function LiveBotDashboard({
   const [maxTradesPerSymbol, setMaxTradesPerSymbol] = useState(1);
   const [capitalAllocation, setCapitalAllocation] = useState(1000000.0);
   const [timeframe, setTimeframe] = useState("5m");
+  const [stopLossPct, setStopLossPct] = useState(0.8);
+  const [takeProfitMultiple, setTakeProfitMultiple] = useState(2.0);
+  const [maxDrawdownPct, setMaxDrawdownPct] = useState(2.0);
   const [configSuccessMsg, setConfigSuccessMsg] = useState("");
+  const [configErrorMsg, setConfigErrorMsg] = useState("");
+  const [configSaving, setConfigSaving] = useState(false);
 
   // Quant Lab - Strategy Studio isolated state
   const [quantMarket, setQuantMarket] = useState(market || "INDIA");
@@ -203,6 +211,11 @@ export default function LiveBotDashboard({
   const userSelectedSymbolRef = useRef(false);
   const userSelectedStrategyRef = useRef(false);
   const userSelectedQuotaRef = useRef(false);
+  const userSelectedCapitalRef = useRef(false);
+  const userSelectedTimeframeRef = useRef(false);
+  const userSelectedSlRef = useRef(false);
+  const userSelectedTpRef = useRef(false);
+  const userSelectedDdRef = useRef(false);
   const terminalBodyRef = useRef(null);
 
   // Live Market Indices Ticker Tape (Matches Groww Desktop Header & Screenshot 1, 5)
@@ -324,6 +337,21 @@ export default function LiveBotDashboard({
           if (!userSelectedQuotaRef.current && sData.bot_state.max_trades_per_symbol !== undefined) {
             setMaxTradesPerSymbol(sData.bot_state.max_trades_per_symbol);
           }
+          if (!userSelectedCapitalRef.current && sData.bot_state.capital !== undefined) {
+            setCapitalAllocation(sData.bot_state.capital);
+          }
+          if (!userSelectedTimeframeRef.current && sData.bot_state.timeframe) {
+            setTimeframe(sData.bot_state.timeframe);
+          }
+          if (!userSelectedSlRef.current && sData.bot_state.stop_loss_pct !== undefined) {
+            setStopLossPct(sData.bot_state.stop_loss_pct);
+          }
+          if (!userSelectedTpRef.current && sData.bot_state.take_profit_multiple !== undefined) {
+            setTakeProfitMultiple(sData.bot_state.take_profit_multiple);
+          }
+          if (!userSelectedDdRef.current && sData.bot_state.max_drawdown_pct !== undefined) {
+            setMaxDrawdownPct(sData.bot_state.max_drawdown_pct);
+          }
         }
       } else {
         setIsConnected(false);
@@ -375,6 +403,7 @@ export default function LiveBotDashboard({
   const handleControl = async (action, targetSymbol = symbol, targetStrategy = strategy, targetQuota = maxTradesPerSymbol) => {
     if (actionLoading) return;
     setActionLoading(true);
+    setConfigErrorMsg("");
     try {
       const res = await fetch('/api/bot/control', {
         method: 'POST',
@@ -383,9 +412,12 @@ export default function LiveBotDashboard({
           action,
           symbol: targetSymbol,
           strategy_name: targetStrategy,
-          capital: capitalAllocation,
+          capital: Number(capitalAllocation),
           timeframe,
-          max_trades_per_symbol: targetQuota
+          max_trades_per_symbol: Number(targetQuota),
+          stop_loss_pct: Number(stopLossPct),
+          take_profit_multiple: Number(takeProfitMultiple),
+          max_drawdown_pct: Number(maxDrawdownPct)
         })
       });
       if (res.ok) {
@@ -407,12 +439,78 @@ export default function LiveBotDashboard({
         } else if (action === "PAUSE") {
           setConfigSuccessMsg("Bot Paused Execution");
           setTimeout(() => setConfigSuccessMsg(""), 3500);
+        } else if (action === "RESET") {
+          setConfigSuccessMsg("Trade quota and daily state reset.");
+          setTimeout(() => setConfigSuccessMsg(""), 3500);
+        } else if (action === "SQUARE_OFF") {
+          setConfigSuccessMsg("Emergency position liquidation completed.");
+          setTimeout(() => setConfigSuccessMsg(""), 3500);
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setConfigErrorMsg(errJson.detail || "Operation failed");
+        setTimeout(() => setConfigErrorMsg(""), 5000);
       }
     } catch (e) {
       console.error("Control error:", e);
+      setConfigErrorMsg(e.message || "Failed to contact execution server");
+      setTimeout(() => setConfigErrorMsg(""), 5000);
     } finally {
       setActionLoading(false);
+      fetchData();
+    }
+  };
+
+  // Dedicated configuration save handler
+  const handleSaveConfig = async () => {
+    if (configSaving) return;
+    setConfigSaving(true);
+    setConfigErrorMsg("");
+    setConfigSuccessMsg("");
+    try {
+      const res = await fetch('/api/bot/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: "CONFIG",
+          symbol,
+          strategy_name: strategy,
+          capital: Number(capitalAllocation),
+          timeframe,
+          max_trades_per_symbol: Number(maxTradesPerSymbol),
+          stop_loss_pct: Number(stopLossPct),
+          take_profit_multiple: Number(takeProfitMultiple),
+          max_drawdown_pct: Number(maxDrawdownPct)
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.bot_state) {
+          setBotData(prev => ({
+            ...prev,
+            bot_state: json.bot_state
+          }));
+        }
+        userSelectedSymbolRef.current = false;
+        userSelectedStrategyRef.current = false;
+        userSelectedQuotaRef.current = false;
+        userSelectedCapitalRef.current = false;
+        userSelectedTimeframeRef.current = false;
+        userSelectedSlRef.current = false;
+        userSelectedTpRef.current = false;
+        userSelectedDdRef.current = false;
+        setConfigSuccessMsg("Configuration saved and applied to paper execution engine.");
+        setTimeout(() => setConfigSuccessMsg(""), 4000);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setConfigErrorMsg(errJson.detail || "Failed to save configuration");
+        setTimeout(() => setConfigErrorMsg(""), 6000);
+      }
+    } catch (e) {
+      setConfigErrorMsg(e.message || "Network error saving configuration");
+      setTimeout(() => setConfigErrorMsg(""), 6000);
+    } finally {
+      setConfigSaving(false);
       fetchData();
     }
   };
@@ -567,6 +665,10 @@ export default function LiveBotDashboard({
 
   // Handle single Play / Pause toggle
   const handleTogglePlayPause = () => {
+    if (bot.daily_drawdown_locked && !isRunning) {
+      setConfigErrorMsg("Cannot start bot: Daily drawdown circuit breaker is active. Execution locked until next trading day.");
+      return;
+    }
     if (isRunning) {
       handleControl("PAUSE");
     } else {
@@ -1569,10 +1671,76 @@ export default function LiveBotDashboard({
         )}
 
         {/* ═══════════════════════════════════════════════════════════════════
-            VIEW 4: ORDERS (TRADE HISTORY & NET P&L WITH CHARGES BREAKDOWN)
+            VIEW 4: ORDERS (EXECUTION MONITOR & COMPLETED TRADES)
             ═══════════════════════════════════════════════════════════════════ */}
         {activeSubTab === "orders" && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* View Mode Switcher Pill */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#101314',
+              padding: '6px 12px',
+              borderRadius: '12px',
+              border: '1px solid #202426'
+            }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setOrdersViewMode("monitor")}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    backgroundColor: ordersViewMode === "monitor" ? '#00D09C' : 'transparent',
+                    color: ordersViewMode === "monitor" ? '#080A0B' : '#92999C',
+                    border: 'none',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Activity size={14} />
+                  Execution Monitor (OMS)
+                </button>
+                <button
+                  onClick={() => setOrdersViewMode("history")}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    backgroundColor: ordersViewMode === "history" ? '#00D09C' : 'transparent',
+                    color: ordersViewMode === "history" ? '#080A0B' : '#92999C',
+                    border: 'none',
+                    fontSize: '0.82rem',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <FileText size={14} />
+                  Completed Trades & FIFO Ledger
+                </button>
+              </div>
+
+              <div style={{ fontSize: '0.72rem', color: '#626A6E' }}>
+                {ordersViewMode === "monitor" ? "Real-time Order Lifecycle & Fills" : "Audited FIFO Round-Trip Accounting"}
+              </div>
+            </div>
+
+            {/* Sub-view 1: Execution Monitor */}
+            {ordersViewMode === "monitor" && (
+              <ExecutionMonitorView currency={currency} />
+            )}
+
+            {/* Sub-view 2: Completed Trades & FIFO Ledger */}
+            {ordersViewMode === "history" && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             {/* Top Net P&L Summary Hero Card */}
             <div style={{
               backgroundColor: '#151819',
@@ -1790,6 +1958,8 @@ export default function LiveBotDashboard({
                 </div>
               </div>
             )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1884,6 +2054,77 @@ export default function LiveBotDashboard({
         {(activeSubTab === "automation" || activeSubTab === "config") && (
           <div style={{ maxWidth: '880px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
+            {/* Daily Drawdown Hard Lock Banner */}
+            {bot.daily_drawdown_locked && (
+              <div style={{
+                backgroundColor: 'rgba(235, 91, 60, 0.12)',
+                border: '1px solid #EB5B3C',
+                borderRadius: '16px',
+                padding: '20px 24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '16px',
+                boxShadow: '0 8px 32px rgba(235, 91, 60, 0.15)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(235, 91, 60, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#EB5B3C'
+                  }}>
+                    <Lock size={22} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '1rem', fontWeight: '800', color: '#EB5B3C' }}>
+                      HARD CIRCUIT BREAKER ACTIVE — EXECUTION LOCKED
+                    </div>
+                    <div style={{ fontSize: '0.825rem', color: '#F1F3F4', marginTop: '3px' }}>
+                      {bot.daily_drawdown_lock_reason || "Daily net loss limit hit. Position liquidated; engine locked until next NSE trading session."}
+                    </div>
+                    {bot.daily_drawdown_locked_at && (
+                      <div style={{ fontSize: '0.75rem', color: '#B2B9BC', marginTop: '2px' }}>
+                        Triggered at: {bot.daily_drawdown_locked_at} (Survives server restarts)
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error Message Alert */}
+            {configErrorMsg && (
+              <div style={{
+                backgroundColor: 'rgba(235, 91, 60, 0.12)',
+                border: '1px solid #EB5B3C',
+                borderRadius: '12px',
+                padding: '14px 20px',
+                color: '#EB5B3C',
+                fontWeight: '700',
+                fontSize: '0.875rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px'
+              }}>
+                <AlertTriangle size={18} />
+                <span style={{ flex: 1 }}>{configErrorMsg}</span>
+                <button
+                  type="button"
+                  onClick={() => setConfigErrorMsg("")}
+                  style={{ background: 'none', border: 'none', color: '#EB5B3C', cursor: 'pointer', padding: 0 }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            {/* Success Message Alert */}
             {configSuccessMsg && (
               <div style={{
                 backgroundColor: 'rgba(0, 208, 156, 0.12)',
@@ -1902,6 +2143,7 @@ export default function LiveBotDashboard({
               </div>
             )}
 
+            {/* Main Configuration Card */}
             <div style={{
               backgroundColor: '#151819',
               border: '1px solid #252A2C',
@@ -1915,20 +2157,28 @@ export default function LiveBotDashboard({
                     Algo Bot Engine Configuration
                   </h2>
                   <p style={{ fontSize: '0.825rem', color: '#92999C', marginTop: '4px', margin: 0 }}>
-                    Configure the trading instrument, strategy rules, and execution controls
+                    Configure the trading instrument, strategy rules, risk parameters, and execution controls
                   </p>
                 </div>
 
                 <div style={{
                   padding: '6px 14px',
                   borderRadius: '12px',
-                  backgroundColor: isRunning ? 'rgba(0, 208, 156, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                  border: `1px solid ${isRunning ? '#00D09C' : '#F59E0B'}`,
-                  color: isRunning ? '#00D09C' : '#F59E0B',
+                  backgroundColor: bot.daily_drawdown_locked
+                    ? 'rgba(235, 91, 60, 0.15)'
+                    : isRunning
+                    ? 'rgba(0, 208, 156, 0.12)'
+                    : 'rgba(245, 158, 11, 0.12)',
+                  border: `1px solid ${bot.daily_drawdown_locked ? '#EB5B3C' : isRunning ? '#00D09C' : '#F59E0B'}`,
+                  color: bot.daily_drawdown_locked ? '#EB5B3C' : isRunning ? '#00D09C' : '#F59E0B',
                   fontSize: '0.8rem',
-                  fontWeight: '700'
+                  fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
                 }}>
-                  {bot.status || "STANDBY"}
+                  {bot.daily_drawdown_locked && <Lock size={12} />}
+                  <span>{bot.daily_drawdown_locked ? "CIRCUIT BREAKER LOCKED" : (bot.status || "STANDBY")}</span>
                 </div>
               </div>
 
@@ -1937,7 +2187,7 @@ export default function LiveBotDashboard({
                 {/* 1. Instrument Picker */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
-                    Trading Instrument (Stock)
+                    Trading Instrument (NSE Blue-Chip)
                   </label>
                   <select
                     value={symbol}
@@ -1957,16 +2207,20 @@ export default function LiveBotDashboard({
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="SBIN.NS">SBIN.NS (State Bank of India)</option>
-                    <option value="RELIANCE.NS">RELIANCE.NS (Reliance Industries)</option>
-                    <option value="HDFCBANK.NS">HDFCBANK.NS (HDFC Bank Ltd)</option>
-                    <option value="ICICIBANK.NS">ICICIBANK.NS (ICICI Bank Ltd)</option>
-                    <option value="TATAMOTORS.NS">TATAMOTORS.NS (Tata Motors)</option>
-                    <option value="TCS.NS">TCS.NS (Tata Consultancy Services)</option>
-                    <option value="INFY.NS">INFY.NS (Infosys Ltd)</option>
-                    <option value="BHARTIARTL.NS">BHARTIARTL.NS (Bharti Airtel)</option>
-                    <option value="LT.NS">LT.NS (Larsen & Toubro)</option>
-                    <option value="AXISBANK.NS">AXISBANK.NS (Axis Bank)</option>
+                    <option value="SBIN.NS">SBIN.NS — State Bank of India</option>
+                    <option value="RELIANCE.NS">RELIANCE.NS — Reliance Industries</option>
+                    <option value="HDFCBANK.NS">HDFCBANK.NS — HDFC Bank Ltd</option>
+                    <option value="ICICIBANK.NS">ICICIBANK.NS — ICICI Bank Ltd</option>
+                    <option value="TATAMOTORS.NS">TATAMOTORS.NS — Tata Motors Ltd</option>
+                    <option value="TCS.NS">TCS.NS — Tata Consultancy Services</option>
+                    <option value="INFY.NS">INFY.NS — Infosys Ltd</option>
+                    <option value="BHARTIARTL.NS">BHARTIARTL.NS — Bharti Airtel Ltd</option>
+                    <option value="LT.NS">LT.NS — Larsen & Toubro</option>
+                    <option value="AXISBANK.NS">AXISBANK.NS — Axis Bank Ltd</option>
+                    <option value="KOTAKBANK.NS">KOTAKBANK.NS — Kotak Mahindra Bank</option>
+                    <option value="ITC.NS">ITC.NS — ITC Ltd</option>
+                    <option value="HINDUNILVR.NS">HINDUNILVR.NS — Hindustan Unilever</option>
+                    <option value="BAJFINANCE.NS">BAJFINANCE.NS — Bajaj Finance Ltd</option>
                   </select>
                 </div>
 
@@ -2001,55 +2255,60 @@ export default function LiveBotDashboard({
                   </select>
                 </div>
 
-                {/* 3. Max Trades Per Stock Per Day */}
+                {/* 3. Execution Timeframe */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
-                      Max Trades Per Stock Per Day
-                    </label>
-                    <span style={{ fontSize: '0.75rem', color: '#00D09C' }}>Protects Daily Profits</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    {[
-                      { val: 1, label: "1 Trade (Disciplined)" },
-                      { val: 2, label: "2 Trades" },
-                      { val: 0, label: "Unlimited" }
-                    ].map(opt => (
+                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
+                    Bar Timeframe
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {["1m", "2m", "5m", "15m", "30m"].map(tf => (
                       <button
-                        key={opt.val}
+                        key={tf}
                         type="button"
                         onClick={() => {
-                          userSelectedQuotaRef.current = true;
-                          setMaxTradesPerSymbol(opt.val);
+                          userSelectedTimeframeRef.current = true;
+                          setTimeframe(tf);
                         }}
                         style={{
                           flex: 1,
-                          padding: '10px',
+                          minWidth: '50px',
+                          padding: '10px 8px',
                           borderRadius: '8px',
                           border: '1px solid',
-                          borderColor: maxTradesPerSymbol === opt.val ? '#00D09C' : '#252A2C',
-                          backgroundColor: maxTradesPerSymbol === opt.val ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
-                          color: maxTradesPerSymbol === opt.val ? '#00D09C' : '#F1F3F4',
+                          borderColor: timeframe === tf ? '#00D09C' : '#252A2C',
+                          backgroundColor: timeframe === tf ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                          color: timeframe === tf ? '#00D09C' : '#F1F3F4',
                           fontWeight: '700',
-                          fontSize: '0.8rem',
+                          fontSize: '0.82rem',
                           cursor: 'pointer'
                         }}
                       >
-                        {opt.label}
+                        {tf}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* 4. Capital Allocation */}
+                {/* 4. Virtual Capital Allocation */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
-                    Virtual Capital Allocation
-                  </label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
+                      Virtual Capital Allocation (₹10k – ₹10Cr)
+                    </label>
+                    <span style={{ fontSize: '0.78rem', color: '#00D09C', fontWeight: '700' }} className="font-tabular">
+                      ₹{Number(capitalAllocation || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
                   <input
-                    type="text"
-                    value={`₹${(capitalAllocation).toLocaleString('en-IN')}`}
-                    readOnly
+                    type="number"
+                    min="10000"
+                    max="100000000"
+                    step="50000"
+                    value={capitalAllocation}
+                    onChange={(e) => {
+                      userSelectedCapitalRef.current = true;
+                      setCapitalAllocation(parseFloat(e.target.value) || 0);
+                    }}
                     style={{
                       padding: '12px 16px',
                       borderRadius: '10px',
@@ -2061,14 +2320,304 @@ export default function LiveBotDashboard({
                       outline: 'none'
                     }}
                   />
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                    {[
+                      { label: "1L", val: 100000 },
+                      { label: "5L", val: 500000 },
+                      { label: "10L", val: 1000000 },
+                      { label: "25L", val: 2500000 },
+                      { label: "50L", val: 5000000 },
+                      { label: "1Cr", val: 10000000 }
+                    ].map(chip => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => {
+                          userSelectedCapitalRef.current = true;
+                          setCapitalAllocation(chip.val);
+                        }}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid',
+                          borderColor: capitalAllocation === chip.val ? '#00D09C' : '#252A2C',
+                          backgroundColor: capitalAllocation === chip.val ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                          color: capitalAllocation === chip.val ? '#00D09C' : '#92999C',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* 5. Stop-Loss Percentage */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
+                      Stop-Loss % (0.1% – 10.0%)
+                    </label>
+                    <span style={{ fontSize: '0.78rem', color: '#EB5B3C', fontWeight: '700' }}>
+                      {stopLossPct}%
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0.1"
+                    max="10.0"
+                    step="0.1"
+                    value={stopLossPct}
+                    onChange={(e) => {
+                      userSelectedSlRef.current = true;
+                      setStopLossPct(parseFloat(e.target.value) || 0);
+                    }}
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '10px',
+                      backgroundColor: '#080A0B',
+                      border: '1px solid #252A2C',
+                      color: '#F1F3F4',
+                      fontSize: '0.9rem',
+                      fontWeight: '600',
+                      outline: 'none'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {[0.5, 0.8, 1.0, 1.5, 2.0].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => {
+                          userSelectedSlRef.current = true;
+                          setStopLossPct(val);
+                        }}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid',
+                          borderColor: stopLossPct === val ? '#00D09C' : '#252A2C',
+                          backgroundColor: stopLossPct === val ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                          color: stopLossPct === val ? '#00D09C' : '#92999C',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {val}%{val === 0.8 ? " (Default)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 6. Take-Profit Multiple (R:R) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
+                      Take-Profit Multiple (0.5R – 10.0R)
+                    </label>
+                    <span style={{ fontSize: '0.78rem', color: '#00D09C', fontWeight: '700' }}>
+                      {takeProfitMultiple}R
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="10.0"
+                    step="0.5"
+                    value={takeProfitMultiple}
+                    onChange={(e) => {
+                      userSelectedTpRef.current = true;
+                      setTakeProfitMultiple(parseFloat(e.target.value) || 0);
+                    }}
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '10px',
+                      backgroundColor: '#080A0B',
+                      border: '1px solid #252A2C',
+                      color: '#F1F3F4',
+                      fontSize: '0.9rem',
+                      fontWeight: '600',
+                      outline: 'none'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {[1.5, 2.0, 2.5, 3.0].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => {
+                          userSelectedTpRef.current = true;
+                          setTakeProfitMultiple(val);
+                        }}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid',
+                          borderColor: takeProfitMultiple === val ? '#00D09C' : '#252A2C',
+                          backgroundColor: takeProfitMultiple === val ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                          color: takeProfitMultiple === val ? '#00D09C' : '#92999C',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {val}R{val === 2.0 ? " (Default)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 7. Max Daily Drawdown % (Hard Circuit Breaker) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#EB5B3C' }}>
+                      Max Daily Drawdown % (Circuit Breaker)
+                    </label>
+                    <span style={{ fontSize: '0.78rem', color: '#EB5B3C', fontWeight: '700' }}>
+                      {maxDrawdownPct}% (₹{((capitalAllocation || 1000000) * (maxDrawdownPct / 100)).toLocaleString('en-IN')})
+                    </span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0.5"
+                    max="20.0"
+                    step="0.5"
+                    value={maxDrawdownPct}
+                    onChange={(e) => {
+                      userSelectedDdRef.current = true;
+                      setMaxDrawdownPct(parseFloat(e.target.value) || 0);
+                    }}
+                    style={{
+                      padding: '12px 16px',
+                      borderRadius: '10px',
+                      backgroundColor: '#080A0B',
+                      border: '1px solid #252A2C',
+                      color: '#F1F3F4',
+                      fontSize: '0.9rem',
+                      fontWeight: '600',
+                      outline: 'none'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {[1.0, 1.5, 2.0, 3.0, 5.0].map(val => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => {
+                          userSelectedDdRef.current = true;
+                          setMaxDrawdownPct(val);
+                        }}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid',
+                          borderColor: maxDrawdownPct === val ? '#EB5B3C' : '#252A2C',
+                          backgroundColor: maxDrawdownPct === val ? 'rgba(235, 91, 60, 0.12)' : '#080A0B',
+                          color: maxDrawdownPct === val ? '#EB5B3C' : '#92999C',
+                          fontSize: '0.75rem',
+                          fontWeight: '600',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {val}%{val === 2.0 ? " (Hard Stop)" : ""}
+                      </button>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: '#626A6E' }}>
+                    Enforced at runtime. Liquidates active positions & locks session for today once breached.
+                  </span>
+                </div>
+
+                {/* 8. Max Trades Per Stock Per Day */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.825rem', fontWeight: '700', color: '#92999C' }}>
+                      Max Trades Per Stock Per Day
+                    </label>
+                    <span style={{ fontSize: '0.75rem', color: '#00D09C' }}>Protects Daily Profits</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {[
+                      { val: 1, label: "1 Trade (Disciplined)" },
+                      { val: 2, label: "2 Trades" },
+                      { val: 3, label: "3 Trades" },
+                      { val: 0, label: "Unlimited" }
+                    ].map(opt => (
+                      <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => {
+                          userSelectedQuotaRef.current = true;
+                          setMaxTradesPerSymbol(opt.val);
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: '80px',
+                          padding: '10px 8px',
+                          borderRadius: '8px',
+                          border: '1px solid',
+                          borderColor: maxTradesPerSymbol === opt.val ? '#00D09C' : '#252A2C',
+                          backgroundColor: maxTradesPerSymbol === opt.val ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                          color: maxTradesPerSymbol === opt.val ? '#00D09C' : '#F1F3F4',
+                          fontWeight: '700',
+                          fontSize: '0.78rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Save & Apply Configuration Bar */}
+              <div style={{
+                marginTop: '28px',
+                paddingTop: '20px',
+                borderTop: '1px solid #252A2C',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px'
+              }}>
+                <div style={{ fontSize: '0.8rem', color: '#92999C' }}>
+                  Changes are validated strictly by the FastAPI backend before applying.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveConfig}
+                  disabled={configSaving}
+                  style={{
+                    padding: '11px 24px',
+                    borderRadius: '10px',
+                    backgroundColor: '#00D09C',
+                    color: '#080A0B',
+                    border: 'none',
+                    fontSize: '0.88rem',
+                    fontWeight: '800',
+                    cursor: configSaving ? 'not-allowed' : 'pointer',
+                    opacity: configSaving ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 16px rgba(0, 208, 156, 0.25)'
+                  }}
+                >
+                  {configSaving ? <RefreshCw size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                  <span>{configSaving ? "Applying Configuration..." : "Save & Apply Configuration"}</span>
+                </button>
               </div>
 
               {/* Bot Action Buttons — Note: Single Play/Pause Button as Requested */}
               <div style={{
-                marginTop: '32px',
-                paddingTop: '24px',
-                borderTop: '1px solid #252A2C',
+                marginTop: '20px',
+                paddingTop: '20px',
+                borderTop: '1px solid #202426',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -2079,12 +2628,15 @@ export default function LiveBotDashboard({
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button
                     onClick={handleTogglePlayPause}
-                    disabled={actionLoading}
+                    disabled={actionLoading || (!isRunning && bot.daily_drawdown_locked)}
+                    title={bot.daily_drawdown_locked ? "Locked: Daily Drawdown Limit Reached" : (isRunning ? "Pause Bot" : "Start Bot")}
                     className={isRunning ? "btn-groww-pause" : "btn-groww-primary"}
                     style={{
                       padding: '12px 28px',
                       fontSize: '0.9rem',
-                      fontWeight: '800'
+                      fontWeight: '800',
+                      opacity: (!isRunning && bot.daily_drawdown_locked) ? 0.6 : 1,
+                      cursor: (!isRunning && bot.daily_drawdown_locked) ? 'not-allowed' : 'pointer'
                     }}
                   >
                     {isRunning ? (
@@ -2094,8 +2646,8 @@ export default function LiveBotDashboard({
                       </>
                     ) : (
                       <>
-                        <Play size={17} fill="#080A0B" />
-                        <span>Start Bot ({symbol})</span>
+                        {bot.daily_drawdown_locked ? <Lock size={17} color="#EB5B3C" /> : <Play size={17} fill="#080A0B" />}
+                        <span>{bot.daily_drawdown_locked ? "Circuit Locked" : `Start Bot (${symbol})`}</span>
                       </>
                     )}
                   </button>
@@ -2105,9 +2657,19 @@ export default function LiveBotDashboard({
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button
                     onClick={() => handleControl("RESET")}
-                    disabled={actionLoading}
-                    title="Reset Today's Trade Counter & State"
+                    disabled={actionLoading || bot.in_position || bot.daily_drawdown_locked}
+                    title={
+                      bot.daily_drawdown_locked
+                        ? "Cannot reset quota during active circuit breaker lock"
+                        : bot.in_position
+                        ? "Square off active position first before resetting"
+                        : "Reset Today's Trade Counter & State"
+                    }
                     className="btn-groww-secondary"
+                    style={{
+                      opacity: (bot.in_position || bot.daily_drawdown_locked) ? 0.5 : 1,
+                      cursor: (bot.in_position || bot.daily_drawdown_locked) ? 'not-allowed' : 'pointer'
+                    }}
                   >
                     <RotateCcw size={14} />
                     <span>Reset Quota</span>
@@ -2125,7 +2687,7 @@ export default function LiveBotDashboard({
               </div>
             </div>
 
-            {/* Institutional Risk Parameters Box */}
+            {/* Dynamic Institutional Risk Parameters Box */}
             <div style={{
               backgroundColor: '#151819',
               border: '1px solid #252A2C',
@@ -2136,24 +2698,94 @@ export default function LiveBotDashboard({
               gap: '12px',
               fontSize: '0.85rem'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#00D09C', fontWeight: '700' }}>
-                <ShieldCheck size={18} />
-                <span>SEBI & Institutional Risk Guardrails</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginTop: '8px' }}>
-                <div style={{ padding: '12px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
-                  <div style={{ color: '#626A6E', fontSize: '0.75rem' }}>Auto Square-Off</div>
-                  <div style={{ color: '#F1F3F4', fontWeight: '700', marginTop: '4px' }}>15:15 IST (3:15 PM)</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#00D09C', fontWeight: '700' }}>
+                  <ShieldCheck size={18} />
+                  <span>SEBI & Institutional Risk Guardrails (Live Engine Telemetry)</span>
                 </div>
-                <div style={{ padding: '12px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
-                  <div style={{ color: '#626A6E', fontSize: '0.75rem' }}>Max Drawdown Circuit</div>
-                  <div style={{ color: '#EB5B3C', fontWeight: '700', marginTop: '4px' }}>₹20,000 (2.0%)</div>
-                </div>
-                <div style={{ padding: '12px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
-                  <div style={{ color: '#626A6E', fontSize: '0.75rem' }}>Margin Multiplier</div>
-                  <div style={{ color: '#00D09C', fontWeight: '700', marginTop: '4px' }}>5x MIS (SEBI Limit)</div>
+                <div style={{ fontSize: '0.78rem', color: '#626A6E' }}>
+                  Calculated dynamically from multi-leg FIFO trade ledger
                 </div>
               </div>
+
+              {(() => {
+                const risk = botData?.risk_metrics || {
+                  starting_daily_equity: capitalAllocation || 1000000.0,
+                  current_equity: capitalAllocation || 1000000.0,
+                  daily_realized_pnl: 0.0,
+                  unrealized_pnl: 0.0,
+                  daily_net_pnl: 0.0,
+                  daily_charges: 0.0,
+                  max_daily_loss: (capitalAllocation || 1000000.0) * (maxDrawdownPct / 100),
+                  remaining_daily_risk: (capitalAllocation || 1000000.0) * (maxDrawdownPct / 100),
+                  risk_consumed_pct: 0.0,
+                  circuit_breaker_triggered: false,
+                  max_drawdown_pct: maxDrawdownPct
+                };
+                const isTriggered = risk.circuit_breaker_triggered || bot.daily_drawdown_locked;
+                const pnlPositive = (risk.daily_net_pnl || 0) >= 0;
+
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginTop: '8px' }}>
+                    <div style={{ padding: '12px 14px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                      <div style={{ color: '#626A6E', fontSize: '0.72rem', fontWeight: '600' }}>Day Starting Baseline</div>
+                      <div style={{ color: '#F1F3F4', fontWeight: '700', marginTop: '4px', fontSize: '0.92rem' }} className="font-tabular">
+                        ₹{Number(risk.starting_daily_equity || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                      <div style={{ color: '#626A6E', fontSize: '0.72rem', fontWeight: '600' }}>Daily Net P&L (Post-Fees)</div>
+                      <div style={{
+                        color: pnlPositive ? '#00D09C' : '#EB5B3C',
+                        fontWeight: '700',
+                        marginTop: '4px',
+                        fontSize: '0.92rem'
+                      }} className="font-tabular">
+                        {pnlPositive ? '+' : ''}₹{Number(risk.daily_net_pnl || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                      <div style={{ color: '#626A6E', fontSize: '0.72rem', fontWeight: '600' }}>Max Daily Loss Limit</div>
+                      <div style={{ color: '#EB5B3C', fontWeight: '700', marginTop: '4px', fontSize: '0.92rem' }} className="font-tabular">
+                        -₹{Number(risk.max_daily_loss || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} ({risk.max_drawdown_pct}%)
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                      <div style={{ color: '#626A6E', fontSize: '0.72rem', fontWeight: '600' }}>Remaining Risk Buffer</div>
+                      <div style={{
+                        color: (risk.remaining_daily_risk || 0) <= 0 ? '#EB5B3C' : '#00D09C',
+                        fontWeight: '700',
+                        marginTop: '4px',
+                        fontSize: '0.92rem'
+                      }} className="font-tabular">
+                        ₹{Number(Math.max(0, risk.remaining_daily_risk || 0)).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                      <div style={{ color: '#626A6E', fontSize: '0.72rem', fontWeight: '600' }}>Intraday Margin Multiplier</div>
+                      <div style={{ color: '#00D09C', fontWeight: '700', marginTop: '4px', fontSize: '0.92rem' }}>
+                        5x MIS (SEBI Peak Margin)
+                      </div>
+                    </div>
+
+                    <div style={{ padding: '12px 14px', backgroundColor: '#080A0B', borderRadius: '10px', border: '1px solid #252A2C' }}>
+                      <div style={{ color: '#626A6E', fontSize: '0.72rem', fontWeight: '600' }}>Circuit Breaker Guard</div>
+                      <div style={{
+                        color: isTriggered ? '#EB5B3C' : '#00D09C',
+                        fontWeight: '800',
+                        marginTop: '4px',
+                        fontSize: '0.92rem'
+                      }}>
+                        {isTriggered ? "TRIGGERED & LOCKED" : "NORMAL (ACTIVE)"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

@@ -20,6 +20,7 @@ import MorningScannerView from './components/MorningScannerView';
 import TelegramModal from './components/TelegramModal';
 import TradeJournal from './components/TradeJournal';
 import GrowwUserProfileDropdown from './components/GrowwUserProfileDropdown';
+import RiskGuardrailsView from './components/RiskGuardrailsView';
 
 export default function App() {
   // Clear any legacy terminal edition from localStorage
@@ -479,44 +480,7 @@ export default function App() {
 
         {/* VIEW: RISK GUARDRAILS */}
         {activeCategory === "risk" && (
-          <div style={{ padding: '36px', maxWidth: '840px', margin: '0 auto', width: '100%' }}>
-            <div style={{
-              backgroundColor: '#151819',
-              border: '1px solid #252A2C',
-              borderRadius: '20px',
-              padding: '32px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-                <ShieldCheck size={24} color="#00D09C" />
-                <h2 style={{ fontSize: '1.3rem', fontWeight: '800', color: '#F1F3F4', margin: 0 }}>
-                  Institutional Risk Controls & SEBI Compliance
-                </h2>
-              </div>
-              <p style={{ fontSize: '0.85rem', color: '#92999C', marginBottom: '24px' }}>
-                Automated circuit breakers, intraday MIS margin limits, and mandatory square-off rules enforcing strict capital preservation.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '0.875rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#080A0B', borderRadius: '12px', border: '1px solid #252A2C' }}>
-                  <span style={{ color: '#92999C', fontWeight: '600' }}>3:15 PM Auto Square-Off</span>
-                  <span style={{ color: '#00D09C', fontWeight: '800' }}>ENABLED (NSE Intraday MIS)</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#080A0B', borderRadius: '12px', border: '1px solid #252A2C' }}>
-                  <span style={{ color: '#92999C', fontWeight: '600' }}>Max Daily Drawdown Stop</span>
-                  <span style={{ color: '#EB5B3C', fontWeight: '800' }}>₹20,000 (2.0% Hard Circuit)</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#080A0B', borderRadius: '12px', border: '1px solid #252A2C' }}>
-                  <span style={{ color: '#92999C', fontWeight: '600' }}>Peak Margin Leverage</span>
-                  <span style={{ color: '#00D09C', fontWeight: '800' }}>5x MIS (SEBI Compliant)</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px', backgroundColor: '#080A0B', borderRadius: '12px', border: '1px solid #252A2C' }}>
-                  <span style={{ color: '#92999C', fontWeight: '600' }}>Survivorship & Calendar Filters</span>
-                  <span style={{ color: '#00D09C', fontWeight: '800' }}>Active (F&O Ban / Earnings Filter)</span>
-                </div>
-              </div>
-            </div>
-          </div>
+          <RiskGuardrailsView currency={currency} />
         )}
       </main>
 

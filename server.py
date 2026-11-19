@@ -475,15 +475,18 @@ def _init_default_logs():
 _init_default_logs()
 
 
-from engine.live_trader import get_live_state, command_bot_control, start_live_execution_engine
+from engine.live_trader import get_live_state, command_bot_control, start_live_execution_engine, get_risk_metrics
 
 class BotControlRequest(BaseModel):
-    action: str = Field(..., description="START, STOP, PAUSE, SQUARE_OFF, RESET")
-    symbol: Optional[str] = Field(default=None)
-    strategy_name: Optional[str] = "NSE Intraday ORB Breakout"
-    capital: Optional[float] = 1_000_000.0
+    action: str = Field(..., description="START, STOP, PAUSE, SQUARE_OFF, RESET, CONFIG")
+    symbol: Optional[str] = None
+    strategy_name: Optional[str] = None
+    capital: Optional[float] = None
     timeframe: Optional[str] = None
     max_trades_per_symbol: Optional[int] = None
+    stop_loss_pct: Optional[float] = None
+    take_profit_multiple: Optional[float] = None
+    max_drawdown_pct: Optional[float] = None
 
 
 @app.on_event("startup")
@@ -610,6 +613,8 @@ def get_bot_state(symbol: Optional[str] = None):
         (now_ist.hour == 15 and now_ist.minute <= 30)
     ))
 
+    risk_metrics = get_risk_metrics(state_data)
+
     return {
         "bot_state": state_data,
         "active_symbol": active_sym,
@@ -620,7 +625,8 @@ def get_bot_state(symbol: Optional[str] = None):
         "ist_date": now_ist.strftime("%Y-%m-%d"),
         "recent_trades": recent_trades,
         "all_trades": all_trades,
-        "logs": _BOT_LOGS[-60:]
+        "logs": _BOT_LOGS[-60:],
+        "risk_metrics": risk_metrics
     }
 
 
@@ -641,16 +647,24 @@ def clear_bot_logs():
 
 @app.post("/api/bot/control")
 def control_paper_bot(req: BotControlRequest):
-    """Controls the active live paper trading engine directly."""
-    updated_state = command_bot_control(
-        action=req.action,
-        symbol=req.symbol,
-        strategy_name=req.strategy_name,
-        capital=req.capital,
-        timeframe=req.timeframe,
-        max_trades_per_symbol=req.max_trades_per_symbol
-    )
-    return {"success": True, "action": req.action, "bot_state": updated_state}
+    """Controls the active live paper trading engine directly with strict safety and validation."""
+    try:
+        updated_state = command_bot_control(
+            action=req.action,
+            symbol=req.symbol,
+            strategy_name=req.strategy_name,
+            capital=req.capital,
+            timeframe=req.timeframe,
+            max_trades_per_symbol=req.max_trades_per_symbol,
+            stop_loss_pct=req.stop_loss_pct,
+            take_profit_multiple=req.take_profit_multiple,
+            max_drawdown_pct=req.max_drawdown_pct
+        )
+        return {"success": True, "action": req.action, "bot_state": updated_state}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal control execution error: {str(e)}")
 
 
 @app.get("/api/market/watchlist")
@@ -1122,6 +1136,202 @@ def test_telegram_alert():
     if not sent:
         raise HTTPException(status_code=502, detail="Failed to deliver message via Telegram API. Check bot token and chat ID.")
     return {"success": True, "message": "Test alert sent to Telegram!"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. Paper Order Management System (OMS) & Execution Monitor Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+from engine.order_manager import (
+    get_order_manager,
+    OrderStatus,
+    OrderSide,
+    OrderType,
+    InvalidStateTransitionError,
+    OrderNotFoundError,
+    OrderValidationError
+)
+
+class OrderSubmitRequest(BaseModel):
+    symbol: str = Field(..., description="NSE symbol e.g. SBIN.NS")
+    side: str = Field(..., description="BUY, SELL, SHORT, or COVER")
+    order_type: str = Field(default="MARKET", description="MARKET or LIMIT")
+    quantity: int = Field(..., gt=0, description="Requested share quantity")
+    limit_price: Optional[float] = Field(default=None, description="Price for LIMIT orders")
+    idempotency_key: Optional[str] = Field(default=None, description="Client idempotency key")
+    strategy_name: Optional[str] = Field(default="NSE Intraday ORB Breakout", description="Strategy generating order")
+    bot_id: Optional[str] = Field(default="live_bot_1", description="Associated bot ID")
+    simulated_market_price: Optional[float] = Field(default=None, description="Optional simulated current price")
+
+class OrderCancelRequest(BaseModel):
+    reason: Optional[str] = Field(default="Cancelled by user", description="Reason for cancellation")
+
+class OrderFillStepRequest(BaseModel):
+    quantity: int = Field(..., gt=0, description="Quantity to fill")
+    price: float = Field(..., gt=0, description="Fill price")
+    slippage: Optional[float] = Field(default=None, description="Modeled slippage amount")
+
+class SimulateTickRequest(BaseModel):
+    symbol: str = Field(..., description="Symbol to simulate tick for")
+    price: float = Field(..., gt=0, description="Current market price")
+    volume: Optional[int] = Field(default=None, description="Available tick volume")
+
+
+@app.post("/api/orders", status_code=200)
+def submit_paper_order(req: OrderSubmitRequest):
+    """
+    Submits a paper trading order with full idempotency and lifecycle handling.
+    Immediate MARKET orders simulate fills, while LIMIT orders queue as PENDING.
+    """
+    oms = get_order_manager()
+    try:
+        order, is_new = oms.submit_order(
+            symbol=req.symbol,
+            side=req.side,
+            order_type=req.order_type,
+            quantity=req.quantity,
+            limit_price=req.limit_price,
+            idempotency_key=req.idempotency_key,
+            strategy_name=req.strategy_name,
+            bot_id=req.bot_id,
+            simulated_market_price=req.simulated_market_price
+        )
+        return {
+            "success": True,
+            "is_new": is_new,
+            "order": order.to_dict()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/orders")
+def list_paper_orders(
+    symbol: Optional[str] = Query(None, description="Filter by ticker"),
+    side: Optional[str] = Query(None, description="Filter by side: BUY, SELL, SHORT, COVER"),
+    status: Optional[str] = Query(None, description="Filter by status: PENDING, FILLED, etc."),
+    strategy: Optional[str] = Query(None, description="Filter by strategy"),
+    date_from: Optional[str] = Query(None, description="Start date YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="End date YYYY-MM-DD"),
+    limit: int = Query(50, ge=1, le=500, description="Pagination limit"),
+    offset: int = Query(0, ge=0, description="Pagination offset")
+):
+    """Lists orders with rich multi-parameter filtering and chronological ordering."""
+    oms = get_order_manager()
+    orders, total = oms.list_orders(
+        symbol=symbol,
+        side=side,
+        status=status,
+        strategy=strategy,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        offset=offset
+    )
+    return {
+        "orders": [o.to_dict() for o in orders],
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
+
+
+@app.get("/api/orders/{order_id}")
+def get_paper_order_details(order_id: str):
+    """Fetches comprehensive order details including lifecycle history and individual fills."""
+    oms = get_order_manager()
+    try:
+        order = oms.get_order(order_id)
+        return order.to_dict()
+    except OrderNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+
+
+@app.post("/api/orders/{order_id}/cancel")
+def cancel_paper_order(order_id: str, req: Optional[OrderCancelRequest] = None):
+    """
+    Cancels outstanding quantity on an order.
+    Preserves executed partial fills and cancels only remaining quantity.
+    Rejects cancellation if the order is already FILLED, CANCELLED, or EXPIRED.
+    """
+    oms = get_order_manager()
+    reason = req.reason if req else "Cancelled by user"
+    try:
+        order = oms.cancel_order(order_id, reason=reason)
+        return {"success": True, "order": order.to_dict()}
+    except OrderNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+    except (ValueError, InvalidStateTransitionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/orders/{order_id}/fills")
+def get_paper_order_fills(order_id: str):
+    """Fetches all individual execution fills associated with an order."""
+    oms = get_order_manager()
+    try:
+        fills = oms.get_order_fills(order_id)
+        return {
+            "order_id": order_id,
+            "fills": [f.to_dict() for f in fills],
+            "total_fills": len(fills)
+        }
+    except OrderNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+
+
+@app.get("/api/execution/metrics")
+def get_execution_metrics():
+    """Returns aggregated execution telemetry and order metrics across the paper trading book."""
+    oms = get_order_manager()
+    return oms.get_execution_metrics()
+
+
+@app.post("/api/orders/{order_id}/fill-step")
+def execute_order_fill_step(order_id: str, req: OrderFillStepRequest):
+    """Simulates an explicit execution fill step for testing or stepped matching."""
+    oms = get_order_manager()
+    try:
+        fill = oms.execute_fill(
+            order_id=order_id,
+            quantity=req.quantity,
+            price=req.price,
+            slippage=req.slippage,
+            sync_to_ledger=True
+        )
+        order = oms.get_order(order_id)
+        return {
+            "success": True,
+            "fill": fill.to_dict(),
+            "order": order.to_dict()
+        }
+    except OrderNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
+    except (ValueError, InvalidStateTransitionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/orders/simulate-tick")
+def simulate_order_tick(req: SimulateTickRequest):
+    """Simulates a market price tick matching against pending LIMIT orders."""
+    oms = get_order_manager()
+    fills = oms.simulate_tick(
+        symbol=req.symbol,
+        current_price=req.price,
+        available_volume=req.volume,
+        sync_to_ledger=True
+    )
+    return {
+        "success": True,
+        "matched_fills": [f.to_dict() for f in fills],
+        "count": len(fills)
+    }
+
+
+@app.get("/api/execution/reconcile")
+def reconcile_execution_ledger():
+    """Reconciles paper order fills 1:1 against trade_history.csv."""
+    oms = get_order_manager()
+    return oms.reconcile_with_ledger()
 
 
 # ─────────────────────────────────────────────────────────────────────────────

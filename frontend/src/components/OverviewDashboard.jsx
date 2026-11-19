@@ -24,7 +24,9 @@ import {
   ExternalLink,
   ChevronRight,
   RefreshCw,
-  Info
+  Info,
+  Lock,
+  AlertTriangle
 } from 'lucide-react';
 import { computePortfolioMetrics } from '../utils/tradeUtils';
 
@@ -122,6 +124,66 @@ export default function OverviewDashboard({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', paddingBottom: '40px' }}>
+
+      {/* ── DAILY DRAWDOWN CIRCUIT BREAKER LOCK BANNER ── */}
+      {bot.daily_drawdown_locked && (
+        <div style={{
+          backgroundColor: 'rgba(235, 91, 60, 0.12)',
+          border: '1px solid #EB5B3C',
+          borderRadius: '16px',
+          padding: '18px 22px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '14px',
+          boxShadow: '0 8px 32px rgba(235, 91, 60, 0.15)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '12px',
+              backgroundColor: 'rgba(235, 91, 60, 0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#EB5B3C'
+            }}>
+              <Lock size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#EB5B3C' }}>
+                HARD CIRCUIT BREAKER ACTIVE — DAILY RISK LIMIT BREACHED
+              </div>
+              <div style={{ fontSize: '0.8rem', color: '#F1F3F4', marginTop: '2px' }}>
+                {bot.daily_drawdown_lock_reason || "Daily net loss limit hit. Position liquidated; engine locked until next NSE trading session."}
+              </div>
+              {bot.daily_drawdown_locked_at && (
+                <div style={{ fontSize: '0.74rem', color: '#B2B9BC', marginTop: '2px' }}>
+                  Locked at: {bot.daily_drawdown_locked_at} (Survives server restarts)
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onNavigate("automation")}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '8px',
+              backgroundColor: '#EB5B3C',
+              color: '#FFFFFF',
+              border: 'none',
+              fontSize: '0.8rem',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            Review Risk Settings
+          </button>
+        </div>
+      )}
 
       {/* ── TOP HERO COMMAND BANNER ── */}
       <div style={{
@@ -697,19 +759,20 @@ export default function OverviewDashboard({
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={() => onControl(isEnginePaused ? "START" : "PAUSE")}
-              disabled={actionLoading}
+              disabled={actionLoading || (isEnginePaused && bot.daily_drawdown_locked)}
+              title={bot.daily_drawdown_locked ? "Locked: Daily Drawdown Limit Reached" : (isEnginePaused ? "Arm & Resume Bot" : "Pause Bot")}
               style={{
                 flex: 1,
                 padding: '10px 14px',
                 borderRadius: '8px',
-                backgroundColor: isEnginePaused ? '#00D09C' : '#1C2022',
-                color: isEnginePaused ? '#080A0B' : '#F1F3F4',
+                backgroundColor: (isEnginePaused && !bot.daily_drawdown_locked) ? '#00D09C' : '#1C2022',
+                color: (isEnginePaused && !bot.daily_drawdown_locked) ? '#080A0B' : '#F1F3F4',
                 border: '1px solid',
-                borderColor: isEnginePaused ? '#00D09C' : '#2F3538',
+                borderColor: (isEnginePaused && !bot.daily_drawdown_locked) ? '#00D09C' : '#2F3538',
                 fontSize: '0.82rem',
                 fontWeight: '700',
-                cursor: actionLoading ? 'not-allowed' : 'pointer',
-                opacity: actionLoading ? 0.6 : 1,
+                cursor: (actionLoading || (isEnginePaused && bot.daily_drawdown_locked)) ? 'not-allowed' : 'pointer',
+                opacity: (actionLoading || (isEnginePaused && bot.daily_drawdown_locked)) ? 0.6 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -720,11 +783,17 @@ export default function OverviewDashboard({
               {actionLoading ? (
                 <RefreshCw size={14} className="animate-spin" />
               ) : isEnginePaused ? (
-                <Play size={14} fill="#080A0B" />
+                bot.daily_drawdown_locked ? <Lock size={14} color="#EB5B3C" /> : <Play size={14} fill="#080A0B" />
               ) : (
                 <Pause size={14} />
               )}
-              <span>{actionLoading ? "Updating..." : (isEnginePaused ? "Arm & Resume Bot" : "Pause Bot")}</span>
+              <span>
+                {actionLoading
+                  ? "Updating..."
+                  : bot.daily_drawdown_locked
+                  ? "Circuit Locked"
+                  : (isEnginePaused ? "Arm & Resume Bot" : "Pause Bot")}
+              </span>
             </button>
 
             <button
