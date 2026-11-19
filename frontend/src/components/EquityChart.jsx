@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
+import { TrendingUp } from 'lucide-react';
 
 export default function EquityChart({
   equityCurve = [],
@@ -22,31 +23,45 @@ export default function EquityChart({
       width: container.clientWidth,
       height: 320,
       layout: {
-        background: { type: ColorType.Solid, color: '#ffffff' },
-        textColor: '#6b7280',
+        background: { type: ColorType.Solid, color: '#0D1114' },
+        textColor: '#92999C',
         fontSize: 12,
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Inter', -apple-system, sans-serif",
       },
       grid: {
-        vertLines: { color: '#f3f4f6' },
-        horzLines: { color: '#f3f4f6' },
+        vertLines: { color: '#1A1E22' },
+        horzLines: { color: '#1A1E22' },
+      },
+      crosshair: {
+        vertLine: {
+          color: '#00D09C',
+          width: 1,
+          style: 3,
+          labelBackgroundColor: '#00D09C',
+        },
+        horzLine: {
+          color: '#00D09C',
+          width: 1,
+          style: 3,
+          labelBackgroundColor: '#00D09C',
+        },
       },
       rightPriceScale: {
-        borderColor: '#e5e7eb',
+        borderColor: '#202426',
       },
       timeScale: {
-        borderColor: '#e5e7eb',
+        borderColor: '#202426',
         timeVisible: true,
       },
     });
 
     chartRef.current = chart;
 
-    // Quixotic Emerald Area Series
+    // Groww Mint / Crimson Area Series
     const isProfitable = equityCurve.length > 0 && equityCurve[equityCurve.length - 1].equity >= initialCapital;
-    const topColor = isProfitable ? 'rgba(5, 150, 105, 0.35)' : 'rgba(220, 38, 38, 0.35)';
-    const bottomColor = isProfitable ? 'rgba(5, 150, 105, 0.0)' : 'rgba(220, 38, 38, 0.0)';
-    const lineColor = isProfitable ? '#059669' : '#dc2626';
+    const topColor = isProfitable ? 'rgba(0, 208, 156, 0.35)' : 'rgba(235, 91, 60, 0.35)';
+    const bottomColor = isProfitable ? 'rgba(0, 208, 156, 0.0)' : 'rgba(235, 91, 60, 0.0)';
+    const lineColor = isProfitable ? '#00D09C' : '#EB5B3C';
 
     const areaSeries = chart.addAreaSeries({
       topColor,
@@ -64,7 +79,7 @@ export default function EquityChart({
 
       // Baseline at initial capital
       const baselineSeries = chart.addLineSeries({
-        color: '#9ca3af',
+        color: '#626A6E',
         lineWidth: 1,
         lineStyle: 2,
         priceLineVisible: false,
@@ -105,24 +120,31 @@ export default function EquityChart({
 
   return (
     <div style={{
-      backgroundColor: '#ffffff',
-      border: '1px solid #e5e7eb',
-      borderRadius: '20px',
-      boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
-      overflow: 'hidden'
+      backgroundColor: '#121517',
+      border: '1px solid #202426',
+      borderRadius: '16px',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column'
     }}>
       <div style={{
         padding: '14px 20px',
-        borderBottom: '1px solid #f3f4f6',
+        borderBottom: '1px solid #202426',
+        backgroundColor: '#151819',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '10px'
       }}>
-        <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#111827' }}>
-          📈 Portfolio Equity Curve (In-Hand Cash + Open Mark-to-Market)
-        </span>
-        <span style={{ fontSize: '0.75rem', color: '#6b7280', fontFamily: "'JetBrains Mono', monospace" }}>
-          Baseline: {currency}{initialCapital.toLocaleString()}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <TrendingUp size={16} color="#00D09C" />
+          <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#F1F3F4' }}>
+            Portfolio Equity Curve (In-Hand Cash + Open Mark-to-Market)
+          </span>
+        </div>
+        <span style={{ fontSize: '0.75rem', color: '#92999C', fontFamily: "'JetBrains Mono', monospace" }}>
+          Baseline Capital: {currency}{Number(initialCapital || 0).toLocaleString()}
         </span>
       </div>
       <div ref={chartContainerRef} style={{ width: '100%', height: '320px' }} />

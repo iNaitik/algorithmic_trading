@@ -2168,35 +2168,39 @@ export default function LiveBotDashboard({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              backgroundColor: '#151819',
-              border: '1px solid #252A2C',
+              backgroundColor: '#121517',
+              border: '1px solid #202426',
               borderRadius: '14px',
               padding: '6px 10px',
               flexWrap: 'wrap',
               gap: '10px'
             }}>
-              <div style={{ display: 'flex', gap: '6px' }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {[
-                  { id: "scanner", label: "⚡ Morning Scanner" },
-                  { id: "studio", label: "📊 Strategy Studio" },
-                  { id: "matrix", label: "🔬 Factor Matrix" },
-                  { id: "journal", label: "📜 Trade Journal" }
+                  { id: "scanner", label: "⚡ Morning Scanner", desc: "09:16 AM Momentum & Breakouts" },
+                  { id: "studio", label: "📊 Strategy Studio", desc: "Algorithmic Simulation & Optimization" },
+                  { id: "matrix", label: "🔬 Factor Matrix", desc: "Cross-Sectional Combinatorial Grid" },
+                  { id: "journal", label: "📜 Trade Journal", desc: "Audited Round-Trip Ledger & MTM" }
                 ].map(tool => {
                   const isToolActive = quantSubTool === tool.id;
                   return (
                     <button
                       key={tool.id}
                       onClick={() => setQuantSubTool(tool.id)}
+                      title={tool.desc}
                       style={{
                         padding: '8px 16px',
                         borderRadius: '8px',
-                        border: 'none',
-                        backgroundColor: isToolActive ? '#00D09C' : 'transparent',
-                        color: isToolActive ? '#080A0B' : '#92999C',
-                        fontWeight: '700',
-                        fontSize: '0.85rem',
+                        border: isToolActive ? '1px solid #00D09C' : '1px solid transparent',
+                        backgroundColor: isToolActive ? 'rgba(0, 208, 156, 0.12)' : 'transparent',
+                        color: isToolActive ? '#00D09C' : '#92999C',
+                        fontWeight: isToolActive ? '800' : '600',
+                        fontSize: '0.82rem',
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease'
+                        transition: 'all 0.15s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px'
                       }}
                       onMouseEnter={e => {
                         if (!isToolActive) e.currentTarget.style.color = '#F1F3F4';
@@ -2211,7 +2215,7 @@ export default function LiveBotDashboard({
                 })}
               </div>
 
-              <span style={{ fontSize: '0.78rem', color: '#626A6E', paddingRight: '8px' }}>
+              <span style={{ fontSize: '0.74rem', color: '#626A6E', paddingRight: '8px' }}>
                 Quantitative Research & Market Intelligence Suite
               </span>
             </div>
@@ -2313,32 +2317,36 @@ export default function LiveBotDashboard({
                 : [];
 
               return (
-                <div style={{ backgroundColor: '#151819', border: '1px solid #252A2C', borderRadius: '16px', padding: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Source Switcher Header */}
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    marginBottom: '16px',
+                    backgroundColor: '#121517',
+                    border: '1px solid #202426',
+                    borderRadius: '14px',
+                    padding: '12px 20px',
                     flexWrap: 'wrap',
                     gap: '12px'
                   }}>
                     <div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: '700', color: '#ffffff', margin: 0 }}>
-                        Institutional Trade Journal
+                      <h3 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#F1F3F4', margin: 0, letterSpacing: '-0.01em' }}>
+                        Institutional Trade Journal & Ledger
                       </h3>
-                      <p style={{ fontSize: '0.75rem', color: '#9ca3af', margin: '4px 0 0 0' }}>
-                        Audited multi-leg execution ledger reconciled with statutory fee schedules
+                      <p style={{ fontSize: '0.74rem', color: '#92999C', margin: '2px 0 0 0' }}>
+                        Reconciled multi-leg execution ledger matched with regulatory fee schedules
                       </p>
                     </div>
 
-                    {/* Source Switcher: Live Execution Ledger vs Strategy Backtest */}
+                    {/* Source Switcher Pill */}
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
-                      backgroundColor: '#101314',
-                      padding: '4px',
+                      backgroundColor: '#080A0B',
+                      padding: '3px',
                       borderRadius: '10px',
-                      border: '1px solid #252A2C',
+                      border: '1px solid #202426',
                       gap: '4px'
                     }}>
                       <button
@@ -2347,15 +2355,15 @@ export default function LiveBotDashboard({
                           padding: '6px 14px',
                           borderRadius: '8px',
                           border: 'none',
-                          fontSize: '0.75rem',
-                          fontWeight: '700',
+                          fontSize: '0.74rem',
+                          fontWeight: effectiveJournalSource === "live" ? '700' : '500',
                           backgroundColor: effectiveJournalSource === "live" ? '#00D09C' : 'transparent',
                           color: effectiveJournalSource === "live" ? '#080A0B' : '#92999C',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease'
                         }}
                       >
-                        Live Bot Ledger ({adaptedLiveRoundTrips.length})
+                        🔴 Live Bot Ledger ({adaptedLiveRoundTrips.length})
                       </button>
                       <button
                         onClick={() => setJournalSource("backtest")}
@@ -2363,15 +2371,15 @@ export default function LiveBotDashboard({
                           padding: '6px 14px',
                           borderRadius: '8px',
                           border: 'none',
-                          fontSize: '0.75rem',
-                          fontWeight: '700',
+                          fontSize: '0.74rem',
+                          fontWeight: effectiveJournalSource === "backtest" ? '700' : '500',
                           backgroundColor: effectiveJournalSource === "backtest" ? '#00D09C' : 'transparent',
                           color: effectiveJournalSource === "backtest" ? '#080A0B' : '#92999C',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease'
                         }}
                       >
-                        Strategy Backtest ({backtestTrades.length})
+                        🧪 Strategy Backtest ({backtestTrades.length})
                       </button>
                     </div>
                   </div>

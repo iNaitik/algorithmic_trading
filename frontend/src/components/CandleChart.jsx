@@ -31,44 +31,44 @@ export default function CandleChart({
 
     const container = chartContainerRef.current;
 
-    // Quixotic Clean Light Palette
+    // Dark Fintech TradingView Canvas
     const chart = createChart(container, {
       width: container.clientWidth,
       height: 480,
       layout: {
-        background: { type: ColorType.Solid, color: '#ffffff' },
-        textColor: '#6b7280',
+        background: { type: ColorType.Solid, color: '#0D1114' },
+        textColor: '#92999C',
         fontSize: 12,
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Inter', -apple-system, sans-serif",
       },
       grid: {
-        vertLines: { color: '#f3f4f6' },
-        horzLines: { color: '#f3f4f6' },
+        vertLines: { color: '#1A1E22' },
+        horzLines: { color: '#1A1E22' },
       },
       crosshair: {
         mode: 1,
         vertLine: {
-          color: '#059669',
+          color: '#00D09C',
           width: 1,
           style: 3,
-          labelBackgroundColor: '#059669',
+          labelBackgroundColor: '#00D09C',
         },
         horzLine: {
-          color: '#059669',
+          color: '#00D09C',
           width: 1,
           style: 3,
-          labelBackgroundColor: '#059669',
+          labelBackgroundColor: '#00D09C',
         },
       },
       rightPriceScale: {
-        borderColor: '#e5e7eb',
+        borderColor: '#202426',
         scaleMargins: {
           top: 0.1,
           bottom: 0.25,
         },
       },
       timeScale: {
-        borderColor: '#e5e7eb',
+        borderColor: '#202426',
         timeVisible: interval.includes("m") || interval.includes("h"),
         secondsVisible: false,
       },
@@ -76,19 +76,19 @@ export default function CandleChart({
 
     chartRef.current = chart;
 
-    // 1. Candlestick Series (Emerald Up / Crimson Down)
+    // 1. Candlestick Series (Groww Mint Up #00D09C / Crimson Down #EB5B3C)
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#059669',
-      downColor: '#dc2626',
+      upColor: '#00D09C',
+      downColor: '#EB5B3C',
       borderVisible: false,
-      wickUpColor: '#059669',
-      wickDownColor: '#dc2626',
+      wickUpColor: '#00D09C',
+      wickDownColor: '#EB5B3C',
     });
     candleSeriesRef.current = candleSeries;
 
     // 2. Volume Histogram Series
     const volumeSeries = chart.addHistogramSeries({
-      color: '#a7f3d0',
+      color: '#263137',
       priceFormat: {
         type: 'volume',
       },
@@ -107,7 +107,7 @@ export default function CandleChart({
       const volumeData = candles.map((c) => ({
         time: c.time,
         value: c.volume || 0,
-        color: c.close >= c.open ? 'rgba(5, 150, 105, 0.25)' : 'rgba(220, 38, 38, 0.25)',
+        color: c.close >= c.open ? 'rgba(0, 208, 156, 0.35)' : 'rgba(235, 91, 60, 0.35)',
       }));
       volumeSeries.setData(volumeData);
     }
@@ -115,7 +115,7 @@ export default function CandleChart({
     // 3. Optional VWAP Overlay
     if (indicators && indicators.vwap && indicators.vwap.length > 0 && showVwap) {
       const vwapSeries = chart.addLineSeries({
-        color: '#f59e0b',
+        color: '#F59E0B',
         lineWidth: 2,
         title: 'VWAP',
         priceLineVisible: false,
@@ -126,10 +126,9 @@ export default function CandleChart({
 
     // 4. Trade Markers (Clear BUY / SHORT / EXIT signals)
     if (markers && markers.length > 0 && showMarkers) {
-      // Map markers according to showMarkerText preference
       const cleanMarkers = markers.map(m => ({
         ...m,
-        text: showMarkerText ? m.text : "" // If false, renders only the clean arrow icon!
+        text: showMarkerText ? m.text : ""
       }));
       candleSeries.setMarkers(cleanMarkers);
     }
@@ -147,115 +146,107 @@ export default function CandleChart({
         setHoverData(null);
       } else {
         const candle = param.seriesData.get(candleSeries);
-        const vol = param.seriesData.get(volumeSeries);
+        const volume = param.seriesData.get(volumeSeries);
         if (candle) {
           setHoverData({
             open: candle.open,
             high: candle.high,
             low: candle.low,
             close: candle.close,
-            volume: vol ? vol.value : null,
+            volume: volume ? volume.value : null,
           });
         }
       }
     });
 
-    if (candles && candles.length > 0) {
-      try {
-        chart.timeScale().fitContent();
-      } catch (e) {
-        console.warn("fitContent warning:", e);
-      }
-    }
-
     const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
       }
     };
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (chartRef.current) {
-        chartRef.current.remove();
-        chartRef.current = null;
-      }
+      chart.remove();
     };
-  }, [candles, markers, indicators, showVwap, showMarkers, showMarkerText]);
+  }, [candles, markers, indicators, interval, showVwap, showMarkers, showMarkerText]);
 
-  const latestCandle = candles.length > 0 ? candles[candles.length - 1] : null;
-  const currentView = hoverData || latestCandle;
+  // Current display data: hover or last bar
+  const lastBar = candles && candles.length > 0 ? candles[candles.length - 1] : null;
+  const currentView = hoverData || lastBar;
 
   return (
     <div style={{
-      backgroundColor: '#ffffff',
-      border: '1px solid #e5e7eb',
-      borderRadius: '20px',
-      boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.04)',
+      backgroundColor: '#121517',
+      border: '1px solid #202426',
+      borderRadius: '16px',
       overflow: 'hidden',
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Chart Top Toolbar */}
+      {/* Top Header & HUD bar */}
       <div style={{
         padding: '14px 20px',
-        borderBottom: '1px solid #f3f4f6',
+        borderBottom: '1px solid #202426',
+        backgroundColor: '#151819',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '12px'
       }}>
-        {/* Ticker & Live Price Legend */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {/* Symbol & OHLC Values */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.05rem', fontWeight: '700', color: '#111827', letterSpacing: '-0.01em' }}>
+            <span style={{ fontSize: '0.95rem', fontWeight: '800', color: '#F1F3F4', letterSpacing: '-0.01em' }}>
               {symbol}
             </span>
             <span style={{
-              fontSize: '0.72rem',
+              fontSize: '0.68rem',
               fontWeight: '700',
               padding: '2px 8px',
-              backgroundColor: '#e6f4ea',
-              color: '#059669',
-              borderRadius: '6px'
+              borderRadius: '6px',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              color: '#00D09C',
+              border: '1px solid rgba(0, 208, 156, 0.25)',
+              fontFamily: "'JetBrains Mono', monospace"
             }}>
               {interval}
             </span>
           </div>
 
           {currentView && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.8rem', fontFamily: "'JetBrains Mono', monospace" }}>
-              <span style={{ color: '#6b7280' }}>O: <b style={{ color: '#111827' }}>{currency}{currentView.open?.toFixed(2)}</b></span>
-              <span style={{ color: '#6b7280' }}>H: <b style={{ color: '#059669' }}>{currency}{currentView.high?.toFixed(2)}</b></span>
-              <span style={{ color: '#6b7280' }}>L: <b style={{ color: '#dc2626' }}>{currency}{currentView.low?.toFixed(2)}</b></span>
-              <span style={{ color: '#6b7280' }}>C: <b style={{ color: currentView.close >= currentView.open ? '#059669' : '#dc2626' }}>{currency}{currentView.close?.toFixed(2)}</b></span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.78rem', fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ color: '#92999C' }}>O: <b style={{ color: '#F1F3F4' }}>{currency}{currentView.open?.toFixed(2)}</b></span>
+              <span style={{ color: '#92999C' }}>H: <b style={{ color: '#00D09C' }}>{currency}{currentView.high?.toFixed(2)}</b></span>
+              <span style={{ color: '#92999C' }}>L: <b style={{ color: '#EB5B3C' }}>{currency}{currentView.low?.toFixed(2)}</b></span>
+              <span style={{ color: '#92999C' }}>C: <b style={{ color: currentView.close >= currentView.open ? '#00D09C' : '#EB5B3C' }}>{currency}{currentView.close?.toFixed(2)}</b></span>
               {currentView.volume != null && (
-                <span style={{ color: '#6b7280' }}>Vol: <b style={{ color: '#059669' }}>{currentView.volume.toLocaleString()}</b></span>
+                <span style={{ color: '#92999C' }}>Vol: <b style={{ color: '#60A5FA' }}>{Number(currentView.volume).toLocaleString()}</b></span>
               )}
             </div>
           )}
         </div>
 
-        {/* Toggles */}
+        {/* Indicator & Marker Toggles */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {indicators && indicators.vwap && (
             <button
               onClick={() => setShowVwap(!showVwap)}
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
-                fontSize: '0.75rem',
-                fontWeight: '600',
-                padding: '5px 10px',
+                fontSize: '0.72rem',
+                fontWeight: '700',
+                padding: '4px 10px',
                 borderRadius: '8px',
-                backgroundColor: showVwap ? '#fef3c7' : '#f3f4f6',
-                color: showVwap ? '#d97706' : '#6b7280',
-                border: 'none',
+                backgroundColor: showVwap ? 'rgba(245, 158, 11, 0.15)' : '#080A0B',
+                color: showVwap ? '#F59E0B' : '#92999C',
+                border: showVwap ? '1px solid rgba(245, 158, 11, 0.35)' : '1px solid #202426',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
               VWAP
@@ -265,16 +256,18 @@ export default function CandleChart({
           <button
             onClick={() => setShowMarkers(!showMarkers)}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '5px',
-              fontSize: '0.75rem',
-              fontWeight: '600',
-              padding: '5px 10px',
+              fontSize: '0.72rem',
+              fontWeight: '700',
+              padding: '4px 10px',
               borderRadius: '8px',
-              backgroundColor: showMarkers ? '#e6f4ea' : '#f3f4f6',
-              color: showMarkers ? '#059669' : '#6b7280',
-              border: 'none',
+              backgroundColor: showMarkers ? 'rgba(0, 208, 156, 0.15)' : '#080A0B',
+              color: showMarkers ? '#00D09C' : '#92999C',
+              border: showMarkers ? '1px solid rgba(0, 208, 156, 0.35)' : '1px solid #202426',
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
             Signals ({markers.length})
@@ -285,16 +278,17 @@ export default function CandleChart({
               onClick={() => setShowMarkerText(!showMarkerText)}
               title="Toggle between Text Labels and Clean Arrows"
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '5px',
-                fontSize: '0.75rem',
+                fontSize: '0.72rem',
                 fontWeight: '600',
-                padding: '5px 10px',
+                padding: '4px 10px',
                 borderRadius: '8px',
-                backgroundColor: showMarkerText ? '#f3f4f6' : '#e6f4ea',
-                color: showMarkerText ? '#4b5563' : '#059669',
-                border: '1px solid #e5e7eb',
+                backgroundColor: '#080A0B',
+                color: '#92999C',
+                border: '1px solid #202426',
+                cursor: 'pointer'
               }}
             >
               {showMarkerText ? "Arrow Only" : "Show Labels"}
@@ -318,15 +312,27 @@ export default function CandleChart({
             alignItems: 'center',
             justifyContent: 'center',
             gap: '12px',
-            backgroundColor: 'rgba(255, 255, 255, 0.92)',
-            color: '#6b7280'
+            backgroundColor: 'rgba(13, 17, 20, 0.95)',
+            color: '#92999C'
           }}>
-            <BarChart2 size={38} color="#059669" />
-            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#111827' }}>
+            <div style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '14px',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              border: '1px solid rgba(0, 208, 156, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#00D09C'
+            }}>
+              <BarChart2 size={26} />
+            </div>
+            <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#F1F3F4' }}>
               Chart Ready & Standing By
             </div>
-            <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-              Click <b style={{ color: '#059669' }}>"RUN STRATEGY SIMULATION"</b> to render price candles & signals.
+            <div style={{ fontSize: '0.78rem', color: '#92999C' }}>
+              Click <b style={{ color: '#00D09C' }}>"RUN STRATEGY SIMULATION"</b> in the studio to generate candles and markers.
             </div>
           </div>
         )}

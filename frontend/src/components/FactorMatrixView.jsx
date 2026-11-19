@@ -327,7 +327,7 @@ export default function FactorMatrixView({
         backgroundColor: '#151819',
         borderRadius: '16px',
         padding: '24px 28px',
-        border: '1px solid #252A2C',
+        border: '1px solid #202426',
         display: 'flex',
         flexDirection: 'column',
         gap: '20px'
@@ -339,7 +339,7 @@ export default function FactorMatrixView({
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '12px',
-          borderBottom: '1px solid #252A2C',
+          borderBottom: '1px solid #202426',
           paddingBottom: '16px'
         }}>
           <div>
@@ -365,7 +365,7 @@ export default function FactorMatrixView({
                   color: '#F1F3F4',
                   fontSize: '0.75rem',
                   fontWeight: '600',
-                  border: '1px solid #252A2C',
+                  border: '1px solid #202426',
                   cursor: 'pointer',
                   transition: 'all 0.15s'
                 }}
@@ -380,7 +380,7 @@ export default function FactorMatrixView({
                     timeframes: ["5m", "15m"],
                     strategies: ["NSE Intraday ORB Breakout", "NSE Midday VWAP Pullback"]
                   })}
-                  style={{ padding: '6px 12px', borderRadius: '8px', backgroundColor: '#101314', color: '#F1F3F4', fontSize: '0.75rem', fontWeight: '600', border: '1px solid #252A2C', cursor: 'pointer' }}
+                  style={{ padding: '6px 12px', borderRadius: '8px', backgroundColor: '#101314', color: '#F1F3F4', fontSize: '0.75rem', fontWeight: '600', border: '1px solid #202426', cursor: 'pointer' }}
                 >
                   ⚡ Quick Test (8 Runs)
                 </button>
@@ -390,7 +390,7 @@ export default function FactorMatrixView({
                     timeframes: ["1m", "2m", "5m"],
                     strategies: ["NSE Intraday ORB Breakout", "NSE Midday VWAP Pullback", "NSE Failed-Gap Fade"]
                   })}
-                  style={{ padding: '6px 12px', borderRadius: '8px', backgroundColor: '#101314', color: '#F1F3F4', fontSize: '0.75rem', fontWeight: '600', border: '1px solid #252A2C', cursor: 'pointer' }}
+                  style={{ padding: '6px 12px', borderRadius: '8px', backgroundColor: '#101314', color: '#F1F3F4', fontSize: '0.75rem', fontWeight: '600', border: '1px solid #202426', cursor: 'pointer' }}
                 >
                   🔥 Fast Core (36 Runs)
                 </button>
@@ -455,7 +455,7 @@ export default function FactorMatrixView({
                       borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: isSelected ? '700' : '500',
-                      border: isSelected ? '1px solid #00D09C' : '1px solid #252A2C',
+                      border: isSelected ? '1px solid #00D09C' : '1px solid #202426',
                       backgroundColor: isSelected ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
                       color: isSelected ? '#00D09C' : '#92999C',
                       cursor: 'pointer',
@@ -493,7 +493,7 @@ export default function FactorMatrixView({
                       borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: isSelected ? '700' : '500',
-                      border: isSelected ? '1px solid #00D09C' : '1px solid #252A2C',
+                      border: isSelected ? '1px solid #00D09C' : '1px solid #202426',
                       backgroundColor: isSelected ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
                       color: isSelected ? '#00D09C' : '#92999C',
                       cursor: 'pointer',
@@ -531,7 +531,7 @@ export default function FactorMatrixView({
                       borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: isSelected ? '700' : '500',
-                      border: isSelected ? '1px solid #00D09C' : '1px solid #252A2C',
+                      border: isSelected ? '1px solid #00D09C' : '1px solid #202426',
                       backgroundColor: isSelected ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
                       color: isSelected ? '#00D09C' : '#92999C',
                       cursor: 'pointer',
@@ -557,7 +557,7 @@ export default function FactorMatrixView({
           backgroundColor: '#080A0B',
           borderRadius: '12px',
           padding: '16px 20px',
-          border: '1px solid #252A2C',
+          border: '1px solid #202426',
           marginTop: '4px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -607,7 +607,7 @@ export default function FactorMatrixView({
         {isRunningTask && (
           <div style={{
             backgroundColor: '#101314',
-            border: '1px solid #252A2C',
+            border: '1px solid #202426',
             borderRadius: '12px',
             padding: '14px 18px',
             display: 'flex',
@@ -625,7 +625,7 @@ export default function FactorMatrixView({
             </div>
 
             {/* Progress track */}
-            <div style={{ width: '100%', height: '6px', backgroundColor: '#252A2C', borderRadius: '3px', overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '6px', backgroundColor: '#202426', borderRadius: '3px', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${taskProgress.pct || 0}%`,
@@ -691,7 +691,7 @@ export default function FactorMatrixView({
             </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #252A2C', paddingTop: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderTop: '1px solid #202426', paddingTop: '14px' }}>
             <div>
               <div style={{ fontSize: '0.7rem', color: '#92999C' }}>Sharpe Ratio</div>
               <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#F1F3F4' }} className="font-tabular">
@@ -720,7 +720,7 @@ export default function FactorMatrixView({
           backgroundColor: '#151819',
           borderRadius: '16px',
           padding: '22px 26px',
-          border: '1px solid #252A2C',
+          border: '1px solid #202426',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
@@ -756,7 +756,7 @@ export default function FactorMatrixView({
                   width: '100%',
                   height: `${b.val}%`,
                   borderRadius: '6px',
-                  backgroundColor: b.peak ? '#00D09C' : '#252A2C',
+                  backgroundColor: b.peak ? '#00D09C' : '#202426',
                   transition: 'height 0.3s ease'
                 }} />
                 <span style={{ fontSize: '0.72rem', fontWeight: '600', color: b.peak ? '#00D09C' : '#92999C' }}>
@@ -772,7 +772,7 @@ export default function FactorMatrixView({
           backgroundColor: '#151819',
           borderRadius: '16px',
           padding: '22px 24px',
-          border: '1px solid #252A2C',
+          border: '1px solid #202426',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
@@ -800,7 +800,7 @@ export default function FactorMatrixView({
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid #252A2C', paddingTop: '14px', display: 'flex', justifyContent: 'space-between' }}>
+          <div style={{ borderTop: '1px solid #202426', paddingTop: '14px', display: 'flex', justifyContent: 'space-between' }}>
             <div>
               <div style={{ fontSize: '0.7rem', color: '#92999C' }}>Median Sharpe</div>
               <div style={{ fontSize: '1.1rem', fontWeight: '700', color: '#F1F3F4' }} className="font-tabular">
@@ -821,13 +821,13 @@ export default function FactorMatrixView({
       <div style={{
         backgroundColor: '#151819',
         borderRadius: '16px',
-        border: '1px solid #252A2C',
+        border: '1px solid #202426',
         overflow: 'hidden'
       }}>
         {/* Table Top Controls Bar */}
         <div style={{
           padding: '16px 20px',
-          borderBottom: '1px solid #252A2C',
+          borderBottom: '1px solid #202426',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -885,7 +885,7 @@ export default function FactorMatrixView({
               style={{
                 padding: '7px 12px',
                 backgroundColor: '#080A0B',
-                border: '1px solid #252A2C',
+                border: '1px solid #202426',
                 borderRadius: '8px',
                 color: '#F1F3F4',
                 fontSize: '0.75rem',
@@ -906,7 +906,7 @@ export default function FactorMatrixView({
               style={{
                 padding: '7px 12px',
                 backgroundColor: '#080A0B',
-                border: '1px solid #252A2C',
+                border: '1px solid #202426',
                 borderRadius: '8px',
                 color: '#F1F3F4',
                 fontSize: '0.75rem',
@@ -926,7 +926,7 @@ export default function FactorMatrixView({
               backgroundColor: '#080A0B',
               padding: '2px',
               borderRadius: '8px',
-              border: '1px solid #252A2C'
+              border: '1px solid #202426'
             }}>
               {["ALL", "1m", "2m", "5m", "15m"].map(tf => (
                 <button
@@ -965,7 +965,7 @@ export default function FactorMatrixView({
                     fontSize: '0.72rem',
                     fontWeight: sortBy === s.id ? '700' : '500',
                     border: '1px solid',
-                    borderColor: sortBy === s.id ? '#00D09C' : '#252A2C',
+                    borderColor: sortBy === s.id ? '#00D09C' : '#202426',
                     backgroundColor: sortBy === s.id ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
                     color: sortBy === s.id ? '#00D09C' : '#92999C',
                     cursor: 'pointer'
@@ -983,7 +983,7 @@ export default function FactorMatrixView({
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#101314', color: '#92999C', borderBottom: '1px solid #252A2C', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+                <tr style={{ backgroundColor: '#101314', color: '#92999C', borderBottom: '1px solid #202426', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
                   <th style={{ padding: '12px 20px' }}>Rank</th>
                   <th style={{ padding: '12px 20px' }}>Stock</th>
                   <th style={{ padding: '12px 20px', textAlign: 'center' }}>Timeframe</th>
@@ -1010,10 +1010,10 @@ export default function FactorMatrixView({
                     <tr
                       key={idx}
                       style={{
-                        borderBottom: '1px solid #252A2C',
+                        borderBottom: '1px solid #202426',
                         transition: 'background-color 0.15s'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1c2022'}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#181D20'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <td style={{ padding: '14px 20px', color: '#626A6E', fontWeight: '700' }}>
@@ -1023,7 +1023,7 @@ export default function FactorMatrixView({
                         {row.symbol || row.asset}
                       </td>
                       <td style={{ padding: '14px 20px', textAlign: 'center' }}>
-                        <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#080A0B', color: '#F1F3F4', fontSize: '0.72rem', fontWeight: '600', border: '1px solid #252A2C' }}>
+                        <span style={{ padding: '2px 8px', borderRadius: '6px', backgroundColor: '#080A0B', color: '#F1F3F4', fontSize: '0.72rem', fontWeight: '600', border: '1px solid #202426' }}>
                           {row.timeframe}
                         </span>
                       </td>
@@ -1056,7 +1056,7 @@ export default function FactorMatrixView({
                           fontWeight: '700',
                           backgroundColor: row.status === 'PRIME' ? 'rgba(0, 208, 156, 0.12)' : (row.status === 'GOOD' ? 'rgba(83, 103, 255, 0.12)' : 'rgba(235, 91, 60, 0.12)'),
                           color: row.status === 'PRIME' ? '#00D09C' : (row.status === 'GOOD' ? '#5367FF' : '#EB5B3C'),
-                          border: `1px solid ${row.status === 'PRIME' ? 'rgba(0, 208, 156, 0.28)' : '#252A2C'}`
+                          border: `1px solid ${row.status === 'PRIME' ? 'rgba(0, 208, 156, 0.28)' : '#202426'}`
                         }}>
                           {row.status}
                         </span>
@@ -1110,19 +1110,19 @@ export default function FactorMatrixView({
 
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center', fontSize: '0.78rem' }}>
               <thead>
-                <tr style={{ backgroundColor: '#101314', borderBottom: '1px solid #252A2C' }}>
+                <tr style={{ backgroundColor: '#101314', borderBottom: '1px solid #202426' }}>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', color: '#92999C' }}>Asset Universe</th>
                   {["1m", "2m", "5m", "15m"].map(tf => (
-                    <th key={tf} colSpan={strategyOptions.length} style={{ padding: '10px 14px', borderLeft: '1px solid #252A2C', color: '#F1F3F4', fontWeight: '800' }}>
+                    <th key={tf} colSpan={strategyOptions.length} style={{ padding: '10px 14px', borderLeft: '1px solid #202426', color: '#F1F3F4', fontWeight: '800' }}>
                       {tf} Horizon
                     </th>
                   ))}
                 </tr>
-                <tr style={{ backgroundColor: '#101314', fontSize: '0.7rem', color: '#92999C', borderBottom: '1px solid #252A2C' }}>
+                <tr style={{ backgroundColor: '#101314', fontSize: '0.7rem', color: '#92999C', borderBottom: '1px solid #202426' }}>
                   <th style={{ padding: '8px 16px', textAlign: 'left' }}>Ticker</th>
                   {["1m", "2m", "5m", "15m"].map(tf => (
                     strategyOptions.map(st => (
-                      <th key={`${tf}-${st.id}`} style={{ padding: '8px 6px', borderLeft: '1px solid #252A2C', minWidth: '75px' }}>
+                      <th key={`${tf}-${st.id}`} style={{ padding: '8px 6px', borderLeft: '1px solid #202426', minWidth: '75px' }}>
                         {st.id.includes("ORB") ? "ORB" : (st.id.includes("VWAP") ? "VWAP" : "Fade")}
                       </th>
                     ))
@@ -1131,7 +1131,7 @@ export default function FactorMatrixView({
               </thead>
               <tbody>
                 {stockOptions.map(stk => (
-                  <tr key={stk.symbol} style={{ borderBottom: '1px solid #252A2C' }}>
+                  <tr key={stk.symbol} style={{ borderBottom: '1px solid #202426' }}>
                     <td style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '700', color: '#F1F3F4', backgroundColor: '#101314' }}>
                       {stk.symbol}
                     </td>
@@ -1170,7 +1170,7 @@ export default function FactorMatrixView({
                               backgroundColor: cellBg,
                               color: textColor,
                               fontWeight: '700',
-                              borderLeft: '1px solid #252A2C',
+                              borderLeft: '1px solid #202426',
                               cursor: match ? 'pointer' : 'default',
                               transition: 'transform 0.1s'
                             }}
@@ -1182,7 +1182,7 @@ export default function FactorMatrixView({
                                 <div style={{ fontSize: '0.65rem', opacity: 0.85 }}>S: {sharpe.toFixed(1)}</div>
                               </div>
                             ) : (
-                              <span style={{ color: '#252A2C' }}>-</span>
+                              <span style={{ color: '#202426' }}>-</span>
                             )}
                           </td>
                         );

@@ -10,7 +10,11 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Layers,
-  ChevronDown
+  ChevronDown,
+  ShieldCheck,
+  Zap,
+  Clock,
+  DollarSign
 } from 'lucide-react';
 
 import CandleChart from './CandleChart';
@@ -20,28 +24,28 @@ import TradeJournal from './TradeJournal';
 
 export default function BacktesterView({
   marketDefs,
-  strategiesList,
-  selectedMarket,
-  setSelectedMarket,
-  symbol,
-  setSymbol,
-  customSymbol,
-  setCustomSymbol,
-  interval,
-  setInterval,
-  lookbackDays,
-  setLookbackDays,
-  capitalInput,
-  setCapitalInput,
-  initialCapital,
-  selectedStrategy,
-  setSelectedStrategy,
-  loading,
-  backtestResult,
-  errorMsg,
-  onRunBacktest
+  strategiesList = [],
+  selectedMarket = "INDIA",
+  setSelectedMarket = () => {},
+  symbol = "SBIN.NS",
+  setSymbol = () => {},
+  customSymbol = "",
+  setCustomSymbol = () => {},
+  interval = "5m",
+  setInterval = () => {},
+  lookbackDays = 60,
+  setLookbackDays = () => {},
+  capitalInput = "10L",
+  setCapitalInput = () => {},
+  initialCapital = 1000000.0,
+  selectedStrategy = "NSE Intraday ORB Breakout",
+  setSelectedStrategy = () => {},
+  loading = false,
+  backtestResult = null,
+  errorMsg = null,
+  onRunBacktest = () => {}
 }) {
-  const [subView, setSubView] = useState("CHART");
+  const [subView, setSubView] = useState("CHART"); // "CHART", "EQUITY", "FEES", "JOURNAL"
 
   const currentMarketDef = marketDefs?.markets.find(m => m.id === selectedMarket);
   const currency = currentMarketDef?.currency || (selectedMarket === "INDIA" ? "₹" : "$");
@@ -54,32 +58,66 @@ export default function BacktesterView({
       display: 'flex',
       flex: 1,
       overflow: 'hidden',
-      height: 'calc(100vh - 70px)',
-      backgroundColor: '#0c0e14',
-      color: '#ffffff'
+      height: 'calc(100vh - 72px)',
+      backgroundColor: '#080A0B',
+      color: '#F1F3F4',
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
     }}>
-      {/* ── Left Parameter Studio Control Panel ───────────────────────── */}
+      {/* ── Left Parameter Studio Control Panel ── */}
       <aside style={{
         width: '320px',
         minWidth: '320px',
-        backgroundColor: '#161922',
-        borderRight: '1px solid #242938',
-        padding: '24px 20px',
+        maxWidth: '320px',
+        backgroundColor: '#121517',
+        borderRight: '1px solid #202426',
+        padding: '20px 18px',
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
         overflowY: 'auto'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid #242938', paddingBottom: '14px' }}>
-          <Sliders size={18} color="#00d09c" />
-          <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#ffffff' }}>
-            Strategy Studio
+        {/* Panel Title */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid #202426',
+          paddingBottom: '14px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(0, 208, 156, 0.12)',
+              border: '1px solid rgba(0, 208, 156, 0.25)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#00D09C'
+            }}>
+              <Sliders size={15} />
+            </div>
+            <span style={{ fontSize: '0.92rem', fontWeight: '800', color: '#F1F3F4', letterSpacing: '-0.01em' }}>
+              Strategy Studio
+            </span>
+          </div>
+          <span style={{
+            fontSize: '0.68rem',
+            fontWeight: '700',
+            padding: '2px 8px',
+            borderRadius: '6px',
+            backgroundColor: 'rgba(0, 208, 156, 0.1)',
+            color: '#00D09C',
+            border: '1px solid rgba(0, 208, 156, 0.2)'
+          }}>
+            Simulation
           </span>
         </div>
 
         {/* 1. Target Market */}
         <div>
-          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
+          <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             1. Target Market
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginTop: '6px' }}>
@@ -87,62 +125,70 @@ export default function BacktesterView({
               { id: "INDIA", flag: "🇮🇳", label: "NSE" },
               { id: "US", flag: "🇺🇸", label: "US Tech" },
               { id: "FOREX", flag: "💱", label: "Forex" }
-            ].map(m => (
-              <button
-                key={m.id}
-                onClick={() => setSelectedMarket(m.id)}
-                style={{
-                  padding: '7px 4px',
-                  borderRadius: '10px',
-                  border: selectedMarket === m.id ? '1px solid #00d09c' : '1px solid #242938',
-                  backgroundColor: selectedMarket === m.id ? 'rgba(0, 208, 156, 0.15)' : '#0c0e14',
-                  color: selectedMarket === m.id ? '#00d09c' : '#9ca3af',
-                  fontWeight: '700',
-                  fontSize: '0.72rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                <span>{m.flag}</span>
-                <span>{m.label}</span>
-              </button>
-            ))}
+            ].map(m => {
+              const isSelected = selectedMarket === m.id;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedMarket(m.id)}
+                  style={{
+                    padding: '8px 4px',
+                    borderRadius: '8px',
+                    border: isSelected ? '1px solid #00D09C' : '1px solid #202426',
+                    backgroundColor: isSelected ? 'rgba(0, 208, 156, 0.12)' : '#080A0B',
+                    color: isSelected ? '#00D09C' : '#92999C',
+                    fontWeight: '700',
+                    fontSize: '0.74rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <span>{m.flag}</span>
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* 2. Ticker Symbol */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               2. Ticker Symbol
             </label>
-            <span style={{ fontSize: '0.7rem', color: '#00d09c', fontFamily: "'JetBrains Mono', monospace", fontWeight: '700' }}>
+            <span style={{ fontSize: '0.72rem', color: '#00D09C', fontFamily: "'JetBrains Mono', monospace", fontWeight: '700' }}>
               {customSymbol || symbol}
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
-            {currentMarketDef?.presets.slice(0, 6).map(p => (
-              <button
-                key={p.ticker}
-                onClick={() => { setSymbol(p.ticker); setCustomSymbol(""); }}
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: '600',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  backgroundColor: symbol === p.ticker && !customSymbol ? 'rgba(0, 208, 156, 0.15)' : '#0c0e14',
-                  color: symbol === p.ticker && !customSymbol ? '#00d09c' : '#9ca3af',
-                  border: symbol === p.ticker && !customSymbol ? '1px solid #00d09c' : '1px solid #242938',
-                  cursor: 'pointer'
-                }}
-              >
-                {p.ticker.replace('.NS', '')}
-              </button>
-            ))}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginTop: '6px' }}>
+            {currentMarketDef?.presets.slice(0, 6).map(p => {
+              const isPresetActive = symbol === p.ticker && !customSymbol;
+              return (
+                <button
+                  key={p.ticker}
+                  onClick={() => { setSymbol(p.ticker); setCustomSymbol(""); }}
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: isPresetActive ? '700' : '500',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    backgroundColor: isPresetActive ? 'rgba(0, 208, 156, 0.14)' : '#080A0B',
+                    color: isPresetActive ? '#00D09C' : '#92999C',
+                    border: isPresetActive ? '1px solid #00D09C' : '1px solid #202426',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {p.ticker.replace('.NS', '')}
+                </button>
+              );
+            })}
           </div>
 
           <input
@@ -153,56 +199,62 @@ export default function BacktesterView({
             style={{
               width: '100%',
               marginTop: '6px',
-              padding: '8px 10px',
-              backgroundColor: '#0c0e14',
-              border: '1px solid #242938',
+              padding: '8px 12px',
+              backgroundColor: '#080A0B',
+              border: '1px solid #202426',
               borderRadius: '8px',
-              color: '#ffffff',
+              color: '#F1F3F4',
               fontSize: '0.8rem',
-              outline: 'none'
+              outline: 'none',
+              fontFamily: "'JetBrains Mono', monospace",
+              boxSizing: 'border-box'
             }}
           />
         </div>
 
         {/* 3. Timeframe */}
         <div>
-          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
+          <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             3. Candle Interval
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '4px', marginTop: '6px' }}>
-            {["1m", "2m", "5m", "15m", "30m", "1h", "1d"].map(tf => (
-              <button
-                key={tf}
-                onClick={() => {
-                  setInterval(tf);
-                  if (tf === "1m" || tf === "2m") setLookbackDays(7);
-                  else if (tf === "1d") setLookbackDays(365);
-                  else setLookbackDays(60);
-                }}
-                style={{
-                  padding: '6px 2px',
-                  fontSize: '0.72rem',
-                  fontWeight: '700',
-                  borderRadius: '6px',
-                  backgroundColor: interval === tf ? '#00d09c' : '#0c0e14',
-                  color: interval === tf ? '#0c0e14' : '#9ca3af',
-                  border: interval === tf ? '1px solid #00d09c' : '1px solid #242938',
-                  cursor: 'pointer'
-                }}
-              >
-                {tf}
-              </button>
-            ))}
+            {["1m", "2m", "5m", "15m", "30m", "1h", "1d"].map(tf => {
+              const isTfActive = interval === tf;
+              return (
+                <button
+                  key={tf}
+                  onClick={() => {
+                    setInterval(tf);
+                    if (tf === "1m" || tf === "2m") setLookbackDays(7);
+                    else if (tf === "1d") setLookbackDays(365);
+                    else setLookbackDays(60);
+                  }}
+                  style={{
+                    padding: '6px 2px',
+                    fontSize: '0.72rem',
+                    fontWeight: '700',
+                    borderRadius: '6px',
+                    backgroundColor: isTfActive ? '#00D09C' : '#080A0B',
+                    color: isTfActive ? '#080A0B' : '#92999C',
+                    border: isTfActive ? '1px solid #00D09C' : '1px solid #202426',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {tf}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* 4. Lookback Period */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               4. Lookback Period
             </label>
-            <span style={{ fontSize: '0.75rem', color: '#ffffff', fontWeight: '700' }}>
+            <span style={{ fontSize: '0.75rem', color: '#F1F3F4', fontWeight: '700', fontFamily: "'JetBrains Mono', monospace" }}>
               {lookbackDays} Days
             </span>
           </div>
@@ -212,18 +264,18 @@ export default function BacktesterView({
             max={interval === "1m" || interval === "2m" ? "7" : (interval === "1d" ? "730" : "60")}
             value={lookbackDays}
             onChange={(e) => setLookbackDays(Number(e.target.value))}
-            style={{ width: '100%', marginTop: '6px', accentColor: '#00d09c' }}
+            style={{ width: '100%', marginTop: '8px', accentColor: '#00D09C' }}
           />
         </div>
 
         {/* 5. Starting Capital */}
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
+            <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               5. Starting Capital
             </label>
-            <span style={{ fontSize: '0.7rem', color: '#00d09c', fontWeight: '700', fontFamily: "'JetBrains Mono', monospace" }}>
-              {currency}{initialCapital.toLocaleString()} {selectedMarket === "INDIA" && initialCapital >= 100000 ? `(${(initialCapital / 100000).toFixed(2)}L)` : ''}
+            <span style={{ fontSize: '0.72rem', color: '#00D09C', fontWeight: '700', fontFamily: "'JetBrains Mono', monospace" }}>
+              {currency}{initialCapital.toLocaleString()} {selectedMarket === "INDIA" && initialCapital >= 100000 ? `(${(initialCapital / 100000).toFixed(1)}L)` : ''}
             </span>
           </div>
           <input
@@ -234,252 +286,297 @@ export default function BacktesterView({
             style={{
               width: '100%',
               marginTop: '6px',
-              padding: '8px 10px',
-              backgroundColor: '#0c0e14',
-              border: '1px solid #242938',
+              padding: '8px 12px',
+              backgroundColor: '#080A0B',
+              border: '1px solid #202426',
               borderRadius: '8px',
-              color: '#ffffff',
+              color: '#F1F3F4',
               fontSize: '0.8rem',
-              outline: 'none'
+              outline: 'none',
+              fontFamily: "'JetBrains Mono', monospace",
+              boxSizing: 'border-box'
             }}
           />
         </div>
 
         {/* 6. Trading Strategy */}
         <div>
-          <label style={{ fontSize: '0.72rem', fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase' }}>
+          <label style={{ fontSize: '0.7rem', fontWeight: '700', color: '#92999C', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             6. Quantitative Strategy
           </label>
-          <select
-            value={selectedStrategy}
-            onChange={(e) => setSelectedStrategy(e.target.value)}
-            style={{
-              width: '100%',
-              marginTop: '6px',
-              padding: '8px 10px',
-              backgroundColor: '#0c0e14',
-              border: '1px solid #242938',
-              borderRadius: '8px',
-              color: '#00d09c',
-              fontWeight: '600',
-              fontSize: '0.8rem',
-              outline: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            {filteredStrategies.map(s => (
-              <option key={s.name} value={s.name}>{s.name}</option>
-            ))}
-          </select>
+          <div style={{ position: 'relative', marginTop: '6px' }}>
+            <select
+              value={selectedStrategy}
+              onChange={(e) => setSelectedStrategy(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '9px 12px',
+                backgroundColor: '#080A0B',
+                border: '1px solid #202426',
+                borderRadius: '8px',
+                color: '#00D09C',
+                fontWeight: '700',
+                fontSize: '0.78rem',
+                outline: 'none',
+                cursor: 'pointer',
+                appearance: 'none',
+                boxSizing: 'border-box'
+              }}
+            >
+              {filteredStrategies.map(s => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} color="#92999C" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+          </div>
         </div>
 
         {/* Run Button */}
-        <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+        <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
           <button
             onClick={onRunBacktest}
             disabled={loading}
             style={{
               width: '100%',
               padding: '12px',
-              borderRadius: '12px',
-              backgroundColor: loading ? '#242938' : '#00d09c',
-              color: loading ? '#9ca3af' : '#0c0e14',
+              borderRadius: '10px',
+              backgroundColor: loading ? '#202426' : '#00D09C',
+              color: loading ? '#92999C' : '#080A0B',
               fontWeight: '800',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               border: 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              boxShadow: '0 4px 14px rgba(0, 208, 156, 0.3)',
-              cursor: loading ? 'not-allowed' : 'pointer'
+              boxShadow: loading ? 'none' : '0 4px 14px rgba(0, 208, 156, 0.25)',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s ease'
             }}
           >
-            <Play size={14} fill={loading ? "#9ca3af" : "#0c0e14"} />
-            {loading ? "EXECUTING SIMULATION..." : "RUN STRATEGY SIMULATION"}
+            {loading ? (
+              <>
+                <div style={{
+                  width: '14px',
+                  height: '14px',
+                  border: '2px solid #92999C',
+                  borderTopColor: '#00D09C',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite'
+                }} />
+                <span>EXECUTING SIMULATION...</span>
+              </>
+            ) : (
+              <>
+                <Play size={14} fill="#080A0B" />
+                <span>RUN STRATEGY SIMULATION</span>
+              </>
+            )}
           </button>
         </div>
       </aside>
 
-      {/* ── Main Backtest View Canvas ─────────────────────────────────── */}
-      <main style={{ flex: 1, padding: '24px 32px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* ── Main Backtest View Canvas ── */}
+      <main style={{
+        flex: 1,
+        padding: '20px 28px',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '18px'
+      }}>
         {errorMsg && (
           <div style={{
             padding: '12px 16px',
             borderRadius: '12px',
-            backgroundColor: 'rgba(235, 91, 60, 0.15)',
-            border: '1px solid #eb5b3c',
-            color: '#eb5b3c',
-            fontSize: '0.85rem'
-          }}>
-            <b>Error:</b> {errorMsg}
-          </div>
-        )}
-
-        {/* Loading Indicator */}
-        {loading && (
-          <div style={{
-            padding: '16px 20px',
-            borderRadius: '16px',
-            backgroundColor: '#161922',
-            border: '1px solid #00d09c',
+            backgroundColor: 'rgba(235, 91, 60, 0.12)',
+            border: '1px solid #EB5B3C',
+            color: '#EB5B3C',
+            fontSize: '0.82rem',
             display: 'flex',
             alignItems: 'center',
-            gap: '16px'
+            gap: '8px'
           }}>
-            <div style={{
-              width: '24px',
-              height: '24px',
-              minWidth: '24px',
-              border: '3px solid #242938',
-              borderTopColor: '#00d09c',
-              borderRadius: '50%',
-              animation: 'spin 0.8s linear infinite'
-            }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '0.875rem', fontWeight: '700', color: '#ffffff' }}>
-                Executing Quantitative Simulation for {customSymbol || symbol} ({interval})
-              </span>
-              <span style={{ fontSize: '0.75rem', color: '#9ca3af' }}>
-                Calculating indicators for {selectedStrategy} and applying statutory friction...
-              </span>
-            </div>
+            <b>Simulation Error:</b> {errorMsg}
           </div>
         )}
 
-        {/* Groww 4 KPI Cards */}
+        {/* Top 4 KPI Metric Ribbon (Groww + Bloomberg Workstation) */}
         {summary && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '16px',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+            gap: '14px'
           }}>
-            {/* Card 1: Net P&L */}
+            {/* KPI 1: Net P&L */}
             <div style={{
-              backgroundColor: '#161922',
-              border: '1px solid #242938',
-              borderRadius: '16px',
-              padding: '20px 22px',
+              backgroundColor: '#121517',
+              border: '1px solid #202426',
+              borderRadius: '14px',
+              padding: '16px 18px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px'
+              gap: '4px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
+                <span style={{ fontSize: '0.75rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
                   Net Strategy P&L
                 </span>
                 <span style={{
-                  padding: '2px 8px',
+                  padding: '2px 7px',
                   borderRadius: '6px',
                   fontSize: '0.72rem',
                   fontWeight: '700',
                   backgroundColor: isNetWin ? 'rgba(0, 208, 156, 0.15)' : 'rgba(235, 91, 60, 0.15)',
-                  color: isNetWin ? '#00d09c' : '#eb5b3c'
+                  color: isNetWin ? '#00D09C' : '#EB5B3C',
+                  fontFamily: "'JetBrains Mono', monospace"
                 }}>
                   {summary.total_return_pct >= 0 ? '+' : ''}{summary.total_return_pct}%
                 </span>
               </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: isNetWin ? '#00d09c' : '#eb5b3c' }}>
-                {summary.net_pnl >= 0 ? '+' : ''}{currency}{summary.net_pnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <div style={{
+                fontSize: '1.5rem',
+                fontWeight: '800',
+                color: isNetWin ? '#00D09C' : '#EB5B3C',
+                fontFamily: "'JetBrains Mono', monospace"
+              }}>
+                {summary.net_pnl >= 0 ? '+' : ''}{currency}{Number(summary.net_pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
-                {summary.net_pnl_formatted}
+              <span style={{ fontSize: '0.7rem', color: '#626A6E' }}>
+                {summary.net_pnl_formatted || "Realized in-hand balance"}
               </span>
             </div>
 
-            {/* Card 2: Final Equity */}
+            {/* KPI 2: Final Equity */}
             <div style={{
-              backgroundColor: '#161922',
-              border: '1px solid #242938',
-              borderRadius: '16px',
-              padding: '20px 22px',
+              backgroundColor: '#121517',
+              border: '1px solid #202426',
+              borderRadius: '14px',
+              padding: '16px 18px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px'
+              gap: '4px'
             }}>
-              <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
+              <span style={{ fontSize: '0.75rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
                 Final Portfolio Equity
               </span>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>
-                {currency}{summary.final_equity.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <div style={{
+                fontSize: '1.5rem',
+                fontWeight: '800',
+                color: '#F1F3F4',
+                fontFamily: "'JetBrains Mono', monospace"
+              }}>
+                {currency}{Number(summary.final_equity || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
-                {summary.final_equity_formatted}
+              <span style={{ fontSize: '0.7rem', color: '#626A6E' }}>
+                Baseline: {currency}{Number(initialCapital).toLocaleString()}
               </span>
             </div>
 
-            {/* Card 3: Win Rate */}
+            {/* KPI 3: Win Rate */}
             <div style={{
-              backgroundColor: '#161922',
-              border: '1px solid #242938',
-              borderRadius: '16px',
-              padding: '20px 22px',
+              backgroundColor: '#121517',
+              border: '1px solid #202426',
+              borderRadius: '14px',
+              padding: '16px 18px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px'
+              gap: '4px'
             }}>
-              <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
-                Win Rate
-              </span>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: summary.win_rate >= 50 ? '#00d09c' : '#eb5b3c' }}>
-                {summary.win_rate} %
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
+                  Win Rate
+                </span>
+                <span style={{ fontSize: '0.7rem', color: '#60A5FA', fontWeight: '700' }}>
+                  PF: {summary.profit_factor || 0}
+                </span>
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
+              <div style={{
+                fontSize: '1.5rem',
+                fontWeight: '800',
+                color: summary.win_rate >= 50 ? '#00D09C' : '#EB5B3C',
+                fontFamily: "'JetBrains Mono', monospace"
+              }}>
+                {summary.win_rate}%
+              </div>
+              <span style={{ fontSize: '0.7rem', color: '#626A6E' }}>
                 {summary.winning_trades}W / {summary.losing_trades}L ({summary.total_trades} Trades)
               </span>
             </div>
 
-            {/* Card 4: Sharpe Ratio */}
+            {/* KPI 4: Sharpe Ratio */}
             <div style={{
-              backgroundColor: '#161922',
-              border: '1px solid #242938',
-              borderRadius: '16px',
-              padding: '20px 22px',
+              backgroundColor: '#121517',
+              border: '1px solid #202426',
+              borderRadius: '14px',
+              padding: '16px 18px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '6px'
+              gap: '4px'
             }}>
-              <span style={{ fontSize: '0.8rem', color: '#9ca3af', fontWeight: '600' }}>
-                Sharpe Ratio
-              </span>
-              <div style={{ fontSize: '1.6rem', fontWeight: '800', color: summary.sharpe_ratio > 0 ? '#00d09c' : '#eb5b3c' }}>
-                {summary.sharpe_ratio}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', color: '#92999C', fontWeight: '600', textTransform: 'uppercase' }}>
+                  Risk Factor
+                </span>
+                <span style={{ fontSize: '0.7rem', color: '#F59E0B', fontWeight: '700' }}>
+                  Fee: -{currency}{Number(summary.total_charges || 0).toFixed(0)}
+                </span>
               </div>
-              <span style={{ fontSize: '0.7rem', color: '#6b7280' }}>
-                Profit Factor: <b style={{ color: '#ffffff' }}>{summary.profit_factor}</b> • Fee: -{currency}{summary.total_charges.toFixed(0)}
+              <div style={{
+                fontSize: '1.5rem',
+                fontWeight: '800',
+                color: summary.sharpe_ratio > 0 ? '#00D09C' : '#EB5B3C',
+                fontFamily: "'JetBrains Mono', monospace"
+              }}>
+                {summary.sharpe_ratio} <span style={{ fontSize: '0.75rem', color: '#92999C', fontWeight: '600' }}>Sharpe</span>
+              </div>
+              <span style={{ fontSize: '0.7rem', color: '#626A6E' }}>
+                Gross Trading P&L: {currency}{Number(summary.gross_trading_pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
           </div>
         )}
 
-        {/* View Toggle Tabs */}
-        <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #242938', paddingBottom: '10px' }}>
+        {/* Workspace View Switcher Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: '8px',
+          borderBottom: '1px solid #202426',
+          paddingBottom: '10px',
+          alignItems: 'center'
+        }}>
           {[
             { id: "CHART", label: "📊 Candlestick Chart & Fills" },
-            { id: "EQUITY", label: "📈 Portfolio Equity Curve" },
+            { id: "EQUITY", label: "📈 Equity Progression" },
+            { id: "FEES", label: "📑 Statutory Cost Schedule" },
             { id: "JOURNAL", label: `📜 Trade Journal (${summary?.total_trades || 0})` }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setSubView(tab.id)}
-              style={{
-                padding: '7px 16px',
-                fontSize: '0.8rem',
-                fontWeight: '700',
-                borderRadius: '10px',
-                border: 'none',
-                backgroundColor: subView === tab.id ? '#00d09c' : '#161922',
-                color: subView === tab.id ? '#0c0e14' : '#9ca3af',
-                cursor: 'pointer'
-              }}
-            >
-              {tab.label}
-            </button>
-          ))}
+          ].map(tab => {
+            const isTabActive = subView === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setSubView(tab.id)}
+                style={{
+                  padding: '7px 16px',
+                  fontSize: '0.78rem',
+                  fontWeight: isTabActive ? '700' : '500',
+                  borderRadius: '8px',
+                  border: isTabActive ? '1px solid #00D09C' : '1px solid #202426',
+                  backgroundColor: isTabActive ? 'rgba(0, 208, 156, 0.12)' : '#121517',
+                  color: isTabActive ? '#00D09C' : '#92999C',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
+        {/* View 1: Candlestick Chart View */}
         {subView === "CHART" && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <CandleChart
               candles={backtestResult?.candles || []}
               markers={backtestResult?.trade_markers || []}
@@ -497,8 +594,9 @@ export default function BacktesterView({
           </div>
         )}
 
+        {/* View 2: Equity Progression View */}
         {subView === "EQUITY" && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <EquityChart
               equityCurve={backtestResult?.equity_curve || []}
               initialCapital={initialCapital}
@@ -507,6 +605,30 @@ export default function BacktesterView({
           </div>
         )}
 
+        {/* View 3: Statutory Costs Schedule View */}
+        {subView === "FEES" && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {summary?.charges_breakdown?.total > 0 ? (
+              <StatutoryFeeCard
+                breakdown={summary.charges_breakdown}
+                currency={currency}
+              />
+            ) : (
+              <div style={{
+                backgroundColor: '#121517',
+                border: '1px solid #202426',
+                borderRadius: '16px',
+                padding: '36px',
+                textAlign: 'center',
+                color: '#92999C'
+              }}>
+                Run a simulation to generate itemized statutory brokerage and SEBI charges.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* View 4: Trade Journal View */}
         {subView === "JOURNAL" && (
           <TradeJournal
             trades={backtestResult?.trades || []}

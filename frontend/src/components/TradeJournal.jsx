@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CheckCircle2, XCircle, Search, Filter, AlertTriangle, Clock } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { CheckCircle2, XCircle, Search, Filter, AlertTriangle, Clock, TrendingUp, TrendingDown, DollarSign, Layers } from 'lucide-react';
 
 export default function TradeJournal({
   trades = [],
@@ -42,6 +42,53 @@ export default function TradeJournal({
   const safeOpenPositions = Array.isArray(openPositions) ? openPositions : [];
   const safeUnmatchedExits = Array.isArray(unmatchedExits) ? unmatchedExits : [];
 
+  // Summary Metrics
+  const metrics = useMemo(() => {
+    if (safeTrades.length === 0) {
+      return { totalTrades: 0, wins: 0, losses: 0, winRate: 0, grossPnl: 0, totalFees: 0, netPnl: 0, profitFactor: 0 };
+    }
+    let wins = 0;
+    let losses = 0;
+    let grossPnl = 0;
+    let totalFees = 0;
+    let netPnl = 0;
+    let totalWinGross = 0;
+    let totalLossGross = 0;
+
+    safeTrades.forEach(t => {
+      const net = getNetPnl(t);
+      const gross = getGrossPnl(t);
+      const fee = getFees(t);
+
+      grossPnl += gross;
+      totalFees += fee;
+      netPnl += net;
+
+      if (net >= 0) {
+        wins++;
+        totalWinGross += Math.max(0, gross);
+      } else {
+        losses++;
+        totalLossGross += Math.abs(Math.min(0, gross));
+      }
+    });
+
+    const winRate = safeTrades.length > 0 ? ((wins / safeTrades.length) * 100).toFixed(1) : 0;
+    const profitFactor = totalLossGross > 0 ? (totalWinGross / totalLossGross).toFixed(2) : (totalWinGross > 0 ? "∞" : "0.00");
+
+    return {
+      totalTrades: safeTrades.length,
+      wins,
+      losses,
+      winRate,
+      grossPnl: Number(grossPnl.toFixed(2)),
+      totalFees: Number(totalFees.toFixed(2)),
+      netPnl: Number(netPnl.toFixed(2)),
+      profitFactor
+    };
+  }, [safeTrades]);
+
+  // Filtering
   const filteredTrades = safeTrades.filter((t) => {
     const isWin = getIsWin(t);
     const side = (t.side || "LONG").toUpperCase();
@@ -70,42 +117,153 @@ export default function TradeJournal({
   if (hasNoActivity) {
     return (
       <div style={{
-        backgroundColor: '#161922',
-        border: '1px solid #242938',
+        backgroundColor: '#121517',
+        border: '1px solid #202426',
         borderRadius: '16px',
-        padding: '36px',
+        padding: '40px',
         textAlign: 'center',
-        color: '#9ca3af'
+        color: '#92999C'
       }}>
-        No trades recorded in this session.
+        <div style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: '12px',
+          backgroundColor: 'rgba(0, 208, 156, 0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          margin: '0 auto 12px auto',
+          color: '#00D09C'
+        }}>
+          <Clock size={22} />
+        </div>
+        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#F1F3F4' }}>
+          No Audited Trades Recorded
+        </div>
+        <div style={{ fontSize: '0.78rem', color: '#92999C', marginTop: '4px' }}>
+          Execute live bot positions or run a strategy simulation to inspect verified trade fills.
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{
-      backgroundColor: '#161922',
-      border: '1px solid #242938',
+      backgroundColor: '#121517',
+      border: '1px solid #202426',
       borderRadius: '16px',
       overflow: 'hidden',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      gap: '0px'
     }}>
-      {/* ── Active Open Inventory (Unmatched Entry Legs) ── */}
+      {/* ── 1. Top Institutional Metrics Ribbon ── */}
+      {safeTrades.length > 0 && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+          gap: '12px',
+          padding: '18px 24px',
+          borderBottom: '1px solid #202426',
+          backgroundColor: '#151819'
+        }}>
+          {/* Net Realized In-Hand */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.7rem', color: '#92999C', fontWeight: '700', textTransform: 'uppercase' }}>
+              Net Realized P&L
+            </span>
+            <div style={{
+              fontSize: '1.35rem',
+              fontWeight: '800',
+              color: metrics.netPnl >= 0 ? '#00D09C' : '#EB5B3C',
+              fontFamily: "'JetBrains Mono', monospace"
+            }}>
+              {metrics.netPnl >= 0 ? '+' : ''}{currency}{metrics.netPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <span style={{ fontSize: '0.68rem', color: '#626A6E' }}>Post statutory deduction</span>
+          </div>
+
+          {/* Win Rate */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.7rem', color: '#92999C', fontWeight: '700', textTransform: 'uppercase' }}>
+              Win Rate
+            </span>
+            <div style={{
+              fontSize: '1.35rem',
+              fontWeight: '800',
+              color: Number(metrics.winRate) >= 50 ? '#00D09C' : '#EB5B3C',
+              fontFamily: "'JetBrains Mono', monospace"
+            }}>
+              {metrics.winRate}%
+            </div>
+            <span style={{ fontSize: '0.68rem', color: '#626A6E' }}>{metrics.wins}W / {metrics.losses}L ({metrics.totalTrades} Trades)</span>
+          </div>
+
+          {/* Gross P&L */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.7rem', color: '#92999C', fontWeight: '700', textTransform: 'uppercase' }}>
+              Gross Trading P&L
+            </span>
+            <div style={{
+              fontSize: '1.35rem',
+              fontWeight: '800',
+              color: metrics.grossPnl >= 0 ? '#00D09C' : '#EB5B3C',
+              fontFamily: "'JetBrains Mono', monospace"
+            }}>
+              {metrics.grossPnl >= 0 ? '+' : ''}{currency}{metrics.grossPnl.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <span style={{ fontSize: '0.68rem', color: '#626A6E' }}>Pre-fee execution price delta</span>
+          </div>
+
+          {/* Total Statutory Fees */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.7rem', color: '#92999C', fontWeight: '700', textTransform: 'uppercase' }}>
+              Statutory Taxes & Fees
+            </span>
+            <div style={{
+              fontSize: '1.35rem',
+              fontWeight: '800',
+              color: '#F59E0B',
+              fontFamily: "'JetBrains Mono', monospace"
+            }}>
+              -{currency}{metrics.totalFees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <span style={{ fontSize: '0.68rem', color: '#626A6E' }}>STT, NSE, SEBI & GST</span>
+          </div>
+
+          {/* Profit Factor */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.7rem', color: '#92999C', fontWeight: '700', textTransform: 'uppercase' }}>
+              Profit Factor
+            </span>
+            <div style={{
+              fontSize: '1.35rem',
+              fontWeight: '800',
+              color: '#60A5FA',
+              fontFamily: "'JetBrains Mono', monospace"
+            }}>
+              {metrics.profitFactor}
+            </div>
+            <span style={{ fontSize: '0.68rem', color: '#626A6E' }}>Gross Gains / Gross Losses</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── 2. Active Open Inventory (Unmatched Entry Legs) ── */}
       {safeOpenPositions.length > 0 && (
         <div style={{
           padding: '16px 24px',
-          borderBottom: '1px solid #242938',
-          backgroundColor: 'rgba(251, 191, 36, 0.05)'
+          borderBottom: '1px solid #202426',
+          backgroundColor: 'rgba(245, 158, 11, 0.05)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Clock size={16} color="#fbbf24" />
-              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#fbbf24' }}>
+              <Clock size={16} color="#F59E0B" />
+              <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F59E0B' }}>
                 Active Open Inventory ({safeOpenPositions.length})
               </span>
-              <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>
-                Unmatched entry legs awaiting exit fill • Mark-to-market active
+              <span style={{ fontSize: '0.72rem', color: '#92999C' }}>
+                Unmatched entry legs awaiting exit fills • Unrealized MTM active
               </span>
             </div>
           </div>
@@ -116,8 +274,8 @@ export default function TradeJournal({
                 <div
                   key={op.id || idx}
                   style={{
-                    backgroundColor: '#12151d',
-                    border: '1px solid #242938',
+                    backgroundColor: '#080A0B',
+                    border: '1px solid #202426',
                     borderRadius: '8px',
                     padding: '10px 14px',
                     display: 'flex',
@@ -133,23 +291,23 @@ export default function TradeJournal({
                         padding: '1px 6px',
                         borderRadius: '4px',
                         backgroundColor: isLong ? 'rgba(0, 208, 156, 0.15)' : 'rgba(235, 91, 60, 0.15)',
-                        color: isLong ? '#00d09c' : '#eb5b3c'
+                        color: isLong ? '#00D09C' : '#EB5B3C'
                       }}>
                         {op.side || (isLong ? 'LONG' : 'SHORT')}
                       </span>
-                      <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#ffffff' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: '700', color: '#F1F3F4' }}>
                         {op.symbol || "UNKNOWN"}
                       </span>
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '4px' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#92999C', marginTop: '4px' }}>
                       Filled: {op.placed_at || "Recent"}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#60a5fa' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#60A5FA', fontFamily: "'JetBrains Mono', monospace" }}>
                       {Number(op.shares || 0).toLocaleString()} Units
                     </div>
-                    <div style={{ fontSize: '0.72rem', color: '#d1d5db', marginTop: '2px' }}>
+                    <div style={{ fontSize: '0.72rem', color: '#D1D5DB', marginTop: '2px', fontFamily: "'JetBrains Mono', monospace" }}>
                       @ {currency}{Number(op.entry_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
@@ -160,99 +318,121 @@ export default function TradeJournal({
         </div>
       )}
 
-      {/* ── Unmatched Exit Warning (if any) ── */}
+      {/* ── 3. Unmatched Exit Warning (if any) ── */}
       {safeUnmatchedExits.length > 0 && (
         <div style={{
           padding: '12px 24px',
-          borderBottom: '1px solid #242938',
+          borderBottom: '1px solid #202426',
           backgroundColor: 'rgba(235, 91, 60, 0.08)',
           display: 'flex',
           alignItems: 'center',
           gap: '10px'
         }}>
-          <AlertTriangle size={16} color="#eb5b3c" />
-          <span style={{ fontSize: '0.78rem', color: '#eb5b3c', fontWeight: '600' }}>
+          <AlertTriangle size={16} color="#EB5B3C" />
+          <span style={{ fontSize: '0.78rem', color: '#EB5B3C', fontWeight: '600' }}>
             Warning: {safeUnmatchedExits.length} exit fill(s) could not be matched to an opening position leg.
           </span>
         </div>
       )}
 
-      {/* ── Header & Filter Controls ── */}
+      {/* ── 4. Header & Filter Controls ── */}
       <div style={{
-        padding: '16px 24px',
-        borderBottom: '1px solid #242938',
+        padding: '14px 24px',
+        borderBottom: '1px solid #202426',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '12px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '0.95rem', fontWeight: '700', color: '#ffffff' }}>
-            📜 Audited Trade Journal & Fills
-          </span>
-          <span style={{
-            fontSize: '0.72rem',
-            fontWeight: '700',
-            padding: '2px 8px',
-            backgroundColor: 'rgba(0, 208, 156, 0.15)',
-            color: '#00d09c',
-            borderRadius: '12px'
-          }}>
-            {safeTrades.length} Closed Round Trips
-          </span>
+        {/* Search input */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          backgroundColor: '#080A0B',
+          border: '1px solid #202426',
+          borderRadius: '8px',
+          padding: '6px 12px',
+          width: '260px'
+        }}>
+          <Search size={14} color="#92999C" />
+          <input
+            type="text"
+            placeholder="Search by symbol, date..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              backgroundColor: 'transparent',
+              border: 'none',
+              outline: 'none',
+              color: '#F1F3F4',
+              fontSize: '0.78rem',
+              width: '100%'
+            }}
+          />
         </div>
 
         {/* Filter Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          {["ALL", "WIN", "LOSS", "LONG", "SHORT"].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                fontSize: '0.75rem',
-                fontWeight: '600',
-                padding: '5px 12px',
-                borderRadius: '8px',
-                backgroundColor: filter === f ? '#00d09c' : '#0c0e14',
-                color: filter === f ? '#0c0e14' : '#9ca3af',
-                border: filter === f ? 'none' : '1px solid #242938',
-                cursor: 'pointer'
-              }}
-            >
-              {f}
-            </button>
-          ))}
+          {[
+            { id: "ALL", label: `All (${safeTrades.length})` },
+            { id: "WIN", label: `Wins (${metrics.wins})` },
+            { id: "LOSS", label: `Losses (${metrics.losses})` },
+            { id: "LONG", label: "Long" },
+            { id: "SHORT", label: "Short" }
+          ].map((f) => {
+            const isFilterActive = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                style={{
+                  fontSize: '0.74rem',
+                  fontWeight: isFilterActive ? '700' : '500',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: isFilterActive ? '#00D09C' : '#080A0B',
+                  color: isFilterActive ? '#080A0B' : '#92999C',
+                  border: isFilterActive ? '1px solid #00D09C' : '1px solid #202426',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* ── Closed Round Trips Table ── */}
+      {/* ── 5. Closed Round Trips Table ── */}
       {safeTrades.length === 0 ? (
         <div style={{
-          padding: '28px',
+          padding: '32px',
           textAlign: 'center',
-          color: '#9ca3af',
+          color: '#92999C',
           fontSize: '0.85rem'
         }}>
-          No closed round trips completed yet. Active inventory is displayed above.
+          No closed round trips completed yet. Active open inventory is displayed above.
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left', fontFamily: "'JetBrains Mono', monospace" }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', textAlign: 'left', fontFamily: "'JetBrains Mono', monospace" }}>
             <thead>
-              <tr style={{ backgroundColor: '#12151d', color: '#9ca3af', borderBottom: '1px solid #242938', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
-                <th style={{ padding: '12px 16px', textAlign: 'center', width: '40px' }}>#</th>
-                <th style={{ padding: '12px 16px' }}>Placed At</th>
-                <th style={{ padding: '12px 16px' }}>Exited At</th>
-                <th style={{ padding: '12px 16px', textAlign: 'center' }}>Instrument & Side</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Entry Price</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Exit Price</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Shares</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Gross P&L</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Statutory Fees</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Net In-Hand</th>
-                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Return %</th>
-                <th style={{ padding: '12px 16px', textAlign: 'center' }}>Status</th>
+              <tr style={{ backgroundColor: '#101314', color: '#92999C', borderBottom: '1px solid #202426', textTransform: 'uppercase', fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+                <th style={{ padding: '12px 18px', textAlign: 'center', width: '40px' }}>#</th>
+                <th style={{ padding: '12px 18px' }}>Placed At</th>
+                <th style={{ padding: '12px 18px' }}>Exited At</th>
+                <th style={{ padding: '12px 18px', textAlign: 'center' }}>Instrument & Side</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Entry Price</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Exit Price</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Shares</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Gross P&L</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Statutory Fees</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Net In-Hand</th>
+                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Return %</th>
+                <th style={{ padding: '12px 18px', textAlign: 'center' }}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -264,68 +444,68 @@ export default function TradeJournal({
                 const pnlPct = getPnlPct(t);
                 const isWin = getIsWin(t);
 
-                const pnlColor = netPnl >= 0 ? "#00d09c" : "#eb5b3c";
-                const grossColor = grossPnl >= 0 ? "#00d09c" : "#eb5b3c";
+                const pnlColor = netPnl >= 0 ? "#00D09C" : "#EB5B3C";
+                const grossColor = grossPnl >= 0 ? "#00D09C" : "#EB5B3C";
 
                 return (
                   <tr
                     key={t.id || idx}
                     style={{
-                      borderBottom: '1px solid #1f2430',
-                      transition: 'background-color 0.1s ease',
+                      borderBottom: '1px solid #1E2326',
+                      transition: 'background-color 0.15s ease',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#1c212e')}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#181D20')}
                     onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
                   >
-                    <td style={{ padding: '12px 16px', textAlign: 'center', color: '#6b7280' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'center', color: '#626A6E' }}>
                       {t.id || idx + 1}
                     </td>
-                    <td style={{ padding: '12px 16px', color: '#00d09c', fontWeight: '600' }}>
+                    <td style={{ padding: '12px 18px', color: '#00D09C', fontWeight: '600' }}>
                       {t.placed_at || t.entry_time || '-'}
                     </td>
-                    <td style={{ padding: '12px 16px', color: '#9ca3af' }}>
+                    <td style={{ padding: '12px 18px', color: '#92999C' }}>
                       {t.exited_at || t.exit_time || '-'}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'center' }}>
                       <span style={{
                         fontSize: '0.7rem',
                         fontWeight: '700',
-                        padding: '2px 8px',
+                        padding: '3px 8px',
                         borderRadius: '4px',
                         backgroundColor: isLong ? 'rgba(0, 208, 156, 0.15)' : 'rgba(235, 91, 60, 0.15)',
-                        color: isLong ? '#00d09c' : '#eb5b3c',
+                        color: isLong ? '#00D09C' : '#EB5B3C',
                       }}>
                         {t.symbol ? `${t.symbol} • ` : ''}{t.side || (isLong ? 'LONG' : 'SHORT')}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#ffffff' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'right', color: '#F1F3F4' }}>
                       {currency}{Number(t.entry_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#ffffff' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'right', color: '#F1F3F4' }}>
                       {currency}{Number(t.exit_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#60a5fa', fontWeight: '600' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'right', color: '#60A5FA', fontWeight: '600' }}>
                       {Number(t.shares || 0).toLocaleString()}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: grossColor, fontWeight: '600' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'right', color: grossColor, fontWeight: '600' }}>
                       {grossPnl >= 0 ? '+' : ''}{currency}{Number(grossPnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: '#fbbf24' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'right', color: '#F59E0B' }}>
                       {fees > 0 ? `-${currency}${Number(fees).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `${currency}0.00`}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: pnlColor, fontWeight: '800' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'right', color: pnlColor, fontWeight: '800' }}>
                       {netPnl >= 0 ? '+' : ''}{currency}{Number(netPnl).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', color: pnlColor, fontWeight: '700' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'right', color: pnlColor, fontWeight: '700' }}>
                       {pnlPct >= 0 ? '+' : ''}{Number(pnlPct).toFixed(2)}%
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
+                    <td style={{ padding: '12px 18px', textAlign: 'center' }}>
                       {isWin ? (
-                        <span style={{ color: '#00d09c', display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', fontWeight: '700' }}>
+                        <span style={{ color: '#00D09C', display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.74rem', fontWeight: '700' }}>
                           <CheckCircle2 size={13} /> WIN
                         </span>
                       ) : (
-                        <span style={{ color: '#eb5b3c', display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.75rem', fontWeight: '700' }}>
+                        <span style={{ color: '#EB5B3C', display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.74rem', fontWeight: '700' }}>
                           <XCircle size={13} /> LOSS
                         </span>
                       )}
